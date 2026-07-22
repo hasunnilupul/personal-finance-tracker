@@ -1,10 +1,27 @@
 import { eq } from "drizzle-orm";
-import { auth } from "../lib/auth/auth";
-import { logger } from "../lib/logger";
-import { db } from "../lib/db";
-import { user } from "../lib/db/schema";
+import { auth } from "@/lib/auth/auth";
+import { logger } from "@/lib/logger";
+import { db } from "@/lib/db";
+import { user } from "@/lib/db/schema";
+import { seedDefaultCategories } from "@/scripts/seed-categories";
+import { seedExpenses } from "@/scripts/seed-expenses";
 
 async function seed() {
+  logger.info("🌱 Starting database seed...");
+
+  // Clear tables
+  await db.execute(`
+    TRUNCATE TABLE 
+      "categories",
+      "user",
+      "session",
+      "account",
+      "verification"
+    RESTART IDENTITY CASCADE;
+  `);
+
+  logger.info("🧹 Database cleared");
+
   const email = "demo@financeflow.com";
   const password = "Password123!";
 
@@ -27,13 +44,17 @@ async function seed() {
       },
     });
 
-    logger.info("Default user created", {
-      userId: response.user.id,
-      email: response.user.email,
-    });
-  } catch (error) {
-    logger.error("Failed to seed default user", error);
+    logger.info("👤 User created:", { userId: response.user.id, email: response.user.email });
 
+    // seed default categories for the user
+    await seedDefaultCategories(response.user.id);
+
+    // seed sample expenses for the user
+    await seedExpenses(response.user.id);
+
+    logger.info("✅ Seed completed");
+  } catch (error) {
+    logger.error("❌ Seed failed:", error);
     process.exit(1);
   }
 }

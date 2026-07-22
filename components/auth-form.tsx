@@ -50,7 +50,7 @@ function AuthForm({ mode }: AuthFormProps) {
           const { error } = await signIn.email({
             email,
             password,
-            callbackURL: "/dashboard",
+            callbackURL: "/",
           });
 
           if (error) {
@@ -58,7 +58,7 @@ function AuthForm({ mode }: AuthFormProps) {
           }
         }
 
-        router.push("/dashboard");
+        router.push("/");
         router.refresh();
       } catch (error) {
         logger.error("Authentication Failed", error);
