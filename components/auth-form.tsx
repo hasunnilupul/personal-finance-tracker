@@ -4,12 +4,13 @@ import { FormEvent, useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { signIn, signUp } from "@/lib/auth-client";
+import { signIn, signUp } from "@/lib/auth/auth-client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { logger } from "@/lib/logger";
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up";
@@ -51,7 +52,6 @@ function AuthForm({ mode }: AuthFormProps) {
             password,
             callbackURL: "/dashboard",
           });
-          console.log(error);
 
           if (error) {
             throw new Error(error.message);
@@ -61,6 +61,7 @@ function AuthForm({ mode }: AuthFormProps) {
         router.push("/dashboard");
         router.refresh();
       } catch (error) {
+        logger.error("Authentication Failed", error);
         setError(error instanceof Error ? error.message : "Something went wrong");
       } finally {
         setLoading(false);
