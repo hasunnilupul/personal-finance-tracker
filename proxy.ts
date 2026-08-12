@@ -3,12 +3,23 @@ import type { NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth/auth";
 
-const publicRoutes = ["/sign-in", "/sign-up", "/forgot-password"];
+/**
+ * Routes reachable without an authenticated session.
+ */
+const publicRoutes = ["/sign-in", "/sign-up"];
 
+/**
+ * Routes that an authenticated user should never see.
+ */
 const authRoutes = ["/sign-in", "/sign-up"];
 
+/**
+ * Where authenticated users land when they hit an auth route.
+ */
+const afterSignInRoute = "/";
+
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   const session = await auth.api.getSession({
     headers: request.headers,
@@ -20,12 +31,18 @@ export async function proxy(request: NextRequest) {
 
   // Logged-in users should not access auth pages
   if (session && isAuthRoute) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(afterSignInRoute, request.url));
   }
 
-  // Protect private pages
+  // Protect private pages, remembering where the user was headed
   if (!session && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+    const signInUrl = new URL("/sign-in", request.url);
+
+    if (pathname !== afterSignInRoute) {
+      signInUrl.searchParams.set("redirect", `${pathname}${search}`);
+    }
+
+    return NextResponse.redirect(signInUrl);
   }
 
   return NextResponse.next();

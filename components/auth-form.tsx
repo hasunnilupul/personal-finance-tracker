@@ -14,9 +14,11 @@ import { logger } from "@/lib/logger";
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up";
+  /** In-app path to land on once authenticated. Already sanitised by the page. */
+  redirectTo?: string;
 }
 
-function AuthForm({ mode }: AuthFormProps) {
+function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -50,7 +52,7 @@ function AuthForm({ mode }: AuthFormProps) {
           const { error } = await signIn.email({
             email,
             password,
-            callbackURL: "/",
+            callbackURL: redirectTo,
           });
 
           if (error) {
@@ -58,7 +60,7 @@ function AuthForm({ mode }: AuthFormProps) {
           }
         }
 
-        router.push("/");
+        router.push(redirectTo);
         router.refresh();
       } catch (error) {
         logger.error("Authentication Failed", error);
@@ -67,8 +69,14 @@ function AuthForm({ mode }: AuthFormProps) {
         setLoading(false);
       }
     },
-    [name, email, password, router, setError, setLoading],
+    [isSignUp, name, email, password, redirectTo, router],
   );
+
+  const alternateHref = (() => {
+    const path = isSignUp ? "/sign-in" : "/sign-up";
+
+    return redirectTo === "/" ? path : `${path}?redirect=${encodeURIComponent(redirectTo)}`;
+  })();
 
   return (
     <main className="bg-background flex min-h-svh items-center justify-center px-4">
@@ -140,7 +148,7 @@ function AuthForm({ mode }: AuthFormProps) {
           {isSignUp ? "Already have an account? " : "Don't have an account? "}
 
           <Link
-            href={isSignUp ? "/sign-in" : "/sign-up"}
+            href={alternateHref}
             className="text-foreground font-medium underline-offset-4 hover:underline"
           >
             {isSignUp ? "Sign in" : "Sign up"}

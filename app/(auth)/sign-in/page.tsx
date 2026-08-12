@@ -1,7 +1,14 @@
 import AuthForm from "@/components/auth-form";
+import { safeRedirectPath } from "@/lib/utils";
 
-const LoginPage = () => {
-  return <AuthForm mode="sign-in" />;
+interface SignInPageProps {
+  searchParams: Promise<{ redirect?: string }>;
+}
+
+const SignInPage = async ({ searchParams }: SignInPageProps) => {
+  const { redirect } = await searchParams;
+
+  return <AuthForm mode="sign-in" redirectTo={safeRedirectPath(redirect)} />;
 };
 
-export default LoginPage;
+export default SignInPage;
