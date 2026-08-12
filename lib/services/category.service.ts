@@ -4,7 +4,10 @@ import { incomeRepository } from "@/lib/repositories/income.repository";
 import { Category, CategoryInput } from "@/lib/db/models/category.model";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
-import { APP_DEFAULT_CATEGORIES } from "@/constants/default-categories";
+import {
+  APP_DEFAULT_CATEGORIES,
+  APP_DEFAULT_INCOME_CATEGORIES,
+} from "@/constants/default-categories";
 
 export class CategoryService {
   async getAllCategories(ctx: SpaceContext): Promise<Category[]> {
@@ -72,15 +75,21 @@ export class CategoryService {
    * and any shared space — so a member never starts with an empty picker.
    */
   async seedDefaultCategories(ctx: SpaceContext): Promise<Category[]> {
-    return categoryRepository.createMany(
-      APP_DEFAULT_CATEGORIES.map((category) => ({
-        ...category,
-        type: "expense",
-        organizationId: ctx.organizationId,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      })),
-    );
+    const withOwnership = (
+      category: { name: string; icon: string; color: string },
+      type: string,
+    ) => ({
+      ...category,
+      type,
+      organizationId: ctx.organizationId,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
+
+    return categoryRepository.createMany([
+      ...APP_DEFAULT_CATEGORIES.map((category) => withOwnership(category, "expense")),
+      ...APP_DEFAULT_INCOME_CATEGORIES.map((category) => withOwnership(category, "income")),
+    ]);
   }
 }
 

@@ -10,15 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 2 — currency and money handling. Pushed to
-`feat/multi-currency`, PR open into `dev`.
+**Last completed:** Feature 3 — transactions (expenses + income). Pushed to
+`feat/transactions`, PR open into `dev`.
 
-**Next up:** Feature 3 — transactions (expenses + income).
+**Next up:** Feature 4 — categories.
 
-| Branch | State                                              |
-| ------ | -------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0, 1a and 1b. |
-| `dev`  | Integration branch. Has Features 0, 1a and 1b.     |
+| Branch | State                                             |
+| ------ | ------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 2.   |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b and 2. |
 
 ---
 
@@ -116,6 +116,12 @@ drizzle-kit 1.0-rc asks for `--hints` on ambiguous rename-vs-create; pass
 `{"type":"create",...}` for genuinely new columns. Never let `pnpm format`
 touch `lib/db/migrations` (covered by `.prettierignore`).
 
+**Dates.** A transaction date is a calendar day held in a `timestamp` column.
+Everything that writes one anchors it to **midday UTC**, and range filters use
+whole UTC days. Anchoring to local midnight puts an entry made in Colombo on
+the previous UTC day, which silently drops it out of ranges that should
+contain it — this was a real bug, caught by a filter returning the wrong rows.
+
 **Definition of done.** `pnpm typecheck && pnpm lint && pnpm build` all pass,
 plus the feature exercised against the real database — not just compiled.
 
@@ -178,15 +184,24 @@ Swapping it is a one-file change behind `RateProvider`.
 decimal, so there is no floating-point error to design around, and integer
 minor units would have cost a destructive migration for no gain.
 
-### Feature 3 — Transactions (expenses + income) ⬅️ next
+### Feature 3 — Transactions (expenses + income) ✅ done, PR open
 
-- [ ] Expenses list with filters (date range, category, member) and pagination
-- [ ] Add / edit / delete dialogs, zod-validated Server Actions
-- [ ] Income as a sibling view
-- [ ] Show `createdBy` in shared spaces
-- [ ] Empty and loading states
+- [x] List with filters (date range, category, member) and pagination
+- [x] Add / edit / delete, zod-validated Server Actions
+- [x] Income as a sibling view, sharing every component via a `kind` prop
+- [x] `createdBy` shown in shared spaces only
+- [x] Empty, filtered-empty and loading states
+- [x] Per-entry currency picker; foreign amounts show the original under the converted one
+- [x] Default income categories, so the income picker is not empty
 
-### Feature 4 — Categories
+**Filters live in the URL**, so a filtered view can be bookmarked and the page
+stays a Server Component. Junk query values are ignored rather than trusted.
+
+**Expenses and income share one query, one form and one action set**, keyed by
+`TransactionKind`. The tables are structurally identical, so duplicating would
+mean fixing every future filter twice.
+
+### Feature 4 — Categories ⬅️ next
 
 - [ ] Manage categories per space, icon and colour pickers
 - [ ] Income vs expense types
@@ -263,6 +278,11 @@ Things already hit, so they are not hit twice.
 - **The HTTP database driver has no interactive transactions.** Multi-step
   writes have to compute everything that can fail _before_ writing anything —
   see `changeBaseCurrency`.
+- **`react-hooks/set-state-in-effect` will fail lint** for resetting a
+  dialog's fields when the record changes. Remount the form with a `key`
+  instead of syncing state in an effect.
+- **`pnpm db:seed` truncates `session`,** so any browser or curl session is
+  signed out and pages start answering 307. Sign in again after seeding.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -280,6 +300,11 @@ Not blocking, but worth doing.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
-- [ ] No tests yet. Worth adding around permissions and space scoping first.
+- [ ] No tests yet. Worth adding around permissions, space scoping and currency
+      conversion first.
+- [ ] `expenses` and `income` are structurally identical tables. A single
+      `transactions` table with a `type` column would have been simpler; the
+      shared query and service layer hide most of the cost, so this is only
+      worth revisiting if a third kind ever appears.
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.

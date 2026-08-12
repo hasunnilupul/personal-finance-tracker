@@ -42,7 +42,8 @@ export async function seedExpenses(
       baseAmount: sample.amount,
       exchangeRate: "1",
       description: sample.description,
-      date: new Date(now.getFullYear(), now.getMonth(), sample.day),
+      // Midday UTC, matching how the app records dates — see the note below.
+      date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), sample.day, 12)),
       createdBy: userId,
       updatedBy: userId,
     })),

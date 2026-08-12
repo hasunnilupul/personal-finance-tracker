@@ -16,6 +16,11 @@ const tabs = [
     icon: "💰",
   },
   {
+    href: "/income",
+    label: "Income",
+    icon: "💵",
+  },
+  {
     href: "/budgets",
     label: "Budgets",
     icon: "📈",
