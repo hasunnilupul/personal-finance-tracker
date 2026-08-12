@@ -45,15 +45,6 @@ export class ExpenseRepository {
       .returning();
     return result.length > 0;
   }
-
-  /** Number of expenses still pointing at a category, used before deleting it. */
-  async countByCategory(categoryId: number, organizationId: string): Promise<number> {
-    const result = await db
-      .select({ id: expenses.id })
-      .from(expenses)
-      .where(and(eq(expenses.categoryId, categoryId), eq(expenses.organizationId, organizationId)));
-    return result.length;
-  }
 }
 
 export const expenseRepository = new ExpenseRepository();
