@@ -1,5 +1,15 @@
 import { createAuthClient } from "better-auth/react";
+import { organizationClient } from "better-auth/client/plugins";
 
-export const authClient = createAuthClient();
+import { ac, roles } from "@/lib/auth/permissions";
 
-export const { signIn, signUp, signOut, useSession } = authClient;
+export const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      ac,
+      roles,
+    }),
+  ],
+});
+
+export const { signIn, signUp, signOut, useSession, organization: spaces } = authClient;

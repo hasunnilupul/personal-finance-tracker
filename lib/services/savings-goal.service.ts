@@ -1,29 +1,38 @@
 import { savingsGoalRepository } from "@/lib/repositories/savings-goal.repository";
-import { SavingsGoal, NewSavingsGoal } from "@/lib/db/models/savings-goal.model";
+import { SavingsGoal, SavingsGoalInput } from "@/lib/db/models/savings-goal.model";
+import { SpaceContext } from "@/lib/services/types";
 
 export class SavingsGoalService {
-  async getAllSavingsGoals(userId: string): Promise<SavingsGoal[]> {
-    return savingsGoalRepository.findAll(userId);
+  async getAllSavingsGoals(ctx: SpaceContext): Promise<SavingsGoal[]> {
+    return savingsGoalRepository.findAll(ctx.organizationId);
   }
 
-  async getSavingsGoalById(id: number, userId: string): Promise<SavingsGoal | undefined> {
-    return savingsGoalRepository.findById(id, userId);
+  async getSavingsGoalById(ctx: SpaceContext, id: number): Promise<SavingsGoal | undefined> {
+    return savingsGoalRepository.findById(id, ctx.organizationId);
   }
 
-  async createSavingsGoal(data: NewSavingsGoal): Promise<SavingsGoal> {
-    return savingsGoalRepository.create(data);
+  async createSavingsGoal(ctx: SpaceContext, data: SavingsGoalInput): Promise<SavingsGoal> {
+    return savingsGoalRepository.create({
+      ...data,
+      organizationId: ctx.organizationId,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
   }
 
   async updateSavingsGoal(
+    ctx: SpaceContext,
     id: number,
-    userId: string,
-    data: Partial<NewSavingsGoal>,
+    data: Partial<SavingsGoalInput>,
   ): Promise<SavingsGoal | undefined> {
-    return savingsGoalRepository.update(id, userId, data);
+    return savingsGoalRepository.update(id, ctx.organizationId, {
+      ...data,
+      updatedBy: ctx.userId,
+    });
   }
 
-  async deleteSavingsGoal(id: number, userId: string): Promise<boolean> {
-    return savingsGoalRepository.delete(id, userId);
+  async deleteSavingsGoal(ctx: SpaceContext, id: number): Promise<boolean> {
+    return savingsGoalRepository.delete(id, ctx.organizationId);
   }
 }
 

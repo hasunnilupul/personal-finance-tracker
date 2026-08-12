@@ -3,12 +3,11 @@ import "dotenv/config";
 import { auth } from "@/lib/auth/auth";
 import { logger } from "@/lib/logger";
 import { db } from "@/lib/db";
-import { seedDefaultCategories } from "@/scripts/seed-categories";
+import { spaceService } from "@/lib/services/space.service";
 import { seedExpenses } from "@/scripts/seed-expenses";
 
 /**
- * Every table the seed owns, ordered so the statement reads top-down from
- * domain data to auth data. `CASCADE` handles the foreign keys between them.
+ * Every table the seed owns. `CASCADE` handles the foreign keys between them.
  */
 const SEEDED_TABLES = [
   "budgets",
@@ -17,6 +16,9 @@ const SEEDED_TABLES = [
   "income",
   "recurringTransactions",
   "savingsGoals",
+  "invitation",
+  "member",
+  "organization",
   "user",
   "session",
   "account",
@@ -46,13 +48,20 @@ async function seed() {
       },
     });
 
-    logger.info("👤 User created:", { userId: response.user.id, email: response.user.email });
+    const userId = response.user.id;
 
-    // seed default categories for the user
-    await seedDefaultCategories(response.user.id);
+    logger.info("👤 User created:", { userId, email: response.user.email });
 
-    // seed sample expenses for the user
-    await seedExpenses(response.user.id);
+    // The sign-up hook creates the personal space and its default categories.
+    const personalSpace = await spaceService.getPersonalSpace(userId);
+
+    if (!personalSpace) {
+      throw new Error("Personal space was not created for the demo user");
+    }
+
+    logger.info("🏠 Personal space ready", { organizationId: personalSpace.id });
+
+    await seedExpenses(personalSpace.id, userId);
 
     logger.info("✅ Seed completed");
   } catch (error) {

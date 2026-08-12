@@ -4,15 +4,15 @@ import { Budget, NewBudget } from "@/lib/db/models/budget.model";
 import { eq, and } from "drizzle-orm";
 
 export class BudgetRepository {
-  async findAll(userId: string): Promise<Budget[]> {
-    return db.select().from(budgets).where(eq(budgets.userId, userId));
+  async findAll(organizationId: string): Promise<Budget[]> {
+    return db.select().from(budgets).where(eq(budgets.organizationId, organizationId));
   }
 
-  async findById(id: number, userId: string): Promise<Budget | undefined> {
+  async findById(id: number, organizationId: string): Promise<Budget | undefined> {
     const [result] = await db
       .select()
       .from(budgets)
-      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)));
+      .where(and(eq(budgets.id, id), eq(budgets.organizationId, organizationId)));
     return result;
   }
 
@@ -21,19 +21,23 @@ export class BudgetRepository {
     return result;
   }
 
-  async update(id: number, userId: string, data: Partial<NewBudget>): Promise<Budget | undefined> {
+  async update(
+    id: number,
+    organizationId: string,
+    data: Partial<NewBudget>,
+  ): Promise<Budget | undefined> {
     const [result] = await db
       .update(budgets)
       .set(data)
-      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
+      .where(and(eq(budgets.id, id), eq(budgets.organizationId, organizationId)))
       .returning();
     return result;
   }
 
-  async delete(id: number, userId: string): Promise<boolean> {
+  async delete(id: number, organizationId: string): Promise<boolean> {
     const result = await db
       .delete(budgets)
-      .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
+      .where(and(eq(budgets.id, id), eq(budgets.organizationId, organizationId)))
       .returning();
     return result.length > 0;
   }

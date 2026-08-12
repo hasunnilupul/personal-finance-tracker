@@ -4,15 +4,15 @@ import { SavingsGoal, NewSavingsGoal } from "@/lib/db/models/savings-goal.model"
 import { eq, and } from "drizzle-orm";
 
 export class SavingsGoalRepository {
-  async findAll(userId: string): Promise<SavingsGoal[]> {
-    return db.select().from(savingsGoals).where(eq(savingsGoals.userId, userId));
+  async findAll(organizationId: string): Promise<SavingsGoal[]> {
+    return db.select().from(savingsGoals).where(eq(savingsGoals.organizationId, organizationId));
   }
 
-  async findById(id: number, userId: string): Promise<SavingsGoal | undefined> {
+  async findById(id: number, organizationId: string): Promise<SavingsGoal | undefined> {
     const [result] = await db
       .select()
       .from(savingsGoals)
-      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, userId)));
+      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.organizationId, organizationId)));
     return result;
   }
 
@@ -23,21 +23,21 @@ export class SavingsGoalRepository {
 
   async update(
     id: number,
-    userId: string,
+    organizationId: string,
     data: Partial<NewSavingsGoal>,
   ): Promise<SavingsGoal | undefined> {
     const [result] = await db
       .update(savingsGoals)
       .set(data)
-      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, userId)))
+      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.organizationId, organizationId)))
       .returning();
     return result;
   }
 
-  async delete(id: number, userId: string): Promise<boolean> {
+  async delete(id: number, organizationId: string): Promise<boolean> {
     const result = await db
       .delete(savingsGoals)
-      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, userId)))
+      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.organizationId, organizationId)))
       .returning();
     return result.length > 0;
   }
