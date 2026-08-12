@@ -11,6 +11,7 @@ import { buildInvitationUrl } from "@/lib/auth/urls";
 import { spaceService } from "@/lib/services/space.service";
 import { categoryService } from "@/lib/services/category.service";
 import { sendInvitationEmail } from "@/lib/email/invitation-email";
+import { DEFAULT_CURRENCY } from "@/constants/currencies";
 import { logger } from "@/lib/logger";
 
 export const auth = betterAuth({
@@ -126,6 +127,7 @@ export const auth = betterAuth({
             await categoryService.seedDefaultCategories({
               organizationId: space.id,
               userId: user.id,
+              baseCurrency: space.baseCurrency ?? DEFAULT_CURRENCY,
             });
           } catch (error) {
             logger.error("Failed to seed categories for new space", error, {

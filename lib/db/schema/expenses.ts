@@ -1,6 +1,7 @@
-import { pgTable, timestamp, integer, varchar, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, timestamp, integer, varchar, index } from "drizzle-orm/pg-core";
 
 import { auditColumns } from "@/lib/db/schema/columns";
+import { moneyColumns } from "@/lib/db/schema/money";
 import { categories } from "@/lib/db/schema/categories";
 
 /**
@@ -16,7 +17,7 @@ export const expenses = pgTable(
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     categoryId: integer("categoryId").references(() => categories.id, { onDelete: "set null" }),
-    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    ...moneyColumns(),
     description: varchar("description", { length: 255 }),
     date: timestamp("date").notNull(),
     ...auditColumns(),

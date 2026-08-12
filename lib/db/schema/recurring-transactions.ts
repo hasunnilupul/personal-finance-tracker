@@ -2,6 +2,7 @@ import { pgTable, timestamp, integer, varchar, numeric, boolean, index } from "d
 
 import { auditColumns } from "@/lib/db/schema/columns";
 import { categories } from "@/lib/db/schema/categories";
+import { DEFAULT_CURRENCY } from "@/constants/currencies";
 
 /**
  * A transaction template that repeats on a schedule, e.g. rent or a salary.
@@ -16,6 +17,14 @@ export const recurringTransactions = pgTable(
     categoryId: integer("categoryId").references(() => categories.id, { onDelete: "set null" }),
     type: varchar("type", { length: 10 }).notNull(), // 'expense' or 'income'
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    /**
+     * The currency the template is denominated in.
+     *
+     * Unlike a real entry this carries no `baseAmount`: a template is not a
+     * transaction, and converting it once would freeze a rate that should be
+     * applied afresh each time an occurrence is created.
+     */
+    currency: varchar("currency", { length: 3 }).notNull().default(DEFAULT_CURRENCY),
     description: varchar("description", { length: 255 }),
     frequency: varchar("frequency", { length: 20 }).notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
     nextDate: timestamp("nextDate").notNull(),

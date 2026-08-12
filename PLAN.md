@@ -10,15 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 1b — invitations and invite-only sign-up. Pushed to
-`feat/invitations`, PR open into `dev`.
+**Last completed:** Feature 2 — currency and money handling. Pushed to
+`feat/multi-currency`, PR open into `dev`.
 
-**Next up:** Feature 2 — currency and money handling.
+**Next up:** Feature 3 — transactions (expenses + income).
 
-| Branch | State                                         |
-| ------ | --------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 and 1a |
-| `dev`  | Integration branch. Has Features 0 and 1a.    |
+| Branch | State                                              |
+| ------ | -------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0, 1a and 1b. |
+| `dev`  | Integration branch. Has Features 0, 1a and 1b.     |
 
 ---
 
@@ -105,9 +105,11 @@ space scoping in one place.
 `proxy.ts` is an optimistic check for redirects only. It is **not** a security
 boundary. Hiding a button is presentation, not protection.
 
-**Space scoping.** Services take a `SpaceContext` (`organizationId` + `userId`)
-and fill in `organizationId`, `createdBy` and `updatedBy` themselves. Callers
-never supply them — see `UserInput<T>` in `lib/db/models/types.ts`.
+**Space scoping.** Services take a `SpaceContext` (`organizationId`, `userId`,
+`baseCurrency`) and fill in `organizationId`, `createdBy`, `updatedBy`,
+`baseAmount` and `exchangeRate` themselves. Callers never supply them — see
+`UserInput<T>` in `lib/db/models/types.ts`. Accepting a converted amount from a
+client would let it claim any exchange rate it liked.
 
 **Migrations.** `pnpm db:generate` then review the SQL before applying.
 drizzle-kit 1.0-rc asks for `--hints` on ambiguous rename-vs-create; pass
@@ -143,7 +145,7 @@ plus the feature exercised against the real database — not just compiled.
 - [x] Migration applied, seed rewritten
 - [x] Verified: isolation, switching, and tampered `activeOrganizationId` falling back
 
-### Feature 1b — Invitations and invite-only sign-up ✅ done, PR open
+### Feature 1b — Invitations and invite-only sign-up ✅ merged (PR #10)
 
 - [x] Invite from the space owner, producing a **copyable link** (`/accept-invitation/[id]`)
 - [x] Resend email as a layer on top: sends when `RESEND_FROM` is set, logs and skips when not
@@ -158,17 +160,25 @@ plus the feature exercised against the real database — not just compiled.
 Deferred, not needed yet: changing a member's role. There are only two roles and
 the owner is the creator, so there is nothing meaningful to change it to.
 
-### Feature 2 — Currency and money handling ⬅️ next
+### Feature 2 — Currency and money handling ✅ done, PR open
 
-- [ ] Currency per space, plus a per-entry currency
-- [ ] `exchange_rates` table with a daily fetch and manual override
-- [ ] Convert to the space's base currency for all totals and reports
-- [ ] Money formatting helper; decide rounding rules and store minor units consistently
-- [ ] Backfill existing rows to the space's base currency
+- [x] Base currency per space, plus a per-entry currency
+- [x] `exchangeRates` table with on-demand fetch, daily cron, and manual override
+- [x] Conversion at **write** time into `baseAmount`, so totals do not shift when rates move
+- [x] `formatMoney` / `parseAmount`; amounts stay Postgres `numeric`, not integer minor units
+- [x] Backfill: existing rows converted to themselves at rate 1, non-destructively
+- [x] Changing a space's base currency re-converts history at each entry's own date
 
-Open question: rate source. Needs one covering LKR — ECB/Frankfurter does not.
+**Rate source decided:** `@fawazahmed0/currency-api` over jsDelivr, with its
+`pages.dev` mirror as fallback. No API key, no quota (static JSON on a CDN),
+338 currencies including LKR. ECB-backed feeds were ruled out — no LKR.
+Swapping it is a one-file change behind `RateProvider`.
 
-### Feature 3 — Transactions (expenses + income)
+**Money storage decided:** stay on `numeric(12,2)`. Postgres `numeric` is exact
+decimal, so there is no floating-point error to design around, and integer
+minor units would have cost a destructive migration for no gain.
+
+### Feature 3 — Transactions (expenses + income) ⬅️ next
 
 - [ ] Expenses list with filters (date range, category, member) and pagination
 - [ ] Add / edit / delete dialogs, zod-validated Server Actions
@@ -204,15 +214,16 @@ Open question: rate source. Needs one covering LKR — ECB/Frankfurter does not.
 
 ## Environment
 
-| Variable                | Needed for        | Notes                                          |
-| ----------------------- | ----------------- | ---------------------------------------------- |
-| `BETTER_AUTH_SECRET`    | Auth              | `openssl rand -base64 32`                      |
-| `BETTER_AUTH_URL`       | Auth              | App base URL                                   |
-| `DATABASE_URL`          | Runtime           | Pooled Neon connection                         |
-| `DATABASE_URL_UNPOOLED` | Migrations        | Direct connection for drizzle-kit              |
-| `RESEND_API_KEY`        | Invite email      | Set                                            |
-| `RESEND_FROM`           | Invite email      | **Not set.** Needs a domain verified in Resend |
-| `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate (1b) | Defaults to `false`                            |
+| Variable                | Needed for        | Notes                                           |
+| ----------------------- | ----------------- | ----------------------------------------------- |
+| `BETTER_AUTH_SECRET`    | Auth              | `openssl rand -base64 32`                       |
+| `BETTER_AUTH_URL`       | Auth              | App base URL                                    |
+| `DATABASE_URL`          | Runtime           | Pooled Neon connection                          |
+| `DATABASE_URL_UNPOOLED` | Migrations        | Direct connection for drizzle-kit               |
+| `RESEND_API_KEY`        | Invite email      | Set                                             |
+| `RESEND_FROM`           | Invite email      | **Not set.** Needs a domain verified in Resend  |
+| `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate      | Defaults to `false`                             |
+| `CRON_SECRET`           | Rate refresh cron | **Not set.** Endpoint refuses to run without it |
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
@@ -245,6 +256,13 @@ Things already hit, so they are not hit twice.
   `lib/auth/auth.ts` is also imported by `scripts/seed.ts`, and outside Next's
   bundler that package throws on import. Keep it in `lib/auth/dal.ts`, which
   scripts never reach, and out of the `auth.ts` import graph.
+- **The rate feed only publishes today.** An entry backdated before rate
+  collection began has nothing to look back to, so `getRate` falls forward to
+  the earliest rate on record and logs that it approximated. Without this,
+  saving a backdated expense fails outright.
+- **The HTTP database driver has no interactive transactions.** Multi-step
+  writes have to compute everything that can fail _before_ writing anything —
+  see `changeBaseCurrency`.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.

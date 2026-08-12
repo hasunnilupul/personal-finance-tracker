@@ -23,6 +23,22 @@ export class SpaceRepository {
     return result;
   }
 
+  /**
+   * Every currency at least one space reports in, so the rate refresh only
+   * fetches bases that are actually in use.
+   */
+  async listDistinctBaseCurrencies(): Promise<string[]> {
+    const rows = await db
+      .selectDistinct({ baseCurrency: organization.baseCurrency })
+      .from(organization);
+
+    return rows.map((row) => row.baseCurrency);
+  }
+
+  async updateBaseCurrency(id: string, baseCurrency: string): Promise<void> {
+    await db.update(organization).set({ baseCurrency }).where(eq(organization.id, id));
+  }
+
   async addMember(data: NewMember): Promise<Member> {
     const [result] = await db.insert(member).values(data).returning();
     return result;

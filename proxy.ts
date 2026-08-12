@@ -58,11 +58,15 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Protect all routes except:
+     * Protect all pages except:
+     * - /api/*, whose route handlers authenticate themselves — better-auth
+     *   guards its own endpoints, and the cron route uses CRON_SECRET. A
+     *   session redirect here would turn an unauthorised API call into a 307
+     *   pointing at the sign-in page.
      * - _next
      * - static files
      * - favicon
      */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };

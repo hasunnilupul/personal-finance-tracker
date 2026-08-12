@@ -30,6 +30,11 @@ const tabs = [
     label: "Members",
     icon: "👥",
   },
+  {
+    href: "/settings/space",
+    label: "Settings",
+    icon: "⚙️",
+  },
 ];
 
 export default function AppSidebar() {
