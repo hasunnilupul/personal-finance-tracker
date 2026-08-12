@@ -19,8 +19,38 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 | `main` | Production. Behind `dev` by Features 0 and 1a |
 | `dev`  | Integration branch. Has Features 0 and 1a.    |
 
-**Workflow:** branch off `dev`, open the PR **before** switching away from the
-branch, and let the repo owner merge it.
+---
+
+## Workflow
+
+One feature per branch, one PR per feature. Follow this exactly — do not skip
+to the next feature with a branch still unmerged.
+
+**1. Start** — branch from the latest `origin/dev`:
+
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feat/<feature-name>
+```
+
+**2. Build it.** Commit as you go. Update this file — tick the boxes, move
+"Current position", add any new gotchas — as part of the feature's own commits.
+
+**3. Finish** — bring `dev` in and resolve conflicts on the branch, never in
+the PR:
+
+```bash
+git pull origin dev
+pnpm typecheck && pnpm lint && pnpm build
+```
+
+**4. Open the PR** into `dev`, **before** switching away from the branch.
+
+**5. Stop and ask for approval.** The repo owner merges. Do not start the next
+feature, and do not create the next branch, until the PR is merged.
+
+**6. Next** — go back to step 1, branching from the freshly merged `origin/dev`.
 
 ---
 
