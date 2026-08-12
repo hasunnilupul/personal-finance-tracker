@@ -10,15 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 3 — transactions (expenses + income). Pushed to
-`feat/transactions`, PR open into `dev`.
+**Last completed:** Feature 4 — categories. Pushed to `feat/categories`,
+PR open into `dev`.
 
-**Next up:** Feature 4 — categories.
+**Next up:** Feature 5 — budgets.
 
-| Branch | State                                             |
-| ------ | ------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 2.   |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b and 2. |
+| Branch | State                                                |
+| ------ | ---------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 3.      |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2 and 3. |
 
 ---
 
@@ -82,7 +82,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Invite delivery          | Copyable link, with Resend email on top  | The link is the mechanism and needs no infrastructure; email is a convenience layer    |
 | Data access              | Server Actions; route handlers as needed | Least boilerplate in Next 16                                                           |
 | Validation               | Zod at the Server Action boundary        | Untrusted input is parsed once, at the edge                                            |
-| Category deletion        | Refused while in use; FK is `SET NULL`   | Deleting a category must not silently destroy spending history                         |
+| Category deletion        | Reassign, or refused while in use        | Deleting a category must not silently destroy spending history                         |
+| Category `type`          | Fixed once created                       | Flipping it would strand every entry filed under it in a list that no longer offers it |
 | Package manager          | pnpm                                     |                                                                                        |
 
 ---
@@ -184,7 +185,7 @@ Swapping it is a one-file change behind `RateProvider`.
 decimal, so there is no floating-point error to design around, and integer
 minor units would have cost a destructive migration for no gain.
 
-### Feature 3 — Transactions (expenses + income) ✅ done, PR open
+### Feature 3 — Transactions (expenses + income) ✅ merged (PR #12)
 
 - [x] List with filters (date range, category, member) and pagination
 - [x] Add / edit / delete, zod-validated Server Actions
@@ -201,13 +202,37 @@ stays a Server Component. Junk query values are ignored rather than trusted.
 `TransactionKind`. The tables are structurally identical, so duplicating would
 mean fixing every future filter twice.
 
-### Feature 4 — Categories ⬅️ next
+### Feature 4 — Categories ✅ done, PR open
 
-- [ ] Manage categories per space, icon and colour pickers
-- [ ] Income vs expense types
-- [ ] Reassign entries before deleting a category
+- [x] `/settings/categories` — manage categories per space, with icon and colour pickers
+- [x] Income vs expense shown as two sections on one page, each with its own add button
+- [x] Reassign entries before deleting a category, or refuse the delete
+- [x] Usage counts per category, so a row says what deleting it would cost
+- [x] Restore the defaults for a type whose list has been emptied
+- [x] Verified against the database: usage counts, refusals, reassignment and cleanup
 
-### Feature 5 — Budgets
+**Icons and colours are fixed grids**, not a searchable picker. A household
+needs a couple of dozen recognisable symbols; a full emoji picker would be a
+dependency and a lot of UI for no gain. The field still stores any string, so a
+pasted emoji works.
+
+**A category's `type` cannot be edited.** Switching an expense category to
+income would strand every entry filed under it in a list that no longer offers
+it. Delete-and-reassign is the supported path.
+
+**Usage is counted across four tables**, not two. `budgets` and
+`recurringTransactions` carry a `categoryId` as well, and budgets **cascade** —
+deleting a category deletes its budgets outright rather than nulling them. The
+delete dialog calls that out separately, because it is the part a reassignment
+cannot save. `CategoryUsageRepository` holds the list of referencing tables so
+a fifth one is added in one place.
+
+**Counts are advisory, the service is authoritative.** The manage screen
+renders counts from one grouped query per table, but `deleteCategory` re-checks
+at write time. A count that goes stale between render and click cannot cost
+anyone their history — the delete is refused and the dialog refreshes itself.
+
+### Feature 5 — Budgets ⬅️ next
 
 - [ ] Monthly and yearly budgets per category
 - [ ] Progress against actual spend; over-budget indicator
@@ -283,6 +308,12 @@ Things already hit, so they are not hit twice.
   instead of syncing state in an effect.
 - **`pnpm db:seed` truncates `session`,** so any browser or curl session is
   signed out and pages start answering 307. Sign in again after seeding.
+- **`BETTER_AUTH_URL` is `http://localhost:3001`,** so `next dev` on the default
+  3000 makes better-auth reject every sign-in with `INVALID_ORIGIN`. Run
+  `pnpm dev --port 3001`, or change the variable — not one and not the other.
+- **The Select reports "nothing chosen" as `null`, not `""`.** Its
+  `onValueChange` is typed `string | null`, so backing it with a `useState<string>`
+  fails to typecheck.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -306,5 +337,10 @@ Not blocking, but worth doing.
       `transactions` table with a `type` column would have been simpler; the
       shared query and service layer hide most of the cost, so this is only
       worth revisiting if a third kind ever appears.
+- [ ] Reassigning a category updates four tables in four statements with no
+      transaction to wrap them (the HTTP driver has none). A failure part-way
+      leaves some rows moved and the category still present. Recoverable —
+      every moved row points at a valid same-type category and the delete can
+      be retried — but a `transactions` table would reduce it to two.
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.

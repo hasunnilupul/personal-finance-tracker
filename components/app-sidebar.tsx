@@ -31,6 +31,11 @@ const tabs = [
     icon: "📉",
   },
   {
+    href: "/settings/categories",
+    label: "Categories",
+    icon: "🏷️",
+  },
+  {
     href: "/settings/members",
     label: "Members",
     icon: "👥",

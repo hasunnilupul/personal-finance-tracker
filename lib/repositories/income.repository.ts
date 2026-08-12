@@ -45,15 +45,6 @@ export class IncomeRepository {
       .returning();
     return result.length > 0;
   }
-
-  /** Number of income entries still pointing at a category, used before deleting it. */
-  async countByCategory(categoryId: number, organizationId: string): Promise<number> {
-    const result = await db
-      .select({ id: income.id })
-      .from(income)
-      .where(and(eq(income.categoryId, categoryId), eq(income.organizationId, organizationId)));
-    return result.length;
-  }
 }
 
 export const incomeRepository = new IncomeRepository();
