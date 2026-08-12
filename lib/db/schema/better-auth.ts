@@ -28,6 +28,11 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    /**
+     * The space the user is currently looking at. Set by the space switcher
+     * and defaulted to the personal space on sign-in.
+     */
+    activeOrganizationId: text("active_organization_id"),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );

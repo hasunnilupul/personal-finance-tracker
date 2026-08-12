@@ -3,5 +3,6 @@ export * from "@/lib/db/schema/budgets";
 export * from "@/lib/db/schema/categories";
 export * from "@/lib/db/schema/expenses";
 export * from "@/lib/db/schema/income";
+export * from "@/lib/db/schema/organization";
 export * from "@/lib/db/schema/recurring-transactions";
 export * from "@/lib/db/schema/savings-goals";

@@ -1,11 +1,28 @@
-import { pgTable, text, timestamp, integer, varchar, numeric } from "drizzle-orm/pg-core";
+import { pgTable, timestamp, integer, varchar, numeric, index } from "drizzle-orm/pg-core";
 
-export const expenses = pgTable("expenses", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: text("userId").notNull(),
-  categoryId: integer("categoryId").notNull(),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-  description: varchar("description", { length: 255 }),
-  date: timestamp("date").notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+import { auditColumns } from "@/lib/db/schema/columns";
+import { categories } from "@/lib/db/schema/categories";
+
+/**
+ * A single expense in a space.
+ *
+ * `categoryId` is nullable and `set null` on category deletion, so removing a
+ * category never silently destroys spending history — the entries simply
+ * become uncategorised. The service layer still refuses to delete a category
+ * that is in use, making that a fallback rather than the normal path.
+ */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    categoryId: integer("categoryId").references(() => categories.id, { onDelete: "set null" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    description: varchar("description", { length: 255 }),
+    date: timestamp("date").notNull(),
+    ...auditColumns(),
+  },
+  (table) => [
+    index("expenses_organizationId_date_idx").on(table.organizationId, table.date),
+    index("expenses_categoryId_idx").on(table.categoryId),
+  ],
+);

@@ -7,15 +7,23 @@ import {
 import { eq, and } from "drizzle-orm";
 
 export class RecurringTransactionRepository {
-  async findAll(userId: string): Promise<RecurringTransaction[]> {
-    return db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, userId));
+  async findAll(organizationId: string): Promise<RecurringTransaction[]> {
+    return db
+      .select()
+      .from(recurringTransactions)
+      .where(eq(recurringTransactions.organizationId, organizationId));
   }
 
-  async findById(id: number, userId: string): Promise<RecurringTransaction | undefined> {
+  async findById(id: number, organizationId: string): Promise<RecurringTransaction | undefined> {
     const [result] = await db
       .select()
       .from(recurringTransactions)
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)));
+      .where(
+        and(
+          eq(recurringTransactions.id, id),
+          eq(recurringTransactions.organizationId, organizationId),
+        ),
+      );
     return result;
   }
 
@@ -26,21 +34,31 @@ export class RecurringTransactionRepository {
 
   async update(
     id: number,
-    userId: string,
+    organizationId: string,
     data: Partial<NewRecurringTransaction>,
   ): Promise<RecurringTransaction | undefined> {
     const [result] = await db
       .update(recurringTransactions)
       .set(data)
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
+      .where(
+        and(
+          eq(recurringTransactions.id, id),
+          eq(recurringTransactions.organizationId, organizationId),
+        ),
+      )
       .returning();
     return result;
   }
 
-  async delete(id: number, userId: string): Promise<boolean> {
+  async delete(id: number, organizationId: string): Promise<boolean> {
     const result = await db
       .delete(recurringTransactions)
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
+      .where(
+        and(
+          eq(recurringTransactions.id, id),
+          eq(recurringTransactions.organizationId, organizationId),
+        ),
+      )
       .returning();
     return result.length > 0;
   }

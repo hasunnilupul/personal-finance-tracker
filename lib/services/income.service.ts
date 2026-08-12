@@ -1,29 +1,38 @@
 import { incomeRepository } from "@/lib/repositories/income.repository";
-import { Income, NewIncome } from "@/lib/db/models/income.model";
+import { Income, IncomeInput } from "@/lib/db/models/income.model";
+import { SpaceContext } from "@/lib/services/types";
 
 export class IncomeService {
-  async getAllIncome(userId: string): Promise<Income[]> {
-    return incomeRepository.findAll(userId);
+  async getAllIncome(ctx: SpaceContext): Promise<Income[]> {
+    return incomeRepository.findAll(ctx.organizationId);
   }
 
-  async getIncomeById(id: number, userId: string): Promise<Income | undefined> {
-    return incomeRepository.findById(id, userId);
+  async getIncomeById(ctx: SpaceContext, id: number): Promise<Income | undefined> {
+    return incomeRepository.findById(id, ctx.organizationId);
   }
 
-  async createIncome(data: NewIncome): Promise<Income> {
-    return incomeRepository.create(data);
+  async createIncome(ctx: SpaceContext, data: IncomeInput): Promise<Income> {
+    return incomeRepository.create({
+      ...data,
+      organizationId: ctx.organizationId,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
   }
 
   async updateIncome(
+    ctx: SpaceContext,
     id: number,
-    userId: string,
-    data: Partial<NewIncome>,
+    data: Partial<IncomeInput>,
   ): Promise<Income | undefined> {
-    return incomeRepository.update(id, userId, data);
+    return incomeRepository.update(id, ctx.organizationId, {
+      ...data,
+      updatedBy: ctx.userId,
+    });
   }
 
-  async deleteIncome(id: number, userId: string): Promise<boolean> {
-    return incomeRepository.delete(id, userId);
+  async deleteIncome(ctx: SpaceContext, id: number): Promise<boolean> {
+    return incomeRepository.delete(id, ctx.organizationId);
   }
 }
 
