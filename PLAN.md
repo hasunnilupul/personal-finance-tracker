@@ -10,16 +10,17 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 1a — spaces + RBAC. Pushed to
-`feat/spaces-and-rbac`, awaiting PR into `dev`.
+**Last completed:** Feature 1a — spaces + RBAC, merged into `dev` (PR #7).
 
 **Next up:** Feature 1b — invitations and invite-only sign-up.
 
-| Branch                 | State                                   |
-| ---------------------- | --------------------------------------- |
-| `main`                 | Production. Behind `dev`.               |
-| `dev`                  | Integration branch. Has Feature 0.      |
-| `feat/spaces-and-rbac` | Feature 1a, pushed, needs PR into `dev` |
+| Branch | State                                         |
+| ------ | --------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 and 1a |
+| `dev`  | Integration branch. Has Features 0 and 1a.    |
+
+**Workflow:** branch off `dev`, open the PR **before** switching away from the
+branch, and let the repo owner merge it.
 
 ---
 
@@ -100,7 +101,7 @@ plus the feature exercised against the real database — not just compiled.
 - [x] Format the shadcn components; add `lint:fix`, `format`, `typecheck` scripts
 - [x] `.env.example` and a real README
 
-### Feature 1a — Spaces and RBAC ✅ done, awaiting PR
+### Feature 1a — Spaces and RBAC ✅ merged (PR #7)
 
 - [x] `organization` / `member` / `invitation` tables, `session.activeOrganizationId`
 - [x] Re-scope all six domain tables from `userId` to `organizationId`, with audit columns
