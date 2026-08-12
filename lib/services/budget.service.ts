@@ -1,29 +1,38 @@
 import { budgetRepository } from "@/lib/repositories/budget.repository";
-import { Budget, NewBudget } from "@/lib/db/models/budget.model";
+import { Budget, BudgetInput } from "@/lib/db/models/budget.model";
+import { SpaceContext } from "@/lib/services/types";
 
 export class BudgetService {
-  async getAllBudgets(userId: string): Promise<Budget[]> {
-    return budgetRepository.findAll(userId);
+  async getAllBudgets(ctx: SpaceContext): Promise<Budget[]> {
+    return budgetRepository.findAll(ctx.organizationId);
   }
 
-  async getBudgetById(id: number, userId: string): Promise<Budget | undefined> {
-    return budgetRepository.findById(id, userId);
+  async getBudgetById(ctx: SpaceContext, id: number): Promise<Budget | undefined> {
+    return budgetRepository.findById(id, ctx.organizationId);
   }
 
-  async createBudget(data: NewBudget): Promise<Budget> {
-    return budgetRepository.create(data);
+  async createBudget(ctx: SpaceContext, data: BudgetInput): Promise<Budget> {
+    return budgetRepository.create({
+      ...data,
+      organizationId: ctx.organizationId,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
   }
 
   async updateBudget(
+    ctx: SpaceContext,
     id: number,
-    userId: string,
-    data: Partial<NewBudget>,
+    data: Partial<BudgetInput>,
   ): Promise<Budget | undefined> {
-    return budgetRepository.update(id, userId, data);
+    return budgetRepository.update(id, ctx.organizationId, {
+      ...data,
+      updatedBy: ctx.userId,
+    });
   }
 
-  async deleteBudget(id: number, userId: string): Promise<boolean> {
-    return budgetRepository.delete(id, userId);
+  async deleteBudget(ctx: SpaceContext, id: number): Promise<boolean> {
+    return budgetRepository.delete(id, ctx.organizationId);
   }
 }
 

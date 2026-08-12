@@ -1,6 +1,20 @@
 import type { Logger, LogContext, LogLevel } from "@/lib/logger/types";
 
-const isDevelopment = process.env.NODE_ENV === "development";
+/**
+ * Whether a level is loud enough to emit.
+ *
+ * Warnings and errors always surface — silencing them in production would
+ * hide exactly the events worth knowing about. Informational and debug output
+ * is suppressed in production only, so scripts run outside Next (where
+ * `NODE_ENV` is unset) still report what they did.
+ */
+function shouldLog(level: LogLevel) {
+  if (level === "error" || level === "warn") {
+    return true;
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
 
 /**
  * Extracts the caller location from the stack trace.
@@ -72,7 +86,7 @@ function normalizeError(error: unknown) {
  */
 class ConsoleLogger implements Logger {
   private log(level: LogLevel, message: string, context?: LogContext) {
-    if (!isDevelopment) {
+    if (!shouldLog(level)) {
       return;
     }
 

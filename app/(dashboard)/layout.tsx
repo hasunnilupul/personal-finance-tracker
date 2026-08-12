@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import AppSidebar from "@/components/app-sidebar";
-import { requireUser } from "@/lib/auth/dal";
+import SpaceSwitcher from "@/components/space-switcher";
+import { listSpaces, requireActiveSpace } from "@/lib/auth/dal";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import SignOutButton from "@/components/sign-out-button";
 
@@ -9,9 +10,7 @@ const DashboardLayout = async ({
 }: Readonly<{
   children: ReactNode;
 }>) => {
-  const user = await requireUser();
-
-  const userName = user.name || user.email;
+  const [{ space }, spaces] = await Promise.all([requireActiveSpace(), listSpaces()]);
 
   return (
     <div className="bg-background flex h-screen w-screen overflow-hidden">
@@ -22,13 +21,18 @@ const DashboardLayout = async ({
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-foreground truncate text-2xl font-bold sm:text-3xl">
-                Welcome back, {userName}
+                {space.isPersonal ? "Your money" : space.name}
               </h1>
               <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
-                Track your expenses and manage your budget
+                {space.isPersonal
+                  ? "Private to you — nobody else can see this ledger"
+                  : "Shared space — everyone here can add and edit entries"}
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <div className="w-40 sm:w-48">
+                <SpaceSwitcher spaces={spaces} activeSpaceId={space.id} />
+              </div>
               <ThemeSwitcher />
               <SignOutButton />
             </div>
