@@ -16,3 +16,17 @@ export type NewInvitation = InferInsertModel<typeof invitation>;
 export type Space = Organization & {
   role: string;
 };
+
+/**
+ * A membership joined to the person behind it, for the members list.
+ */
+export interface SpaceMember {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: string;
+  createdAt: Date;
+  name: string;
+  email: string;
+  image: string | null;
+}

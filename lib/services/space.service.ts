@@ -1,6 +1,13 @@
 import { spaceRepository } from "@/lib/repositories/space.repository";
+import { invitationRepository } from "@/lib/repositories/invitation.repository";
 import { categoryService } from "@/lib/services/category.service";
-import { Member, Organization, Space } from "@/lib/db/models/organization.model";
+import {
+  Invitation,
+  Member,
+  Organization,
+  Space,
+  SpaceMember,
+} from "@/lib/db/models/organization.model";
 import { ServiceError } from "@/lib/services/errors";
 import { logger } from "@/lib/logger";
 
@@ -67,6 +74,14 @@ export class SpaceService {
 
   async listMembers(organizationId: string): Promise<Member[]> {
     return spaceRepository.listMembers(organizationId);
+  }
+
+  async listMembersWithUser(organizationId: string): Promise<SpaceMember[]> {
+    return spaceRepository.listMembersWithUser(organizationId);
+  }
+
+  async listPendingInvitations(organizationId: string): Promise<Invitation[]> {
+    return invitationRepository.listPending(organizationId);
   }
 
   /**

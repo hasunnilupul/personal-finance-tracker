@@ -10,9 +10,10 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 1a — spaces + RBAC, merged into `dev` (PR #7).
+**Last completed:** Feature 1b — invitations and invite-only sign-up. Pushed to
+`feat/invitations`, PR open into `dev`.
 
-**Next up:** Feature 1b — invitations and invite-only sign-up.
+**Next up:** Feature 2 — currency and money handling.
 
 | Branch | State                                         |
 | ------ | --------------------------------------------- |
@@ -142,20 +143,22 @@ plus the feature exercised against the real database — not just compiled.
 - [x] Migration applied, seed rewritten
 - [x] Verified: isolation, switching, and tampered `activeOrganizationId` falling back
 
-### Feature 1b — Invitations and invite-only sign-up ⬅️ next
+### Feature 1b — Invitations and invite-only sign-up ✅ done, PR open
 
-- [ ] `POST` invite from the space owner, producing a **copyable link** (`/accept-invitation/[id]`)
-- [ ] Resend email as a layer on top: sends when `RESEND_FROM` is set, logs and skips when not
-- [ ] `/settings/members` — list members, pending invites, revoke, remove, change role
-- [ ] Accept-invitation page, handling signed-in, signed-out, and wrong-account cases
-- [ ] **Close public sign-up**: reject registration without a valid pending invitation,
-      behind `ALLOW_PUBLIC_SIGNUP` (default `false`)
-- [ ] Leave-space flow, blocked for the personal space
-- [ ] Verify: invited user joins the right space, sees its data, and cannot invite others
+- [x] Invite from the space owner, producing a **copyable link** (`/accept-invitation/[id]`)
+- [x] Resend email as a layer on top: sends when `RESEND_FROM` is set, logs and skips when not
+- [x] `/settings/members` — members, pending invites, withdraw, remove, leave
+- [x] Accept-invitation page, handling signed-out, wrong-account, expired and used cases
+- [x] **Public sign-up closed**: rejected without a pending invitation, behind
+      `ALLOW_PUBLIC_SIGNUP`, with a first-user bootstrap so a fresh deployment works
+- [x] Leave-space flow, blocked for the personal space
+- [x] Verified: uninvited sign-up 403s and writes no row; invited address can register,
+      accept, and see shared data; member cannot invite or remove
 
-> Sign-up is currently **open** on the deployed app. This feature closes it.
+Deferred, not needed yet: changing a member's role. There are only two roles and
+the owner is the creator, so there is nothing meaningful to change it to.
 
-### Feature 2 — Currency and money handling
+### Feature 2 — Currency and money handling ⬅️ next
 
 - [ ] Currency per space, plus a per-entry currency
 - [ ] `exchange_rates` table with a daily fetch and manual override
@@ -238,6 +241,13 @@ Things already hit, so they are not hit twice.
   `next-server` PID directly.
 - **The logger only emits warn/error in production.** Info and debug are
   suppressed there by design.
+- **`import "server-only"` breaks the seed script.** Anything reachable from
+  `lib/auth/auth.ts` is also imported by `scripts/seed.ts`, and outside Next's
+  bundler that package throws on import. Keep it in `lib/auth/dal.ts`, which
+  scripts never reach, and out of the `auth.ts` import graph.
+- **better-auth blocks removing the only owner** before it checks role
+  permissions, so that path returns a confusing "cannot leave as the only
+  owner" message rather than a permission error. It still denies the action.
 
 ---
 
