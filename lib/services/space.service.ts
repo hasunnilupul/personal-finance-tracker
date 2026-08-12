@@ -1,6 +1,9 @@
 import { spaceRepository } from "@/lib/repositories/space.repository";
 import { invitationRepository } from "@/lib/repositories/invitation.repository";
+import { expenseRepository } from "@/lib/repositories/expense.repository";
+import { incomeRepository } from "@/lib/repositories/income.repository";
 import { categoryService } from "@/lib/services/category.service";
+import { exchangeRateService } from "@/lib/services/exchange-rate.service";
 import {
   Invitation,
   Member,
@@ -53,11 +56,77 @@ export class SpaceService {
     await categoryService.seedDefaultCategories({
       organizationId: space.id,
       userId: user.id,
+      baseCurrency: space.baseCurrency,
     });
 
     logger.info("Personal space created", { userId: user.id, organizationId: space.id });
 
     return space;
+  }
+
+  /**
+   * Switches a space to a different reporting currency.
+   *
+   * Every entry keeps the amount that was actually spent and its own currency;
+   * only the derived `baseAmount` is recomputed, at the rate for that entry's
+   * date. Re-valuing history at today's rate would quietly rewrite what past
+   * months cost.
+   *
+   * @returns How many entries were re-converted.
+   */
+  async changeBaseCurrency(organizationId: string, baseCurrency: string): Promise<number> {
+    const [expenses, incomeEntries] = await Promise.all([
+      expenseRepository.findAll(organizationId),
+      incomeRepository.findAll(organizationId),
+    ]);
+
+    // Every conversion is computed before anything is written. A missing rate
+    // throws here, with the space still on its old currency — rather than
+    // halfway through, leaving converted and unconverted entries side by side.
+    // The HTTP database driver has no interactive transactions, so ordering the
+    // work this way is what keeps the change coherent.
+    const convert = async (entry: {
+      id: number;
+      amount: string;
+      currency: string;
+      date: Date;
+    }) => ({
+      id: entry.id,
+      ...(await exchangeRateService.convert(
+        entry.amount,
+        entry.currency,
+        baseCurrency,
+        entry.date,
+      )),
+    });
+
+    const [expenseConversions, incomeConversions] = await Promise.all([
+      Promise.all(expenses.map(convert)),
+      Promise.all(incomeEntries.map(convert)),
+    ]);
+
+    await spaceRepository.updateBaseCurrency(organizationId, baseCurrency);
+
+    await Promise.all([
+      ...expenseConversions.map((conversion) =>
+        expenseRepository.update(conversion.id, organizationId, {
+          baseAmount: conversion.baseAmount,
+          exchangeRate: conversion.rate,
+        }),
+      ),
+      ...incomeConversions.map((conversion) =>
+        incomeRepository.update(conversion.id, organizationId, {
+          baseAmount: conversion.baseAmount,
+          exchangeRate: conversion.rate,
+        }),
+      ),
+    ]);
+
+    const reconverted = expenseConversions.length + incomeConversions.length;
+
+    logger.info("Base currency changed", { organizationId, baseCurrency, reconverted });
+
+    return reconverted;
   }
 
   async listSpaces(userId: string): Promise<Space[]> {

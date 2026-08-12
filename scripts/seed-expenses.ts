@@ -3,6 +3,7 @@ import { expenses } from "@/lib/db/schema/expenses";
 import { categories } from "@/lib/db/schema/categories";
 import { eq } from "drizzle-orm";
 import { logger } from "@/lib/logger";
+import { DEFAULT_CURRENCY } from "@/constants/currencies";
 
 const SAMPLE_EXPENSES = [
   { category: "Food & Dining", amount: "2500.00", description: "Dinner with friends", day: 1 },
@@ -15,7 +16,11 @@ const SAMPLE_EXPENSES = [
   { category: "Transportation", amount: "1800.00", description: "Taxi rides", day: 18 },
 ];
 
-export async function seedExpenses(organizationId: string, userId: string) {
+export async function seedExpenses(
+  organizationId: string,
+  userId: string,
+  baseCurrency: string = DEFAULT_CURRENCY,
+) {
   const spaceCategories = await db
     .select()
     .from(categories)
@@ -32,6 +37,10 @@ export async function seedExpenses(organizationId: string, userId: string) {
       organizationId,
       categoryId: categoryMap[sample.category],
       amount: sample.amount,
+      // Seed data is already in the space's own currency, so no conversion.
+      currency: baseCurrency,
+      baseAmount: sample.amount,
+      exchangeRate: "1",
       description: sample.description,
       date: new Date(now.getFullYear(), now.getMonth(), sample.day),
       createdBy: userId,

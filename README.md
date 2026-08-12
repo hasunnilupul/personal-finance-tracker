@@ -95,6 +95,24 @@ exception is the very first account in an empty database, which is allowed
 through so a fresh deployment can be set up. Set `ALLOW_PUBLIC_SIGNUP=true` to
 open registration to anyone.
 
+### Money
+
+Each space reports in a **base currency**, set at `/settings/space`. An entry
+can be recorded in any supported currency; it stores what was actually spent
+alongside what that was worth in the base currency **on the entry's own date**.
+Totals sum the converted figure, so a later move in the exchange rate cannot
+rewrite last month's spending.
+
+Rates come from
+[`@fawazahmed0/currency-api`](https://github.com/fawazahmed0/exchange-api) — no
+API key, no quota, and it covers LKR, which the ECB-backed feeds do not. They
+are cached per day in `exchangeRates`, refreshed by a daily cron and on demand
+when a conversion misses. A row with `source = 'manual'` overrides the feed for
+that day, which is the escape hatch when it is wrong or unavailable.
+
+Amounts are Postgres `numeric`, not integer minor units — `numeric` is exact
+decimal, so there is no floating-point error to work around.
+
 ### Roles
 
 | Role     | Finance data | Invite / remove members | Delete space |

@@ -1,6 +1,15 @@
-import { pgTable, text, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  varchar,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import { user } from "@/lib/db/schema/better-auth";
+import { DEFAULT_CURRENCY } from "@/constants/currencies";
 
 /**
  * A space — the container every piece of financial data belongs to.
@@ -21,6 +30,14 @@ export const organization = pgTable("organization", {
   metadata: text("metadata"),
   /** True for the auto-created personal space, which cannot be left or deleted. */
   isPersonal: boolean("is_personal").default(false).notNull(),
+  /**
+   * The currency this space reports in.
+   *
+   * Entries may be recorded in any supported currency; each one also stores
+   * what it was worth in this currency at the time, and every total is a sum
+   * of those.
+   */
+  baseCurrency: varchar("base_currency", { length: 3 }).default(DEFAULT_CURRENCY).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").$onUpdate(() => /* @__PURE__ */ new Date()),
 });
