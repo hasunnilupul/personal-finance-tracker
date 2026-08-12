@@ -2,12 +2,14 @@ import { and, asc, desc, eq, getTableColumns } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { organization, member } from "@/lib/db/schema/organization";
+import { user } from "@/lib/db/schema/better-auth";
 import {
   Member,
   NewMember,
   NewOrganization,
   Organization,
   Space,
+  SpaceMember,
 } from "@/lib/db/models/organization.model";
 
 export class SpaceRepository {
@@ -71,6 +73,27 @@ export class SpaceRepository {
     return db
       .select()
       .from(member)
+      .where(eq(member.organizationId, organizationId))
+      .orderBy(asc(member.createdAt));
+  }
+
+  /**
+   * Members of a space with the person behind each one, for the members page.
+   */
+  async listMembersWithUser(organizationId: string): Promise<SpaceMember[]> {
+    return db
+      .select({
+        id: member.id,
+        userId: member.userId,
+        organizationId: member.organizationId,
+        role: member.role,
+        createdAt: member.createdAt,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+      })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
       .where(eq(member.organizationId, organizationId))
       .orderBy(asc(member.createdAt));
   }

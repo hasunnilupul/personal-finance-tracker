@@ -25,6 +25,11 @@ const tabs = [
     label: "Reports",
     icon: "📉",
   },
+  {
+    href: "/settings/members",
+    label: "Members",
+    icon: "👥",
+  },
 ];
 
 export default function AppSidebar() {

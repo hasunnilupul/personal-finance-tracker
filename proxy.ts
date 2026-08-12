@@ -5,11 +5,18 @@ import { auth } from "@/lib/auth/auth";
 
 /**
  * Routes reachable without an authenticated session.
+ *
+ * `/accept-invitation` is public because the whole point is that the recipient
+ * may not have an account yet — the page tells them to create one. Accepting
+ * still requires a signed-in session whose email matches the invitation.
  */
-const publicRoutes = ["/sign-in", "/sign-up"];
+const publicRoutes = ["/sign-in", "/sign-up", "/accept-invitation"];
 
 /**
  * Routes that an authenticated user should never see.
+ *
+ * `/accept-invitation` is deliberately absent: a signed-in user following an
+ * invitation link needs to reach it.
  */
 const authRoutes = ["/sign-in", "/sign-up"];
 

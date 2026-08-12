@@ -82,6 +82,19 @@ Every piece of financial data belongs to a **space**, never directly to a user.
 Spaces are better-auth `organization` records, with `isPersonal` marking the
 private one. The space in view is the session's `activeOrganizationId`.
 
+### Joining
+
+Sign-up is **invite only**. The owner of a shared space invites someone by
+email from `/settings/members`, which produces a link to
+`/accept-invitation/<id>`. If Resend is configured the link is also emailed;
+either way it can be copied and sent by hand.
+
+An email with no pending invitation cannot register at all — the check runs in
+a database hook, so it covers every route into sign-up, not just the form. The
+exception is the very first account in an empty database, which is allowed
+through so a fresh deployment can be set up. Set `ALLOW_PUBLIC_SIGNUP=true` to
+open registration to anyone.
+
 ### Roles
 
 | Role     | Finance data | Invite / remove members | Delete space |

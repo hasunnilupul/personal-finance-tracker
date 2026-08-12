@@ -1,12 +1,16 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { ac, roles } from "@/lib/auth/permissions";
+import { canSignUp, SIGNUP_NOT_INVITED_MESSAGE } from "@/lib/auth/signup-policy";
+import { buildInvitationUrl } from "@/lib/auth/urls";
 import { spaceService } from "@/lib/services/space.service";
 import { categoryService } from "@/lib/services/category.service";
+import { sendInvitationEmail } from "@/lib/email/invitation-email";
 import { logger } from "@/lib/logger";
 
 export const auth = betterAuth({
@@ -20,6 +24,23 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        /**
+         * Enforce invite-only registration.
+         *
+         * This runs before the user row is written, and covers every route
+         * into sign-up — the form, the API, and anything added later — because
+         * they all end up creating a user. Guarding the page alone would not.
+         */
+        before: async (user) => {
+          if (await canSignUp(user.email)) {
+            return;
+          }
+
+          throw new APIError("FORBIDDEN", {
+            message: SIGNUP_NOT_INVITED_MESSAGE,
+          });
+        },
+
         /**
          * Give every new user their own private ledger.
          *
@@ -79,6 +100,21 @@ export const auth = betterAuth({
             },
           },
         },
+      },
+      /**
+       * Emails the invitation when Resend is configured.
+       *
+       * The link is the real mechanism — the members page always shows it for
+       * copying — so a missing or failed email is logged and ignored rather
+       * than failing the invitation.
+       */
+      sendInvitationEmail: async ({ id, email, organization: space, inviter }) => {
+        await sendInvitationEmail({
+          to: email,
+          spaceName: space.name,
+          inviterName: inviter.user.name || inviter.user.email,
+          acceptUrl: buildInvitationUrl(id),
+        });
       },
       organizationHooks: {
         /**
