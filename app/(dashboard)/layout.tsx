@@ -1,8 +1,7 @@
 import { ReactNode } from "react";
 import AppSidebar from "@/components/app-sidebar";
-import { auth } from "@/lib/auth/auth";
+import { requireUser } from "@/lib/auth/dal";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { headers } from "next/headers";
 import SignOutButton from "@/components/sign-out-button";
 
 const DashboardLayout = async ({
@@ -10,12 +9,9 @@ const DashboardLayout = async ({
 }: Readonly<{
   children: ReactNode;
 }>) => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const user = await requireUser();
 
-  const user = session?.user;
-  const userName = user?.name || user?.email || "User";
+  const userName = user.name || user.email;
 
   return (
     <div className="bg-background flex h-screen w-screen overflow-hidden">
