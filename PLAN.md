@@ -10,15 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 5 — budgets. Pushed to `feat/budgets`,
-PR #14 open into `dev`, awaiting the repo owner's merge.
+**Last completed:** Feature 6 — dashboard and reports. Pushed to
+`feat/dashboard-reports`, PR open into `dev`, awaiting the repo owner's merge.
 
-**Next up:** Feature 6 — dashboard and reports.
+**Next up:** Feature 7 — savings goals and recurring transactions.
 
-| Branch | State                                                   |
-| ------ | ------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 4.         |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3 and 4. |
+| Branch | State                                                      |
+| ------ | ---------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 5.            |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4 and 5. |
 
 ---
 
@@ -87,6 +87,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Budget periods           | Calendar-aligned, nothing materialised    | Rollover becomes free — the window moves on its own, with no cron and no period rows   |
 | Budget amounts           | Space base currency, no `currency` column | They are compared against `baseAmount` sums; anything else converts one side each time |
 | Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded    |
+| Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS          |
+| Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast  |
 | Package manager          | pnpm                                      |                                                                                        |
 
 ---
@@ -235,7 +237,7 @@ renders counts from one grouped query per table, but `deleteCategory` re-checks
 at write time. A count that goes stale between render and click cannot cost
 anyone their history — the delete is refused and the dialog refreshes itself.
 
-### Feature 5 — Budgets ✅ done, PR #14 open
+### Feature 5 — Budgets ✅ merged (PR #14)
 
 - [x] Monthly and yearly budgets per category
 - [x] Progress against actual spend; over-budget indicator
@@ -272,13 +274,56 @@ would not appear on the screen that created it.
 period; the service's check exists to produce a sentence rather than a
 constraint error, and would otherwise lose a race.
 
-### Feature 6 — Dashboard and reports ⬅️ next
+### Feature 6 — Dashboard and reports ✅ done, PR open
 
-- [ ] Dashboard: month totals, recent entries, budget health
-- [ ] Reports: spend by category, trend over time, income vs expense
-- [ ] Date-range picker
+- [x] Dashboard: month totals, recent entries, budget health
+- [x] Reports: spend by category, trend over time, income vs expense
+- [x] Date-range picker, with presets before a custom range
+- [x] Every chart has a table twin and a keyboard path to the same figures
+- [x] Verified against the database: totals reconcile, junk ranges fall back, income path exercised
 
-### Feature 7 — Savings goals and recurring transactions
+**Both pages are compositions, not a new layer.** The dashboard's "spent this
+month" is the same window the budgets page measures against, and its budget
+bars are `budgetService.getOverview` reused whole; the recent list is the
+transaction list asked for one short page. A second way to compute the month's
+spend would eventually disagree with the first — verified by a check that the
+dashboard tile and the reports page report the same figure for the same month.
+
+**The dashboard has no range control and the reports page does.** "Where am I
+right now" is the dashboard's whole question; a dashboard that scrolls into the
+past is the reports page with fewer features.
+
+**Two grouped queries carry the reports page**, `sumByCategoryWithNames` and
+`sumByMonth`, both taking the same `TransactionFilters` the list uses so a
+report range and a list filter narrow identically. `sumByMonth` buckets with
+`to_char` on the stored value: the column is `timestamp without time zone` and
+every date is anchored to midday UTC, so no timezone conversion is in the way.
+
+**The breakdown keeps the uncategorised bucket**, unlike the budgets query it
+sits beside. Budgets can ignore it — no limit can point at it — but a report
+that dropped it would print parts that do not add up to the total beside them.
+A check asserts the breakdown and the monthly buckets each sum to the headline.
+
+**Chart colour is two validated tokens, not a taste call.** `--viz-income` and
+`--viz-expense` are a categorical pair checked against the app's own card
+surfaces: worst-case deutan ΔE 9.2 light / 9.4 dark and normal-vision 27.6 /
+26.5, against floors of 8 and 15. The existing `--chart-1..5` are a grey
+lightness ramp and cannot tell two series apart. Light-mode aqua measures
+2.82:1, under the 3:1 bar, which is **why** every chart ships visible labels
+and a `details` table twin rather than leaning on the fill.
+
+**Spending by category is one series, so one colour.** Shading each bar by its
+own size would encode length twice; tinting by the category's own colour would
+imply the hues mean something. Identity comes from the icon and name beside the
+bar. Bars scale against the largest category, not the total, so the ranking
+stays visible when one category dominates — the share of the total is printed
+beside each one so the two readings cannot be confused.
+
+**Income and expenses share one axis.** Both are amounts in the same currency,
+so the comparison is real; a second y-axis would let the two be slid against
+each other until they told whatever story was wanted.
+
+### Feature 7 — Savings goals and recurring transactions ⬅️ next
 
 - [ ] Savings goals with progress and deadlines
 - [ ] Recurring templates materialised into real entries when due
@@ -351,6 +396,13 @@ Things already hit, so they are not hit twice.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
+- **`sumTransactions` returns `"0"`, not `"0.00"`, for an empty set** — the
+  `coalesce(..., 0)::text` in the query has no scale. `formatMoney` renders
+  both the same, so it only shows up when a figure is compared as a string.
+  Normalise with `Number(x).toFixed(2)` before putting it in a model.
+- **The two transaction tables have separate id sequences,** so ordering a
+  merged expense-and-income list by id ranks by which table was busier. The
+  dashboard's recent list breaks date ties on `updatedAt` instead.
 
 ---
 
