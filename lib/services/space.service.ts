@@ -3,7 +3,9 @@ import { invitationRepository } from "@/lib/repositories/invitation.repository";
 import { expenseRepository } from "@/lib/repositories/expense.repository";
 import { incomeRepository } from "@/lib/repositories/income.repository";
 import { categoryService } from "@/lib/services/category.service";
+import { budgetService } from "@/lib/services/budget.service";
 import { exchangeRateService } from "@/lib/services/exchange-rate.service";
+import { SpaceContext } from "@/lib/services/types";
 import {
   Invitation,
   Member,
@@ -13,6 +15,17 @@ import {
 } from "@/lib/db/models/organization.model";
 import { ServiceError } from "@/lib/services/errors";
 import { logger } from "@/lib/logger";
+
+/**
+ * What a base-currency change touched, counted by kind.
+ *
+ * Entries and budgets are reported separately because they are re-converted on
+ * different rules — entries at their own date, budgets at today's.
+ */
+export interface ReconversionCount {
+  entries: number;
+  budgets: number;
+}
 
 /**
  * Builds a URL-safe slug, suffixed to stay unique across all spaces.
@@ -72,9 +85,19 @@ export class SpaceService {
    * date. Re-valuing history at today's rate would quietly rewrite what past
    * months cost.
    *
-   * @returns How many entries were re-converted.
+   * Budget limits are the exception: they hold no currency of their own, so they
+   * are re-expressed in the new currency at today's rate. A limit is a
+   * forward-looking intention rather than a record of what something cost, so
+   * what it is worth now is the figure that matters.
+   *
+   * `ctx.baseCurrency` is the currency being left behind — the budgets are
+   * converted out of it — and `ctx.userId` is stamped on the rows it touches.
+   *
+   * @returns How many entries and how many budgets were re-converted.
    */
-  async changeBaseCurrency(organizationId: string, baseCurrency: string): Promise<number> {
+  async changeBaseCurrency(ctx: SpaceContext, baseCurrency: string): Promise<ReconversionCount> {
+    const organizationId = ctx.organizationId;
+
     const [expenses, incomeEntries] = await Promise.all([
       expenseRepository.findAll(organizationId),
       incomeRepository.findAll(organizationId),
@@ -107,6 +130,20 @@ export class SpaceService {
 
     await spaceRepository.updateBaseCurrency(organizationId, baseCurrency);
 
+    const budgetsReconverted = await budgetService.reconvertAmounts(
+      organizationId,
+      ctx.userId,
+      async (amount) => {
+        const { baseAmount } = await exchangeRateService.convert(
+          amount,
+          ctx.baseCurrency,
+          baseCurrency,
+        );
+
+        return baseAmount;
+      },
+    );
+
     await Promise.all([
       ...expenseConversions.map((conversion) =>
         expenseRepository.update(conversion.id, organizationId, {
@@ -122,11 +159,16 @@ export class SpaceService {
       ),
     ]);
 
-    const reconverted = expenseConversions.length + incomeConversions.length;
+    const entries = expenseConversions.length + incomeConversions.length;
 
-    logger.info("Base currency changed", { organizationId, baseCurrency, reconverted });
+    logger.info("Base currency changed", {
+      organizationId,
+      baseCurrency,
+      entries,
+      budgets: budgetsReconverted,
+    });
 
-    return reconverted;
+    return { entries, budgets: budgetsReconverted };
   }
 
   async listSpaces(userId: string): Promise<Space[]> {

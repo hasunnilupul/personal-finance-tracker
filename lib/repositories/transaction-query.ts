@@ -145,6 +145,46 @@ function sumBaseAmount(table: TransactionTable) {
 }
 
 /**
+ * Spend per category between two instants, in the space's base currency.
+ *
+ * One grouped query for the whole set rather than one sum per caller: the
+ * budgets page asks this once per period type and reads every budget's spend
+ * out of the result, so a space with thirty budgets costs the same as one with
+ * three. Reports will want the same shape.
+ *
+ * Takes `Date` bounds rather than the `YYYY-MM-DD` strings the filters use,
+ * because the callers here derive their range from a calendar period rather
+ * than from the URL. The bounds are inclusive on both ends.
+ *
+ * @returns Totals keyed by category id. Uncategorised spend belongs to no
+ * category and is left out.
+ */
+export async function sumBaseAmountByCategory(
+  table: TransactionTable,
+  organizationId: string,
+  from: Date,
+  to: Date,
+): Promise<Map<number, string>> {
+  const rows = await db
+    .select({ categoryId: table.categoryId, total: sumBaseAmount(table) })
+    .from(table)
+    .where(
+      and(eq(table.organizationId, organizationId), gte(table.date, from), lte(table.date, to)),
+    )
+    .groupBy(table.categoryId);
+
+  const totals = new Map<number, string>();
+
+  for (const row of rows) {
+    if (row.categoryId !== null) {
+      totals.set(row.categoryId, row.total);
+    }
+  }
+
+  return totals;
+}
+
+/**
  * Members who have recorded at least one transaction, for the author filter.
  */
 export async function listTransactionAuthors(
