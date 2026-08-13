@@ -11,7 +11,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Feature 5 — budgets. Pushed to `feat/budgets`,
-PR open into `dev`, awaiting the repo owner's merge.
+PR #14 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Feature 6 — dashboard and reports.
 
@@ -235,7 +235,7 @@ renders counts from one grouped query per table, but `deleteCategory` re-checks
 at write time. A count that goes stale between render and click cannot cost
 anyone their history — the delete is refused and the dialog refreshes itself.
 
-### Feature 5 — Budgets ✅ done, PR open
+### Feature 5 — Budgets ✅ done, PR #14 open
 
 - [x] Monthly and yearly budgets per category
 - [x] Progress against actual spend; over-budget indicator
