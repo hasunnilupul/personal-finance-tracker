@@ -10,7 +10,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** The test suite. Pushed to `chore/tests`, PR open into `dev`,
+**Last completed:** The test suite. Pushed to `chore/tests`, PR #18 open into `dev`,
 awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
