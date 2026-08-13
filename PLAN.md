@@ -10,16 +10,16 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 7 — savings goals and recurring transactions. Pushed
-to `feat/goals-recurring`, PR #17 open into `dev`, awaiting the repo owner's merge.
+**Last completed:** The test suite. Pushed to `chore/tests`, PR #18 open into `dev`,
+awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
-left — tests and the lockfile first.
+left — the lockfile first.
 
-| Branch | State                                                         |
-| ------ | ------------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 6.               |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5 and 6. |
+| Branch | State                                                            |
+| ------ | ---------------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 7.                  |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6 and 7. |
 
 ---
 
@@ -133,8 +133,27 @@ whole UTC days. Anchoring to local midnight puts an entry made in Colombo on
 the previous UTC day, which silently drops it out of ranges that should
 contain it — this was a real bug, caught by a filter returning the wrong rows.
 
-**Definition of done.** `pnpm typecheck && pnpm lint && pnpm build` all pass,
-plus the feature exercised against the real database — not just compiled.
+**Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
+`*.test.ts`.
+
+- **Nothing in the suite touches the database.** Repositories are mocked at the
+  module boundary, so it runs offline, in CI, and against no shared state. The
+  placeholder `DATABASE_URL` in `vitest.config.mts` exists only because
+  `lib/db` builds a client at import time; a test that reaches a real query
+  fails loudly, which is the signal wanted — it means a repository was left
+  unmocked.
+- **What is worth testing here is the domain logic**: the RBAC policy, space
+  scoping, currency conversion, and the date arithmetic behind budgets,
+  reports and recurring entries. Those are the parts where being wrong is
+  quiet. Components are not tested; a broken button is loud.
+- **Assert the refusals, not just the happy path.** A policy test that only
+  checks what is allowed passes just as well against a policy that allows
+  everything.
+
+**Definition of done.** `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+all pass, plus the feature exercised against the real database — not just
+compiled. The suite covers the logic; it does not prove a page renders or that
+a migration applies.
 
 ---
 
@@ -471,6 +490,20 @@ Things already hit, so they are not hit twice.
   pattern for anything that is not idempotent.
 - **`neon()` is tagged-template only.** `sql("select …")` throws; use
   `sql.query("select …", params)` for a dynamically built statement.
+- **`vi.clearAllMocks()` does not clear queued `mockResolvedValueOnce` values.**
+  It clears recorded calls only, so one test's queued sequence leaks into the
+  next and fails it in a way that looks like a bug in the code under test. Use
+  `vi.resetAllMocks()` and set the implementations in `beforeEach`.
+- **`Intl` separates a currency symbol from its figure with a non-breaking
+  space.** An ordinary space in an expected string fails in a way that looks
+  identical on screen. Normalise it before comparing.
+- **`await` the `.resolves` / `.rejects` matchers.** Without it the assertion
+  is a floating promise that passes whatever happens.
+- **`parseAmount` matches one number; it does not strip characters.** It used
+  to delete anything that was not a digit, which silently turned `1e5` into
+  `15` — a typo becoming a plausible amount, which for money is the worst kind
+  of failure. Found by the first test written against it. To accept a new
+  format, widen the `AMOUNT` regex; never go back to stripping.
 
 ---
 
@@ -485,8 +518,10 @@ Not blocking, but worth doing.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
-- [ ] No tests yet. Worth adding around permissions, space scoping and currency
-      conversion first.
+- [x] ~~No tests yet.~~ 223 unit tests across the RBAC policy, space scoping,
+      currency conversion and the date arithmetic behind budgets, reports and
+      recurring entries. Still untested: Server Actions, components, and
+      anything that needs a database.
 - [ ] `expenses` and `income` are structurally identical tables. A single
       `transactions` table with a `type` column would have been simpler; the
       shared query and service layer hide most of the cost, so this is only

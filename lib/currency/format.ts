@@ -18,7 +18,10 @@ export function formatMoney(
   currency: string = DEFAULT_CURRENCY,
   options: { locale?: string; compact?: boolean } = {},
 ): string {
-  const value = typeof amount === "string" ? Number(amount) : amount;
+  // `Number("")` is 0, so an empty or blank string would otherwise render as a
+  // confident "$0.00" — a missing amount shown as a real one.
+  const value =
+    typeof amount === "string" ? (amount.trim() === "" ? Number.NaN : Number(amount)) : amount;
 
   if (!Number.isFinite(value)) {
     return "—";
@@ -42,6 +45,18 @@ export function formatMoney(
 }
 
 /**
+ * One contiguous number, with optional decoration either side.
+ *
+ * The prefix excludes `-` and digits so an explicit negative cannot be quietly
+ * dropped, and the suffix excludes digits so a second run of them cannot be
+ * discarded. That second rule is the important one: stripping unknown
+ * characters rather than rejecting them turned `1e5` into `15` — a typo
+ * silently becoming a plausible amount, which for money is the worst kind of
+ * failure. Anything that is not exactly one number is now refused outright.
+ */
+const AMOUNT = /^[^\d.-]*(\d[\d,]*(?:\.\d+)?|\.\d+)[^\d]*$/;
+
+/**
  * Parses a user-typed amount into a `numeric`-safe decimal string.
  *
  * Accepts what people actually type — thousands separators, a leading symbol,
@@ -50,13 +65,13 @@ export function formatMoney(
  * @returns The normalised string, or `null` when the input is not usable.
  */
 export function parseAmount(input: string): string | null {
-  const cleaned = input.replace(/[^\d.-]/g, "");
+  const match = AMOUNT.exec(input);
 
-  if (!cleaned || !/^-?\d*\.?\d+$/.test(cleaned)) {
+  if (!match) {
     return null;
   }
 
-  const value = Number(cleaned);
+  const value = Number(match[1].replace(/,/g, ""));
 
   if (!Number.isFinite(value) || value <= 0) {
     return null;
