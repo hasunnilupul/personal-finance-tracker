@@ -376,5 +376,16 @@ Not blocking, but worth doing.
       leaves some rows moved and the category still present. Recoverable —
       every moved row points at a valid same-type category and the delete can
       be retried — but a `transactions` table would reduce it to two.
+- [ ] Changing a space's base currency writes entries and budget limits as
+      parallel un-transacted statements, for the same missing-transaction
+      reason. Every conversion is computed before anything is written, so a
+      failure is a partial write rather than a wrong one — but a partial write
+      leaves the space holding a mix of old-currency and new-currency amounts,
+      with the space's own `baseCurrency` already switched, so nothing on screen
+      says which row is in which. Worse than the reassign case, which stays
+      internally consistent throughout. Re-running the change would convert the
+      already-converted rows a second time, so recovery is manual. Second
+      instance of this pattern; worth one shared answer — a batched multi-
+      statement write, or a per-row marker that makes a re-run idempotent.
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.
