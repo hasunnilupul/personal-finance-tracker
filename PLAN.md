@@ -11,7 +11,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Feature 7 — savings goals and recurring transactions. Pushed
-to `feat/goals-recurring`, PR open into `dev`, awaiting the repo owner's merge.
+to `feat/goals-recurring`, PR #17 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
 left — tests and the lockfile first.
@@ -328,7 +328,7 @@ beside each one so the two readings cannot be confused.
 so the comparison is real; a second y-axis would let the two be slid against
 each other until they told whatever story was wanted.
 
-### Feature 7 — Savings goals and recurring transactions ✅ done, PR open
+### Feature 7 — Savings goals and recurring transactions ✅ done, PR #17 open
 
 - [x] Savings goals with progress and deadlines
 - [x] Recurring templates materialised into real entries when due
