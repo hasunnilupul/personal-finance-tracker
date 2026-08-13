@@ -11,7 +11,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Committed the lockfile. Pushed to `chore/commit-lockfile`,
-PR open into `dev`, awaiting the repo owner's merge.
+PR #19 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
 left — the Dependabot advisories are the largest.
