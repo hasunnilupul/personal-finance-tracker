@@ -31,6 +31,16 @@ const tabs = [
     icon: "📉",
   },
   {
+    href: "/goals",
+    label: "Goals",
+    icon: "🎯",
+  },
+  {
+    href: "/recurring",
+    label: "Recurring",
+    icon: "🔁",
+  },
+  {
     href: "/settings/categories",
     label: "Categories",
     icon: "🏷️",

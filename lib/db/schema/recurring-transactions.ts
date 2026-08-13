@@ -27,7 +27,18 @@ export const recurringTransactions = pgTable(
     currency: varchar("currency", { length: 3 }).notNull().default(DEFAULT_CURRENCY),
     description: varchar("description", { length: 255 }),
     frequency: varchar("frequency", { length: 20 }).notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
+    /**
+     * The first occurrence, and the anchor every later one is measured from.
+     *
+     * Stepping from `nextDate` would drift: rent due on the 31st becomes the
+     * 28th in February, and stepping on from there gives the 28th of March for
+     * ever after. Occurrences are computed as `startDate` plus N periods
+     * instead, so a clamped month is a one-off rather than a permanent shift.
+     */
+    startDate: timestamp("startDate").notNull(),
     nextDate: timestamp("nextDate").notNull(),
+    /** Optional stop. Null means it runs until it is paused or deleted. */
+    endDate: timestamp("endDate"),
     isActive: boolean("isActive").notNull().default(true),
     ...auditColumns(),
   },

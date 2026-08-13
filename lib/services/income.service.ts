@@ -13,7 +13,17 @@ export class IncomeService {
     return incomeRepository.findById(id, ctx.organizationId);
   }
 
-  async createIncome(ctx: SpaceContext, data: IncomeInput): Promise<Income> {
+  /**
+   * Records income, converting it into the space's base currency.
+   *
+   * @param options See {@link ExpenseService.createExpense} — only the
+   * recurring machinery passes these.
+   */
+  async createIncome(
+    ctx: SpaceContext,
+    data: IncomeInput,
+    options: { recurringId?: number; ifAbsent?: boolean } = {},
+  ): Promise<Income | undefined> {
     const currency = data.currency ?? ctx.baseCurrency;
 
     const { baseAmount, rate } = await exchangeRateService.convert(
@@ -23,15 +33,18 @@ export class IncomeService {
       data.date,
     );
 
-    return incomeRepository.create({
+    const row = {
       ...data,
       currency,
       baseAmount,
       exchangeRate: rate,
+      recurringId: options.recurringId ?? null,
       organizationId: ctx.organizationId,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
-    });
+    };
+
+    return options.ifAbsent ? incomeRepository.createIfAbsent(row) : incomeRepository.create(row);
   }
 
   /**

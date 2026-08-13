@@ -25,6 +25,20 @@ export class ExpenseRepository {
     return result;
   }
 
+  /**
+   * Inserts an entry unless its occurrence already exists.
+   *
+   * The occurrence key is `(organizationId, recurringId, date)`, so this only
+   * ever declines a row that a recurring template already produced — nulls sort
+   * as distinct, leaving hand-entered rows alone.
+   *
+   * @returns The new row, or `undefined` when the occurrence was already there.
+   */
+  async createIfAbsent(data: NewExpense): Promise<Expense | undefined> {
+    const [result] = await db.insert(expenses).values(data).onConflictDoNothing().returning();
+    return result;
+  }
+
   async update(
     id: number,
     organizationId: string,

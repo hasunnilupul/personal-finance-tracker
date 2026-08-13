@@ -15,7 +15,12 @@ export type ManagedFields =
   // Derived by the service from `amount`, `currency` and the entry's date.
   // Accepting these from a caller would let a client claim any conversion.
   | "baseAmount"
-  | "exchangeRate";
+  | "exchangeRate"
+  // Set only when a recurring template materialises an entry. A caller that
+  // could supply it could claim an entry was generated, and — because it is
+  // half of the occurrence key — block a real occurrence from ever being
+  // created. Services pass it through their own options argument instead.
+  | "recurringId";
 
 /**
  * The writable shape of an entity, as accepted by services.

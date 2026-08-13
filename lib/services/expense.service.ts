@@ -13,7 +13,23 @@ export class ExpenseService {
     return expenseRepository.findById(id, ctx.organizationId);
   }
 
-  async createExpense(ctx: SpaceContext, data: ExpenseInput): Promise<Expense> {
+  /**
+   * Records an expense, converting it into the space's base currency.
+   *
+   * @param options Only the recurring machinery passes these. `recurringId`
+   * marks the entry as generated, and `ifAbsent` makes the insert decline an
+   * occurrence that already exists — together they are what let materialisation
+   * be retried safely without an interactive transaction. Action handlers never
+   * supply them; `ExpenseInput` deliberately cannot carry `recurringId`.
+   *
+   * @returns The new expense, or `undefined` when `ifAbsent` was set and the
+   * occurrence was already there.
+   */
+  async createExpense(
+    ctx: SpaceContext,
+    data: ExpenseInput,
+    options: { recurringId?: number; ifAbsent?: boolean } = {},
+  ): Promise<Expense | undefined> {
     const currency = data.currency ?? ctx.baseCurrency;
 
     const { baseAmount, rate } = await exchangeRateService.convert(
@@ -23,15 +39,18 @@ export class ExpenseService {
       data.date,
     );
 
-    return expenseRepository.create({
+    const row = {
       ...data,
       currency,
       baseAmount,
       exchangeRate: rate,
+      recurringId: options.recurringId ?? null,
       organizationId: ctx.organizationId,
       createdBy: ctx.userId,
       updatedBy: ctx.userId,
-    });
+    };
+
+    return options.ifAbsent ? expenseRepository.createIfAbsent(row) : expenseRepository.create(row);
   }
 
   /**

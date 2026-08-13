@@ -1,4 +1,5 @@
 import { budgetService } from "@/lib/services/budget.service";
+import { recurringTransactionService } from "@/lib/services/recurring-transaction.service";
 import { transactionService } from "@/lib/services/transaction.service";
 import { SpaceContext } from "@/lib/services/types";
 import { TransactionKind, TransactionListItem } from "@/lib/db/models/transaction.model";
@@ -64,6 +65,15 @@ export interface DashboardData {
  */
 export class DashboardService {
   async getDashboard(ctx: SpaceContext): Promise<DashboardData> {
+    // Materialise anything due *before* reading, so the month's totals include
+    // the rent that fell due this morning rather than showing it a visit late.
+    //
+    // This is the on-read trigger the recurring feature relies on: `CRON_SECRET`
+    // is optional and unset here, so a cron-only sweep would never fire. It is
+    // guarded by a count and made idempotent by the occurrence key, so the usual
+    // case is one indexed query and no writes.
+    await recurringTransactionService.catchUp(ctx);
+
     const month = currentMonthKey();
     const window = monthWindow(month);
 

@@ -10,15 +10,16 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 6 — dashboard and reports. Pushed to
-`feat/dashboard-reports`, PR #16 open into `dev`, awaiting the repo owner's merge.
+**Last completed:** Feature 7 — savings goals and recurring transactions. Pushed
+to `feat/goals-recurring`, PR open into `dev`, awaiting the repo owner's merge.
 
-**Next up:** Feature 7 — savings goals and recurring transactions.
+**Next up:** Nothing on the roadmap. The Known follow-ups below are what is
+left — tests and the lockfile first.
 
-| Branch | State                                                      |
-| ------ | ---------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 5.            |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4 and 5. |
+| Branch | State                                                         |
+| ------ | ------------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 6.               |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5 and 6. |
 
 ---
 
@@ -73,23 +74,27 @@ feature-rich.
 
 Locked in. Revisit only with a reason — and note the reason here.
 
-| Decision                 | Choice                                    | Why                                                                                    |
-| ------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| Spaces implementation    | better-auth `organization` plugin         | Members, invitations and roles come tested; a space is an organization                 |
-| Personal space           | Auto-created at sign-up, `isPersonal`     | Uniform model — everything belongs to a space, so there is no nullable branch anywhere |
-| Shared-space edit rights | Any member may edit or delete any entry   | A household budget is only useful if everyone can correct it                           |
-| Attribution              | `createdBy` / `updatedBy` on every row    | Preserves "who did what" without locking rows down                                     |
-| Invite delivery          | Copyable link, with Resend email on top   | The link is the mechanism and needs no infrastructure; email is a convenience layer    |
-| Data access              | Server Actions; route handlers as needed  | Least boilerplate in Next 16                                                           |
-| Validation               | Zod at the Server Action boundary         | Untrusted input is parsed once, at the edge                                            |
-| Category deletion        | Reassign, or refused while in use         | Deleting a category must not silently destroy spending history                         |
-| Category `type`          | Fixed once created                        | Flipping it would strand every entry filed under it in a list that no longer offers it |
-| Budget periods           | Calendar-aligned, nothing materialised    | Rollover becomes free — the window moves on its own, with no cron and no period rows   |
-| Budget amounts           | Space base currency, no `currency` column | They are compared against `baseAmount` sums; anything else converts one side each time |
-| Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded    |
-| Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS          |
-| Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast  |
-| Package manager          | pnpm                                      |                                                                                        |
+| Decision                 | Choice                                    | Why                                                                                      |
+| ------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Spaces implementation    | better-auth `organization` plugin         | Members, invitations and roles come tested; a space is an organization                   |
+| Personal space           | Auto-created at sign-up, `isPersonal`     | Uniform model — everything belongs to a space, so there is no nullable branch anywhere   |
+| Shared-space edit rights | Any member may edit or delete any entry   | A household budget is only useful if everyone can correct it                             |
+| Attribution              | `createdBy` / `updatedBy` on every row    | Preserves "who did what" without locking rows down                                       |
+| Invite delivery          | Copyable link, with Resend email on top   | The link is the mechanism and needs no infrastructure; email is a convenience layer      |
+| Data access              | Server Actions; route handlers as needed  | Least boilerplate in Next 16                                                             |
+| Validation               | Zod at the Server Action boundary         | Untrusted input is parsed once, at the edge                                              |
+| Category deletion        | Reassign, or refused while in use         | Deleting a category must not silently destroy spending history                           |
+| Category `type`          | Fixed once created                        | Flipping it would strand every entry filed under it in a list that no longer offers it   |
+| Budget periods           | Calendar-aligned, nothing materialised    | Rollover becomes free — the window moves on its own, with no cron and no period rows     |
+| Budget amounts           | Space base currency, no `currency` column | They are compared against `baseAmount` sums; anything else converts one side each time   |
+| Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded      |
+| Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS            |
+| Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast    |
+| Recurring trigger        | On-read catch-up; cron as an accelerator  | `CRON_SECRET` is unset, so a cron-only sweep would never fire in this deployment         |
+| Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
+| Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
+| Savings goals            | A target, not an account; no money moves  | Keeps one place for money to live; a contribution marks intent, not a transfer           |
+| Package manager          | pnpm                                      |                                                                                          |
 
 ---
 
@@ -274,7 +279,7 @@ would not appear on the screen that created it.
 period; the service's check exists to produce a sentence rather than a
 constraint error, and would otherwise lose a race.
 
-### Feature 6 — Dashboard and reports ✅ done, PR #16 open
+### Feature 6 — Dashboard and reports ✅ merged (PR #16)
 
 - [x] Dashboard: month totals, recent entries, budget health
 - [x] Reports: spend by category, trend over time, income vs expense
@@ -323,26 +328,82 @@ beside each one so the two readings cannot be confused.
 so the comparison is real; a second y-axis would let the two be slid against
 each other until they told whatever story was wanted.
 
-### Feature 7 — Savings goals and recurring transactions ⬅️ next
+### Feature 7 — Savings goals and recurring transactions ✅ done, PR open
 
-- [ ] Savings goals with progress and deadlines
-- [ ] Recurring templates materialised into real entries when due
-- [ ] Decide the trigger: cron route vs on-read catch-up
+- [x] Savings goals with progress and deadlines
+- [x] Recurring templates materialised into real entries when due
+- [x] Trigger decided: **on-read catch-up**, with the cron route as an accelerator
+- [x] `/goals` — targets, contributions, and what to put aside each month
+- [x] `/recurring` — templates, pause and resume, and a manual "run now"
+- [x] Verified against the database, including crash-replay and concurrent runs
+
+**The trigger is on-read catch-up.** `CRON_SECRET` is unset, so a cron-only
+sweep would never fire — the feature would silently do nothing in this
+deployment. The dashboard and `/recurring` catch up before they read, which is
+the guarantee; `/api/cron/materialise-recurring` is an accelerator for spaces
+nobody has opened, and refuses to run without the secret exactly as the rate
+refresh does. This mirrors the decision already made for exchange rates: fetch
+on demand, cron as a safety net.
+
+**Materialisation is idempotent, and that is what makes the rest safe.**
+`expenses` and `income` carry a `recurringId`, with a unique index on
+`(organizationId, recurringId, date)` — the occurrence key. The HTTP driver has
+no interactive transactions, so writing the entry and advancing `nextDate`
+cannot be atomic; the order is deliberately **entry first**, because advancing
+first would lose an occurrence outright if the insert then failed, while
+creating first can at worst repeat, and the key turns a repeat into a no-op.
+Verified: a simulated crash between the two writes replays without duplicating,
+and ten page loads including four concurrent ones produce exactly one entry per
+occurrence.
+
+**Occurrences are measured from an anchor, never stepped from the last one.**
+That is what `startDate` is for. Rent anchored on the 31st is clamped to 28
+February, and stepping on from there would give 28 March, 28 April and so on for
+ever. Measuring from the anchor makes the clamp a one-off: 31 Jan, 28 Feb, 31
+Mar. Same rule for 29 February on a yearly template.
+
+**A catch-up run is capped at 60 occurrences per template.** A daily template
+left dormant for two years is 730 entries, and creating them in one page load
+would stall the request. The cap leaves `nextDate` on the first uncreated
+occurrence, so the backlog drains over a few visits instead of in one burst.
+
+**Deleting a template keeps the entries it created** — `set null`, not cascade.
+That money really was spent. Editing one leaves them alone too: rewriting
+history to match a template changed afterwards would be worse than the
+inconsistency.
+
+**A savings goal is a target, not an account.** No money moves between it and
+the ledger, so a contribution says "this much of what I have is spoken for". The
+figure worth having is `perMonth` — what to put aside to arrive on time — which
+is why a deadline turns a goal from a number into a plan. Contributions are a
+signed delta rather than a new balance, so two people paying into one household
+goal both count.
+
+**`recurringId` is a managed field.** A caller that could set it could both
+claim an entry was generated and — because it is half of the occurrence key —
+block a real occurrence from ever being created. It sits in `ManagedFields`
+alongside the conversion columns, and the services pass it through their own
+options argument.
 
 ---
 
 ## Environment
 
-| Variable                | Needed for        | Notes                                           |
-| ----------------------- | ----------------- | ----------------------------------------------- |
-| `BETTER_AUTH_SECRET`    | Auth              | `openssl rand -base64 32`                       |
-| `BETTER_AUTH_URL`       | Auth              | App base URL                                    |
-| `DATABASE_URL`          | Runtime           | Pooled Neon connection                          |
-| `DATABASE_URL_UNPOOLED` | Migrations        | Direct connection for drizzle-kit               |
-| `RESEND_API_KEY`        | Invite email      | Set                                             |
-| `RESEND_FROM`           | Invite email      | **Not set.** Needs a domain verified in Resend  |
-| `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate      | Defaults to `false`                             |
-| `CRON_SECRET`           | Rate refresh cron | **Not set.** Endpoint refuses to run without it |
+| Variable                | Needed for       | Notes                                          |
+| ----------------------- | ---------------- | ---------------------------------------------- |
+| `BETTER_AUTH_SECRET`    | Auth             | `openssl rand -base64 32`                      |
+| `BETTER_AUTH_URL`       | Auth             | App base URL                                   |
+| `DATABASE_URL`          | Runtime          | Pooled Neon connection                         |
+| `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection for drizzle-kit              |
+| `RESEND_API_KEY`        | Invite email     | Set                                            |
+| `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
+| `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
+| `CRON_SECRET`           | Both cron routes | **Not set.** Both refuse to run without it     |
+
+**On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
+by design. Rates are fetched on demand when a conversion misses the cache, and
+recurring entries are materialised when someone loads a page. Setting it buys
+freshness in a space nobody has opened, not correctness.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
@@ -403,6 +464,13 @@ Things already hit, so they are not hit twice.
 - **The two transaction tables have separate id sequences,** so ordering a
   merged expense-and-income list by id ranks by which table was busier. The
   dashboard's recent list breaks date ties on `updatedAt` instead.
+- **The dashboard and `/recurring` write during render.** Both catch up before
+  they read, which is a side effect in a Server Component and normally a smell.
+  It is safe only because the occurrence key makes it repeatable — a re-render,
+  a prefetch or a double submit all converge on the same rows. Do not copy the
+  pattern for anything that is not idempotent.
+- **`neon()` is tagged-template only.** `sql("select …")` throws; use
+  `sql.query("select …", params)` for a dynamically built statement.
 
 ---
 

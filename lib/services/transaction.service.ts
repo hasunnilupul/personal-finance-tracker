@@ -62,10 +62,19 @@ export class TransactionService {
     return listTransactionAuthors(TABLES[kind], ctx.organizationId);
   }
 
-  async create(ctx: SpaceContext, kind: TransactionKind, data: TransactionInput) {
+  /**
+   * @param options Only the recurring machinery passes these — see
+   * {@link ExpenseService.createExpense}.
+   */
+  async create(
+    ctx: SpaceContext,
+    kind: TransactionKind,
+    data: TransactionInput,
+    options: { recurringId?: number; ifAbsent?: boolean } = {},
+  ) {
     return kind === "expense"
-      ? expenseService.createExpense(ctx, data)
-      : incomeService.createIncome(ctx, data);
+      ? expenseService.createExpense(ctx, data, options)
+      : incomeService.createIncome(ctx, data, options);
   }
 
   async update(
