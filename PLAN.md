@@ -11,7 +11,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Feature 6 — dashboard and reports. Pushed to
-`feat/dashboard-reports`, PR open into `dev`, awaiting the repo owner's merge.
+`feat/dashboard-reports`, PR #16 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Feature 7 — savings goals and recurring transactions.
 
@@ -274,7 +274,7 @@ would not appear on the screen that created it.
 period; the service's check exists to produce a sentence rather than a
 constraint error, and would otherwise lose a race.
 
-### Feature 6 — Dashboard and reports ✅ done, PR open
+### Feature 6 — Dashboard and reports ✅ done, PR #16 open
 
 - [x] Dashboard: month totals, recent entries, budget health
 - [x] Reports: spend by category, trend over time, income vs expense
