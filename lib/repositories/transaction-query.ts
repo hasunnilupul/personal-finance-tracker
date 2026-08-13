@@ -185,6 +185,77 @@ export async function sumBaseAmountByCategory(
 }
 
 /**
+ * Spend per category over a filtered set, with the names needed to label it.
+ *
+ * Unlike `sumBaseAmountByCategory`, this **keeps the uncategorised bucket** as a
+ * row with a null `categoryId`. Budgets can ignore it — no limit can point at
+ * it — but a report that dropped it would print a breakdown whose parts do not
+ * add up to the total beside them.
+ *
+ * Takes the same `TransactionFilters` the list uses, so a report range and a
+ * list filter narrow identically and the figures agree.
+ *
+ * @returns Rows ordered by total, largest first.
+ */
+export async function sumByCategoryWithNames(
+  table: TransactionTable,
+  organizationId: string,
+  filters: TransactionFilters = {},
+): Promise<
+  {
+    categoryId: number | null;
+    name: string | null;
+    icon: string | null;
+    color: string | null;
+    total: string;
+  }[]
+> {
+  const total = sumBaseAmount(table);
+
+  return db
+    .select({
+      categoryId: table.categoryId,
+      name: categories.name,
+      icon: categories.icon,
+      color: categories.color,
+      total,
+    })
+    .from(table)
+    .leftJoin(categories, eq(table.categoryId, categories.id))
+    .where(buildConditions(table, organizationId, filters))
+    .groupBy(table.categoryId, categories.name, categories.icon, categories.color)
+    .orderBy(desc(total));
+}
+
+/**
+ * Totals per calendar month over a filtered set.
+ *
+ * `to_char` reads the stored value directly — the column is `timestamp without
+ * time zone` and every date is written anchored to midday UTC, so the month it
+ * reports is the calendar month the entry was filed under, with no timezone
+ * conversion in the way.
+ *
+ * @returns Totals keyed by `YYYY-MM`. Months with no entries are absent; the
+ * caller supplies the full axis, because a missing month is a zero, not a gap
+ * to be skipped.
+ */
+export async function sumByMonth(
+  table: TransactionTable,
+  organizationId: string,
+  filters: TransactionFilters = {},
+): Promise<Map<string, string>> {
+  const month = sql<string>`to_char(${table.date}, 'YYYY-MM')`;
+
+  const rows = await db
+    .select({ month, total: sumBaseAmount(table) })
+    .from(table)
+    .where(buildConditions(table, organizationId, filters))
+    .groupBy(month);
+
+  return new Map(rows.map((row) => [row.month, row.total]));
+}
+
+/**
  * Members who have recorded at least one transaction, for the author filter.
  */
 export async function listTransactionAuthors(

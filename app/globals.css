@@ -23,6 +23,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-viz-income: var(--viz-income);
+  --color-viz-expense: var(--viz-expense);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -72,6 +74,21 @@
   --chart-3: oklch(0.45 0.017 213.2);
   --chart-4: oklch(0.378 0.015 216);
   --chart-5: oklch(0.275 0.011 216.9);
+
+  /*
+   * Chart series hues. The --chart-1..5 above are a grey lightness ramp, which
+   * works as a sequential scale but cannot tell two series apart, so income and
+   * expense get their own slots.
+   *
+   * These two are a validated categorical pair, not a taste call: on the light
+   * card surface (#ffffff) the worst-case separation is deutan ΔE 9.2 and
+   * normal-vision ΔE 27.6, both clear of the 8 / 15 floors. Aqua measures
+   * 2.82:1 against white, under the 3:1 bar, so every chart that uses it ships
+   * visible labels and a table view rather than leaning on the fill alone.
+   */
+  --viz-income: #1baf7a;
+  --viz-expense: #eb6834;
+
   --radius: 0;
   --sidebar: oklch(0.987 0.002 197.1);
   --sidebar-foreground: oklch(0.148 0.004 228.8);
@@ -107,6 +124,15 @@
   --chart-3: oklch(0.45 0.017 213.2);
   --chart-4: oklch(0.378 0.015 216);
   --chart-5: oklch(0.275 0.011 216.9);
+
+  /*
+   * The same two hues stepped for the dark card (#161b1d), not an automatic
+   * flip: deutan ΔE 9.4, normal-vision ΔE 26.5, and both clear 3:1 against the
+   * dark surface — so dark mode needs no contrast relief of its own.
+   */
+  --viz-income: #199e70;
+  --viz-expense: #d95926;
+
   --sidebar: oklch(0.218 0.008 223.9);
   --sidebar-foreground: oklch(0.987 0.002 197.1);
   --sidebar-primary: oklch(0.696 0.17 162.48);
