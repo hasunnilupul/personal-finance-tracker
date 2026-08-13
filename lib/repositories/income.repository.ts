@@ -25,6 +25,15 @@ export class IncomeRepository {
     return result;
   }
 
+  /**
+   * Inserts an entry unless its occurrence already exists.
+   * See {@link ExpenseRepository.createIfAbsent}.
+   */
+  async createIfAbsent(data: NewIncome): Promise<Income | undefined> {
+    const [result] = await db.insert(income).values(data).onConflictDoNothing().returning();
+    return result;
+  }
+
   async update(
     id: number,
     organizationId: string,
