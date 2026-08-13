@@ -10,15 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Feature 4 — categories. Pushed to `feat/categories`,
-PR open into `dev`.
+**Last completed:** Feature 5 — budgets. Pushed to `feat/budgets`,
+PR open into `dev`, awaiting the repo owner's merge.
 
-**Next up:** Feature 5 — budgets.
+**Next up:** Feature 6 — dashboard and reports.
 
-| Branch | State                                                |
-| ------ | ---------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 3.      |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2 and 3. |
+| Branch | State                                                   |
+| ------ | ------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 4.         |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3 and 4. |
 
 ---
 
@@ -73,18 +73,21 @@ feature-rich.
 
 Locked in. Revisit only with a reason — and note the reason here.
 
-| Decision                 | Choice                                   | Why                                                                                    |
-| ------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| Spaces implementation    | better-auth `organization` plugin        | Members, invitations and roles come tested; a space is an organization                 |
-| Personal space           | Auto-created at sign-up, `isPersonal`    | Uniform model — everything belongs to a space, so there is no nullable branch anywhere |
-| Shared-space edit rights | Any member may edit or delete any entry  | A household budget is only useful if everyone can correct it                           |
-| Attribution              | `createdBy` / `updatedBy` on every row   | Preserves "who did what" without locking rows down                                     |
-| Invite delivery          | Copyable link, with Resend email on top  | The link is the mechanism and needs no infrastructure; email is a convenience layer    |
-| Data access              | Server Actions; route handlers as needed | Least boilerplate in Next 16                                                           |
-| Validation               | Zod at the Server Action boundary        | Untrusted input is parsed once, at the edge                                            |
-| Category deletion        | Reassign, or refused while in use        | Deleting a category must not silently destroy spending history                         |
-| Category `type`          | Fixed once created                       | Flipping it would strand every entry filed under it in a list that no longer offers it |
-| Package manager          | pnpm                                     |                                                                                        |
+| Decision                 | Choice                                    | Why                                                                                    |
+| ------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| Spaces implementation    | better-auth `organization` plugin         | Members, invitations and roles come tested; a space is an organization                 |
+| Personal space           | Auto-created at sign-up, `isPersonal`     | Uniform model — everything belongs to a space, so there is no nullable branch anywhere |
+| Shared-space edit rights | Any member may edit or delete any entry   | A household budget is only useful if everyone can correct it                           |
+| Attribution              | `createdBy` / `updatedBy` on every row    | Preserves "who did what" without locking rows down                                     |
+| Invite delivery          | Copyable link, with Resend email on top   | The link is the mechanism and needs no infrastructure; email is a convenience layer    |
+| Data access              | Server Actions; route handlers as needed  | Least boilerplate in Next 16                                                           |
+| Validation               | Zod at the Server Action boundary         | Untrusted input is parsed once, at the edge                                            |
+| Category deletion        | Reassign, or refused while in use         | Deleting a category must not silently destroy spending history                         |
+| Category `type`          | Fixed once created                        | Flipping it would strand every entry filed under it in a list that no longer offers it |
+| Budget periods           | Calendar-aligned, nothing materialised    | Rollover becomes free — the window moves on its own, with no cron and no period rows   |
+| Budget amounts           | Space base currency, no `currency` column | They are compared against `baseAmount` sums; anything else converts one side each time |
+| Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded    |
+| Package manager          | pnpm                                      |                                                                                        |
 
 ---
 
@@ -167,7 +170,7 @@ plus the feature exercised against the real database — not just compiled.
 Deferred, not needed yet: changing a member's role. There are only two roles and
 the owner is the creator, so there is nothing meaningful to change it to.
 
-### Feature 2 — Currency and money handling ✅ done, PR open
+### Feature 2 — Currency and money handling ✅ merged (PR #11)
 
 - [x] Base currency per space, plus a per-entry currency
 - [x] `exchangeRates` table with on-demand fetch, daily cron, and manual override
@@ -202,7 +205,7 @@ stays a Server Component. Junk query values are ignored rather than trusted.
 `TransactionKind`. The tables are structurally identical, so duplicating would
 mean fixing every future filter twice.
 
-### Feature 4 — Categories ✅ done, PR open
+### Feature 4 — Categories ✅ merged (PR #13)
 
 - [x] `/settings/categories` — manage categories per space, with icon and colour pickers
 - [x] Income vs expense shown as two sections on one page, each with its own add button
@@ -232,13 +235,44 @@ renders counts from one grouped query per table, but `deleteCategory` re-checks
 at write time. A count that goes stale between render and click cannot cost
 anyone their history — the delete is refused and the dialog refreshes itself.
 
-### Feature 5 — Budgets ⬅️ next
+### Feature 5 — Budgets ✅ done, PR open
 
-- [ ] Monthly and yearly budgets per category
-- [ ] Progress against actual spend; over-budget indicator
-- [ ] Roll over period boundaries correctly
+- [x] Monthly and yearly budgets per category
+- [x] Progress against actual spend; over-budget indicator
+- [x] Roll over period boundaries correctly
+- [x] `/budgets` — both period types as two sections, one set of month arrows
+- [x] Changing a space's base currency re-expresses the limits too
+- [x] Verified against the database: progress arithmetic, refusals, rollover and re-anchoring
 
-### Feature 6 — Dashboard and reports
+**Periods are calendar-aligned, and nothing is materialised.** A monthly budget
+runs the calendar month whatever day it was created, so rollover costs nothing
+— no cron, no per-period rows. On the first of the month the window moves on
+its own. A row is a standing limit; `startDate` records only the period it took
+effect from, and the window being viewed supplies the rest.
+
+**One grouped spend query per period type**, not one per budget, so thirty
+budgets cost what three do. `sumBaseAmountByCategory` lives in
+`transaction-query.ts` because the reports in Feature 6 will want the same
+shape.
+
+**A limit is held in the space's base currency**, with no `currency` column of
+its own — it is compared against `baseAmount` sums, so anything else would mean
+converting one side of every comparison. Changing the base currency re-expresses
+the limits **at today's rate**, unlike entries, which are re-converted at their
+own date. A limit is a forward-looking intention rather than a record of what
+something cost, so what it is worth now is the figure that matters.
+
+**`startDate` is the service's to set, never the client's.** Accepting one from
+the form would be a way to backdate a limit over spending that already happened.
+For the same reason a budget only applies from its own period onwards, and the
+add button is hidden while a past window is on screen — a limit created there
+would not appear on the screen that created it.
+
+**The unique index is the real guard** against two limits on one category and
+period; the service's check exists to produce a sentence rather than a
+constraint error, and would otherwise lose a race.
+
+### Feature 6 — Dashboard and reports ⬅️ next
 
 - [ ] Dashboard: month totals, recent entries, budget health
 - [ ] Reports: spend by category, trend over time, income vs expense

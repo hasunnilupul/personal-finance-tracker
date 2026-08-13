@@ -1,11 +1,52 @@
+import { and, asc, eq } from "drizzle-orm";
+
 import { db } from "@/lib/db";
 import { budgets } from "@/lib/db/schema/budgets";
+import { categories } from "@/lib/db/schema/categories";
 import { Budget, NewBudget } from "@/lib/db/models/budget.model";
-import { eq, and } from "drizzle-orm";
+
+/**
+ * A budget row with the category it limits, for the list.
+ */
+export interface BudgetWithCategory extends Budget {
+  categoryName: string | null;
+  categoryIcon: string | null;
+  categoryColor: string | null;
+}
 
 export class BudgetRepository {
   async findAll(organizationId: string): Promise<Budget[]> {
     return db.select().from(budgets).where(eq(budgets.organizationId, organizationId));
+  }
+
+  /**
+   * Every budget in the space with its category's name, icon and colour.
+   *
+   * A left join rather than an inner one: `categoryId` is nullable at the
+   * database level, and a budget whose category vanished should still be
+   * visible so it can be deleted, not disappear silently.
+   */
+  async findAllWithCategory(organizationId: string): Promise<BudgetWithCategory[]> {
+    return db
+      .select({
+        id: budgets.id,
+        categoryId: budgets.categoryId,
+        amount: budgets.amount,
+        period: budgets.period,
+        startDate: budgets.startDate,
+        organizationId: budgets.organizationId,
+        createdBy: budgets.createdBy,
+        updatedBy: budgets.updatedBy,
+        createdAt: budgets.createdAt,
+        updatedAt: budgets.updatedAt,
+        categoryName: categories.name,
+        categoryIcon: categories.icon,
+        categoryColor: categories.color,
+      })
+      .from(budgets)
+      .leftJoin(categories, eq(budgets.categoryId, categories.id))
+      .where(eq(budgets.organizationId, organizationId))
+      .orderBy(asc(categories.name), asc(budgets.id));
   }
 
   async findById(id: number, organizationId: string): Promise<Budget | undefined> {
@@ -13,6 +54,30 @@ export class BudgetRepository {
       .select()
       .from(budgets)
       .where(and(eq(budgets.id, id), eq(budgets.organizationId, organizationId)));
+    return result;
+  }
+
+  /**
+   * The existing limit for a category and period, if there is one.
+   *
+   * Backs the service's duplicate check, so the user gets "there is already a
+   * monthly budget for Groceries" instead of a unique-constraint error.
+   */
+  async findByCategoryAndPeriod(
+    organizationId: string,
+    categoryId: number,
+    period: string,
+  ): Promise<Budget | undefined> {
+    const [result] = await db
+      .select()
+      .from(budgets)
+      .where(
+        and(
+          eq(budgets.organizationId, organizationId),
+          eq(budgets.categoryId, categoryId),
+          eq(budgets.period, period),
+        ),
+      );
     return result;
   }
 
