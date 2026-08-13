@@ -10,11 +10,11 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** The test suite. Pushed to `chore/tests`, PR #18 open into `dev`,
-awaiting the repo owner's merge.
+**Last completed:** Committed the lockfile. Pushed to `chore/commit-lockfile`,
+PR #19 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
-left — the lockfile first.
+left — the Dependabot advisories are the largest.
 
 | Branch | State                                                            |
 | ------ | ---------------------------------------------------------------- |
@@ -121,6 +121,12 @@ boundary. Hiding a button is presentation, not protection.
 `baseAmount` and `exchangeRate` themselves. Callers never supply them — see
 `UserInput<T>` in `lib/db/models/types.ts`. Accepting a converted amount from a
 client would let it claim any exchange rate it liked.
+
+**Dependencies.** `pnpm-lock.yaml` is committed, so a deploy installs the tree
+that was tested rather than re-resolving it. That makes the lockfile part of
+any change that touches `package.json` — run `pnpm install` and commit both
+together, or a CI install with `--frozen-lockfile` fails. Prettier is told to
+leave it alone, for the same reason it leaves migrations alone.
 
 **Migrations.** `pnpm db:generate` then review the SQL before applying.
 drizzle-kit 1.0-rc asks for `--hints` on ambiguous rename-vs-create; pass
@@ -511,9 +517,9 @@ Things already hit, so they are not hit twice.
 
 Not blocking, but worth doing.
 
-- [ ] `pnpm-lock.yaml` is git-ignored, so Vercel resolves dependencies fresh on
-      every build. With `drizzle-orm` on a release candidate, an unpinned
-      transitive bump can break a deploy with no code change. Commit the lockfile.
+- [x] ~~`pnpm-lock.yaml` is git-ignored.~~ Committed, so every build resolves the
+      same tree. `drizzle-orm` and `drizzle-kit` are pinned at `1.0.0-rc.4`
+      rather than being re-resolved on each deploy.
 - [ ] GitHub reports 40 Dependabot vulnerabilities (19 high) on the default branch.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth

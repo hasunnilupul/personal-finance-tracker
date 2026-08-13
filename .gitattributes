@@ -1,0 +1,8 @@
+# The lockfile is generated, build-critical, and rewritten by every
+# `pnpm install`. Pinning its line endings keeps a contributor's `core.autocrlf`
+# setting from producing a whole-file diff that hides the real dependency change.
+pnpm-lock.yaml text eol=lf linguist-generated=true
+
+# Same reasoning for drizzle's migration output — reformatting churns
+# historical snapshots, which are a record of what was applied.
+lib/db/migrations/** text eol=lf linguist-generated=true
