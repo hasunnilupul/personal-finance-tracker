@@ -15,6 +15,8 @@ import { SpaceContext } from "@/lib/services/types";
 
 const expenseCreate = vi.fn();
 const expenseCreateIfAbsent = vi.fn();
+const expenseUpdate = vi.fn();
+const expenseFindById = vi.fn();
 const budgetCreate = vi.fn();
 const budgetFindByCategoryAndPeriod = vi.fn();
 const categoryFindById = vi.fn();
@@ -24,6 +26,8 @@ vi.mock("@/lib/repositories/expense.repository", () => ({
   expenseRepository: {
     create: (...args: unknown[]) => expenseCreate(...args),
     createIfAbsent: (...args: unknown[]) => expenseCreateIfAbsent(...args),
+    update: (...args: unknown[]) => expenseUpdate(...args),
+    findById: (...args: unknown[]) => expenseFindById(...args),
   },
 }));
 
@@ -48,6 +52,7 @@ vi.mock("@/lib/services/exchange-rate.service", () => ({
 
 const { expenseService } = await import("@/lib/services/expense.service");
 const { budgetService } = await import("@/lib/services/budget.service");
+const { transactionService } = await import("@/lib/services/transaction.service");
 const { isServiceError } = await import("@/lib/services/errors");
 
 const ctx: SpaceContext = {
@@ -66,6 +71,14 @@ beforeEach(() => {
   budgetCreate.mockImplementation(async (row: unknown) => ({ id: 1, ...(row as object) }));
   budgetFindByCategoryAndPeriod.mockResolvedValue(undefined);
   categoryFindById.mockResolvedValue({ id: 5, type: "expense", organizationId: "org-mine" });
+  expenseUpdate.mockImplementation(async (_id: unknown, _org: unknown, row: unknown) => row);
+  expenseFindById.mockResolvedValue({
+    id: 1,
+    amount: "10.00",
+    currency: "USD",
+    date: DATE,
+    organizationId: "org-mine",
+  });
 });
 
 describe("an expense is written into the acting user's space", () => {
@@ -232,5 +245,76 @@ describe("a budget is scoped to the acting user's space", () => {
     expect(row.startDate.getUTCFullYear()).toBeGreaterThan(2020);
     expect(row.startDate.getUTCDate()).toBe(1);
     expect(row.startDate.getUTCHours()).toBe(12);
+  });
+});
+
+describe("a transaction may only file under a category of its own space", () => {
+  // The foreign key behind `expenses.categoryId` enforces that the row exists,
+  // in any space. Ownership is nobody's job but this one's — without it an
+  // entry here can point at another space's category, and the list joins by id,
+  // so that category's name renders to people who were never in it.
+  const entry = { amount: "10.00", currency: "USD", date: DATE, categoryId: 5 };
+
+  it("looks the category up within the space, never globally", async () => {
+    await transactionService.create(ctx, "expense", entry);
+
+    expect(categoryFindById).toHaveBeenCalledWith(5, "org-mine");
+  });
+
+  it("refuses an id that does not resolve in this space, and writes nothing", async () => {
+    // What a category id belonging to somebody else's space looks like from
+    // here: absent. Also what a deleted one looks like.
+    categoryFindById.mockResolvedValue(undefined);
+
+    await expect(transactionService.create(ctx, "expense", entry)).rejects.toSatisfy(
+      (error: unknown) => isServiceError(error) && error.code === "NOT_FOUND",
+    );
+
+    expect(expenseCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an income category on an expense", async () => {
+    categoryFindById.mockResolvedValue({ id: 5, type: "income", organizationId: "org-mine" });
+
+    await expect(transactionService.create(ctx, "expense", entry)).rejects.toSatisfy(
+      (error: unknown) => isServiceError(error) && error.code === "VALIDATION_FAILED",
+    );
+
+    expect(expenseCreate).not.toHaveBeenCalled();
+  });
+
+  it("accepts an uncategorised entry without a lookup", async () => {
+    await transactionService.create(ctx, "expense", { ...entry, categoryId: null });
+
+    expect(categoryFindById).not.toHaveBeenCalled();
+    expect(expenseCreate).toHaveBeenCalled();
+  });
+
+  it("checks the category on an edit too", async () => {
+    categoryFindById.mockResolvedValue(undefined);
+
+    await expect(transactionService.update(ctx, "expense", 1, { categoryId: 5 })).rejects.toSatisfy(
+      (error: unknown) => isServiceError(error) && error.code === "NOT_FOUND",
+    );
+
+    expect(expenseUpdate).not.toHaveBeenCalled();
+  });
+
+  it("leaves the category alone on an edit that does not mention it", async () => {
+    await transactionService.update(ctx, "expense", 1, { description: "Renamed" });
+
+    expect(categoryFindById).not.toHaveBeenCalled();
+    expect(expenseUpdate).toHaveBeenCalled();
+  });
+
+  it("does not re-check a materialised occurrence", async () => {
+    // The template's category was checked when the template was saved, and
+    // `deleteCategory` refuses while a template still points at it. A catch-up
+    // run writes up to sixty entries in one page render; a lookup each would be
+    // a query per entry for an answer that cannot have changed.
+    await transactionService.create(ctx, "expense", entry, { recurringId: 42, ifAbsent: true });
+
+    expect(categoryFindById).not.toHaveBeenCalled();
+    expect(expenseCreateIfAbsent).toHaveBeenCalled();
   });
 });

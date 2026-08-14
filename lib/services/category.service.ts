@@ -23,6 +23,47 @@ export class CategoryService {
     return categoryRepository.findById(id, ctx.organizationId);
   }
 
+  /**
+   * The one answer to "may this space file under this category id".
+   *
+   * Anything that writes a `categoryId` takes it from a client, and the foreign
+   * key behind the column only enforces that the row **exists** — in any space.
+   * So the ownership question has to be asked here, or an entry in one space
+   * can point at another space's category and render its name to people who
+   * were never in it.
+   *
+   * `null` is a legitimate answer, meaning uncategorised; the check is about
+   * ids that claim to be something.
+   *
+   * @param type The side the caller files under. A category is refused when it
+   *   belongs to the other one, which is the same rule the pickers follow.
+   * @param options.mismatchMessage Overrides the wrong-type sentence for a
+   *   caller that can say something more useful about its own context.
+   */
+  async assertUsable(
+    ctx: SpaceContext,
+    categoryId: number | null | undefined,
+    type: "income" | "expense",
+    options: { mismatchMessage?: string } = {},
+  ): Promise<void> {
+    if (categoryId === null || categoryId === undefined) {
+      return;
+    }
+
+    const category = await categoryRepository.findById(categoryId, ctx.organizationId);
+
+    if (!category) {
+      throw new ServiceError("NOT_FOUND", "That category no longer exists.");
+    }
+
+    if (category.type !== type) {
+      throw new ServiceError(
+        "VALIDATION_FAILED",
+        options.mismatchMessage ?? `That category is for ${category.type}, not ${type}.`,
+      );
+    }
+  }
+
   async createCategory(ctx: SpaceContext, data: CategoryInput): Promise<Category> {
     return categoryRepository.create({
       ...data,
