@@ -1,5 +1,8 @@
+import { after } from "next/server";
+
 import { notificationRepository } from "@/lib/repositories/notification.repository";
 import { spaceRepository } from "@/lib/repositories/space.repository";
+import { pushService } from "@/lib/services/push.service";
 import { Notification, NotificationInput } from "@/lib/db/models/notification.model";
 import { SpaceContext } from "@/lib/services/types";
 import { logger } from "@/lib/logger";
@@ -37,7 +40,7 @@ export class NotificationService {
         return [];
       }
 
-      return await notificationRepository.createManyIfAbsent(
+      const created = await notificationRepository.createManyIfAbsent(
         recipients.map((userId) => ({
           organizationId,
           userId,
@@ -48,6 +51,13 @@ export class NotificationService {
           dedupeKey: input.dedupeKey,
         })),
       );
+
+      this.push(
+        created.map((notification) => notification.userId),
+        input,
+      );
+
+      return created;
     } catch (error) {
       logger.error("Failed to raise a notification", error, {
         organizationId,
@@ -70,7 +80,7 @@ export class NotificationService {
    */
   async notifyUser(userId: string, input: NotificationInput): Promise<Notification | undefined> {
     try {
-      return await notificationRepository.createIfAbsent({
+      const created = await notificationRepository.createIfAbsent({
         organizationId: null,
         userId,
         type: input.type,
@@ -79,6 +89,12 @@ export class NotificationService {
         href: input.href ?? null,
         dedupeKey: input.dedupeKey,
       });
+
+      if (created) {
+        this.push([userId], input);
+      }
+
+      return created;
     } catch (error) {
       logger.error("Failed to raise an account notification", error, {
         userId,
@@ -88,6 +104,37 @@ export class NotificationService {
 
       return undefined;
     }
+  }
+
+  /**
+   * Pushes a notification that was just written, to whoever it was written for.
+   *
+   * **Only for rows that were actually created.** `createManyIfAbsent` returns
+   * what it inserted, so a repeat that the dedupe key turned into a no-op
+   * pushes nothing either — the phone stays quiet for the same reason the bell
+   * does not gain a second entry.
+   *
+   * Deferred with `after()`, so the send happens once the response is on its
+   * way. A push is several HTTPS round trips to Apple or Google, and none of
+   * them belong in the time it takes to save an expense. Not awaiting without
+   * `after()` would be worse than either: a serverless function can be frozen
+   * the moment it responds, killing the request half-sent.
+   */
+  private push(userIds: string[], input: NotificationInput): void {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    after(async () => {
+      await pushService.sendToUsers(userIds, {
+        title: input.title,
+        body: input.body,
+        href: input.href ?? null,
+        // Collapses a repeat on the device, the way the dedupe key does in the
+        // database — belt and braces for a phone that was offline.
+        tag: input.dedupeKey,
+      });
+    });
   }
 
   async list(ctx: SpaceContext, limit = NOTIFICATION_PAGE_SIZE): Promise<Notification[]> {

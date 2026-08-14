@@ -58,14 +58,14 @@ end-to-end proof the PWA works.
 enabling in the Vercel dashboard before it collects anything) and #32
 (Feature 9a — notifications). Neither is in `main` yet.
 
-**In progress:** `feat/invite-notifications` — Feature 9c. An invited address
-that already has an account is offered a channel; one that does not is emailed
-as before. The link shows either way.
+**In progress:** `feat/web-push` — Feature 9b. Notifications reach the phone
+when the app is closed. **Needs the four VAPID variables set in Vercel before
+it does anything in production**; without them the toggle says push is not
+configured and everything else carries on unchanged.
 
-**Still to come:** web push (9b) as a delivery layer over the stored
-notifications, then offline (10), which will cache the shell **and what was
-last viewed** — account data on the device, and therefore a cache clear on
-sign-out as part of the feature rather than after it.
+**Still to come:** offline (10), which will cache the shell **and what was last
+viewed** — account data on the device, and therefore a cache clear on sign-out
+as part of the feature rather than after it.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -515,6 +515,47 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
+### Feature 9b — Web push ✅ done, PR open
+
+- [x] `push_subscriptions`, one row per device, keyed on the endpoint
+- [x] `push` and `notificationclick` in the service worker
+- [x] A per-device toggle on the space settings page
+- [x] Dead subscriptions pruned as they are found
+
+**Push is a layer, and the rows are the record.** Nothing here can lose
+information: every push follows a notification that is already written, so a
+failed send is a missed pop-up. That is what makes it safe for `sendToUsers`
+never to throw.
+
+**Only newly created rows are pushed.** `createManyIfAbsent` returns what it
+actually inserted, so a repeat the dedupe key turned into a no-op pushes
+nothing either — the phone stays quiet for the same reason the bell gains no
+second entry. The dedupe key also rides along as the notification `tag`, so a
+device that was offline collapses duplicates rather than stacking them.
+
+**Sending is deferred with `after()`.** A push is several HTTPS round trips to
+Apple or Google, and none of them belong in the time it takes to save an
+expense. Not awaiting *without* `after()` would be worse than either: a
+serverless function can be frozen the moment it responds, killing the request
+half-sent.
+
+**404 and 410 prune; nothing else does.** Those two mean the browser has
+discarded the subscription — permission revoked, app uninstalled — and pruning
+on discovery is the only way they are ever cleaned up, since nothing tells the
+server that somebody uninstalled. A 429 or a 500 is an outage, not consent
+withdrawn: deleting on those would silently unsubscribe the household after one
+bad afternoon at a push service. Three tests fail if that distinction is
+dropped.
+
+**The endpoint is the device's identity**, not a generated id, so re-subscribing
+upserts. A browser hands back the same endpoint after a permission reset while
+possibly rotating its keys; inserting would leave two rows pushing to one place.
+
+**iOS only exposes the push API to an installed PWA.** Not a permission that
+can be asked for and denied — the API is simply absent until the app is on the
+home screen, which is why the toggle reads that state and says so rather than
+offering a button that would throw.
+
 ### Feature 9c — Invitations through the app ✅ done, PR open
 
 - [x] An invited address that already has an account offers a channel choice
@@ -669,6 +710,10 @@ nothing if the recording waits for you to look.
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
 | `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
+| `VAPID_PUBLIC_KEY`      | Web push         | Same value as the `NEXT_PUBLIC_` one below     |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push  | The browser needs it to subscribe              |
+| `VAPID_PRIVATE_KEY`     | Web push         | Server-side only; signs every push             |
+| `VAPID_SUBJECT`         | Web push         | `mailto:` contact for the push services        |
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
