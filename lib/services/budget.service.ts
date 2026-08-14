@@ -12,7 +12,14 @@ import {
   BudgetWithProgress,
   toBudgetState,
 } from "@/lib/db/models/budget.model";
-import { appliesTo, MonthKey, PeriodWindow, periodStartFor, windowFor } from "@/lib/budgets/period";
+import {
+  appliesTo,
+  currentMonthKey,
+  MonthKey,
+  PeriodWindow,
+  periodStartFor,
+  windowFor,
+} from "@/lib/budgets/period";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
 import { logger } from "@/lib/logger";
@@ -28,6 +35,13 @@ export interface BudgetFields {
   categoryId: number;
   amount: string;
   period: BudgetPeriod;
+}
+
+/** A limit the current period's spending has passed, and by how much. */
+export interface ExceededBudget {
+  budget: Budget;
+  window: PeriodWindow;
+  spent: string;
 }
 
 /**
@@ -167,6 +181,53 @@ export class BudgetService {
       });
 
     return { window, budgets, summary: summarise(budgets) };
+  }
+
+  /**
+   * Which of a category's limits the given date's period has now exceeded.
+   *
+   * Runs after an expense is written, to answer "did that put us over?". The
+   * category usually has no budget at all, which costs one query and stops
+   * there; only when a limit exists is the spend for its window summed.
+   *
+   * The arithmetic is `sumBaseAmountByCategory` and `windowFor` — the same two
+   * the budgets page reads through `getOverview`. A second way to decide what
+   * "over" means would eventually disagree with the bar on screen, which for a
+   * notification saying you overspent would be worse than saying nothing.
+   */
+  async findExceeded(ctx: SpaceContext, categoryId: number, on: Date): Promise<ExceededBudget[]> {
+    const standing = await budgetRepository.findByCategory(ctx.organizationId, categoryId);
+
+    if (standing.length === 0) {
+      return [];
+    }
+
+    const month = currentMonthKey(on);
+    const exceeded: ExceededBudget[] = [];
+
+    for (const budget of standing) {
+      const window = windowFor(budget.period as BudgetPeriod, month);
+
+      // A limit only applies from its own period onwards, exactly as the
+      // budgets page treats it.
+      if (!appliesTo(budget.startDate, window)) {
+        continue;
+      }
+
+      const spendByCategory = await sumBaseAmountByCategory(
+        expenses,
+        ctx.organizationId,
+        window.start,
+        window.end,
+      );
+      const spent = spendByCategory.get(categoryId) ?? "0";
+
+      if (Number(spent) > Number(budget.amount)) {
+        exceeded.push({ budget, window, spent: Number(spent).toFixed(2) });
+      }
+    }
+
+    return exceeded;
   }
 
   /**

@@ -9,7 +9,15 @@ import { RecurringTransaction } from "@/lib/db/models/recurring-transaction.mode
 import { TransactionKind } from "@/lib/db/models/transaction.model";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
-import { dueOccurrences, Frequency, occurrenceAt, todayAnchor } from "@/lib/recurring/schedule";
+import {
+  dueOccurrences,
+  Frequency,
+  FREQUENCY_LABEL,
+  occurrenceAt,
+  todayAnchor,
+} from "@/lib/recurring/schedule";
+import { notificationService } from "@/lib/services/notification.service";
+import { formatMoney } from "@/lib/currency/format";
 import { logger } from "@/lib/logger";
 
 /**
@@ -272,6 +280,23 @@ export class RecurringTransactionService {
         // there first. That is a success, not a failure.
         if (entry) {
           created += 1;
+
+          // Keyed to the occurrence, not to the run, so the cron sweep and a
+          // page load racing each other still leave one notification — the
+          // same guarantee the occurrence key gives the entry itself.
+          const isExpense = template.type === "expense";
+          const name =
+            template.description ?? (isExpense ? "A recurring expense" : "Recurring income");
+
+          await notificationService.notifySpace(ctx.organizationId, {
+            type: "recurring_created",
+            title: `${name} was recorded`,
+            body: `${formatMoney(template.amount, template.currency)} ${
+              isExpense ? "spent" : "received"
+            }, from your ${FREQUENCY_LABEL[template.frequency as Frequency].toLowerCase()} schedule.`,
+            href: isExpense ? "/expenses" : "/income",
+            dedupeKey: `recurring:${template.id}:${date.toISOString().slice(0, 10)}`,
+          });
         }
       }
 

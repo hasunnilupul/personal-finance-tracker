@@ -47,6 +47,9 @@ The three deployment blockers recorded below were **fixed on 2026-08-14**,
 outside the repo. Their notes are kept for the traps they explain, not as
 outstanding work.
 
+**In progress:** `feat/notifications` — Feature 9a. Budget overspend and
+recurring entries, recorded in-app, with the bell in the topbar. Web push (9b)
+and offline (10) follow.
 **Released 2026-08-14 (second)** — `d73622e` (PR #30), carrying #29: the
 service worker Chrome needs before it will offer to install, and the hint iOS
 needs because Safari never offers at all. Verified on the live site (`/sw.js`
@@ -167,6 +170,9 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
 | Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
 | Savings goals            | A target, not an account; no money moves  | Keeps one place for money to live; a contribution marks intent, not a transfer           |
+| Notification delivery    | In-app record; push as a layer on top      | A denied permission must not mean the overspend was never recorded — as with invites     |
+| Notification triggers    | At the write that causes them, not swept   | Crossing a budget is caused by an expense; there is nothing to poll for                  |
+| Notification idempotency | Unique `(org, user, dedupeKey)`            | Every later expense re-crosses the same limit; a sweep races page loads                  |
 | Category scoping         | Services assert; the FK is a backstop     | A foreign key enforces existence in _any_ space, so ownership has to be asked separately |
 | Package manager          | pnpm                                      |                                                                                          |
 
@@ -563,6 +569,59 @@ safe circle.
 **The 512 is upscaled from a 425px tile**, so it is slightly soft. It is the
 largest art the sheet contains. Re-export from the original at 512 and rerun
 the crop if it ever looks wrong on a device.
+
+### Feature 9a — Notifications, in-app ✅ done, PR open
+
+- [x] `notifications` table, one row per recipient, keyed against duplicates
+- [x] Budget overspend, raised at write time
+- [x] Recurring entries, raised as each occurrence is materialised
+- [x] A bell in the topbar with an unread dot, and mark-read
+- [x] Scheduled the recurring sweep, which nothing had ever called
+
+**In-app first, push as a layer on top.** The same shape as invitations, where
+the copyable link is the mechanism and the email sits above it. Push can be
+denied, is only delivered to an installed PWA on iOS, and fails silently; if
+the notification existed only as an OS toast then a denied permission would
+mean the overspend was never recorded anywhere. Stored, it is durable, it can
+be read later, and it can be tested without a push round trip.
+
+**Both triggers hang off writes that already happen.** Crossing a budget is
+*caused* by recording an expense, so the check runs there rather than on a
+sweep — noticed when it happens, not when someone next opens the app. A
+recurring entry is announced as it is materialised. Neither needs a scheduler
+to be correct.
+
+**`dedupeKey` carries the whole feature.** Unique on
+`(organizationId, userId, dedupeKey)`. Every caller can run twice: the second
+expense of an overspent month crosses the same limit again, and the cron sweep
+races page loads. The key makes the repeat a no-op at the database, which is
+the same answer the `(organizationId, recurringId, date)` occurrence key gave
+the entries themselves. Keyed on the budget and its window, not on the entry —
+keying on the entry would notify per purchase.
+
+**Raising one can never fail the write that caused it.** Every call follows a
+write that has already succeeded, so `notifySpace` catches and logs rather than
+throwing. An expense that was recorded stays recorded even if the notice fails.
+Six tests break if that `catch` is removed, including the materialiser's own —
+which is the point.
+
+**Overspend costs one query in the usual case.** Most categories have no
+budget, and `findByCategory` answers that without summing a window. Only when a
+limit exists is the spend computed, through the same
+`sumBaseAmountByCategory` + `windowFor` pair the budgets page reads. A second
+way to decide what "over" means would eventually disagree with the bar on
+screen.
+
+**No `createdBy` / `updatedBy`,** unlike every other space-scoped table. Nobody
+authors a notification: it is raised by a write somebody else made, or by a
+cron sweep with no acting user at all. A nullable attribution column that is
+usually null would invite reading null as "system".
+
+**`/api/cron/materialise-recurring` is now scheduled**, daily at 04:00, an hour
+after the rate refresh so conversions have fresh rates. It had existed, guarded
+and correct, and nothing had ever called it — so occurrences only appeared when
+someone opened the app. A notification saying "your rent was recorded" is worth
+nothing if the recording waits for you to look.
 
 ---
 

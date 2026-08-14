@@ -6,9 +6,12 @@ import {
   sumTransactions,
   TransactionTable,
 } from "@/lib/repositories/transaction-query";
+import { budgetService } from "@/lib/services/budget.service";
 import { categoryService } from "@/lib/services/category.service";
 import { expenseService } from "@/lib/services/expense.service";
 import { incomeService } from "@/lib/services/income.service";
+import { notificationService } from "@/lib/services/notification.service";
+import { formatMoney } from "@/lib/currency/format";
 import { SpaceContext } from "@/lib/services/types";
 import {
   TransactionFilters,
@@ -82,9 +85,16 @@ export class TransactionService {
       await categoryService.assertUsable(ctx, data.categoryId, kind);
     }
 
-    return kind === "expense"
-      ? expenseService.createExpense(ctx, data, options)
-      : incomeService.createIncome(ctx, data, options);
+    const created =
+      kind === "expense"
+        ? await expenseService.createExpense(ctx, data, options)
+        : await incomeService.createIncome(ctx, data, options);
+
+    if (created) {
+      await this.announceOverspend(ctx, kind, created.categoryId, created.date);
+    }
+
+    return created;
   }
 
   async update(
@@ -97,9 +107,56 @@ export class TransactionService {
     // is being cleared. Neither needs a lookup, and `assertUsable` says so.
     await categoryService.assertUsable(ctx, data.categoryId, kind);
 
-    return kind === "expense"
-      ? expenseService.updateExpense(ctx, id, data)
-      : incomeService.updateIncome(ctx, id, data);
+    const updated =
+      kind === "expense"
+        ? await expenseService.updateExpense(ctx, id, data)
+        : await incomeService.updateIncome(ctx, id, data);
+
+    if (updated) {
+      await this.announceOverspend(ctx, kind, updated.categoryId, updated.date);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Raises a notification when an expense has just carried a budget past its
+   * limit.
+   *
+   * Write-time rather than scheduled, because crossing a budget is *caused* by
+   * a write: there is nothing to poll for, and this way it is noticed the
+   * moment it happens rather than whenever someone next opens the app.
+   *
+   * Only the first expense of a period announces it. Every later one crosses
+   * the same limit again, and the dedupe key — the budget and the window it
+   * was crossed in — is what turns those into no-ops at the database rather
+   * than a notification per purchase.
+   *
+   * Income is exempt: a limit is on spending.
+   */
+  private async announceOverspend(
+    ctx: SpaceContext,
+    kind: TransactionKind,
+    categoryId: number | null,
+    date: Date,
+  ): Promise<void> {
+    if (kind !== "expense" || categoryId === null) {
+      return;
+    }
+
+    const exceeded = await budgetService.findExceeded(ctx, categoryId, date);
+
+    for (const { budget, window, spent } of exceeded) {
+      const over = (Number(spent) - Number(budget.amount)).toFixed(2);
+
+      await notificationService.notifySpace(ctx.organizationId, {
+        type: "budget_overspend",
+        title: `Over budget: ${window.label}`,
+        body: `${formatMoney(spent, ctx.baseCurrency)} spent against a ${formatMoney(budget.amount, ctx.baseCurrency)} limit — ${formatMoney(over, ctx.baseCurrency)} over.`,
+        href: "/budgets",
+        dedupeKey: `budget:${budget.id}:${window.start.toISOString().slice(0, 10)}`,
+      });
+    }
   }
 
   async remove(ctx: SpaceContext, kind: TransactionKind, id: number) {
