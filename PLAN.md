@@ -11,8 +11,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Cleared the Dependabot advisories — 40 down to 0, verified
-by `pnpm audit` on both the full and the production-only tree. On
-`chore/security-advisories`, ready to push and open a PR into `dev`.
+by `pnpm audit` on both the full and the production-only tree. Pushed to
+`chore/security-advisories`, PR #20 open into `dev`, awaiting the repo owner's
+merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
 left, and none of them is urgent now the advisories are cleared.
