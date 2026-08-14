@@ -10,7 +10,19 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+**Last completed:** **UI polish** (`fix/ui-polish`) — eight commits of
+presentation fixes found by using the app rather than by planning it. Two were
+whole classes rather than single sightings: no `Select` passed `items`, so every
+trigger printed its raw value (the space switcher showed an organization id),
+and no `Button` rendering a link passed `nativeButton={false}`, which is what
+gates Base UI's link-aware keyboard handling. Also: the sidebar tab that only
+answered a click on its label, a mobile bar carrying ten tabs across a phone,
+the topbar extracted into `components/app-topbar.tsx` and taught to reflow, and
+`PLAN.md` moved into `.prettierignore` because `pnpm format` was indenting it
+four spaces deeper on every run. All four checks pass; none of it was exercised
+in a browser, since signing in needs the owner's own credentials.
+
+**Before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
 `ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
 the first exercise of the deploy-time migration added in #24: the deployment
 went green, which on a production build means the migrate step ran rather than
@@ -19,8 +31,13 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**Next up:** The app is deployed but **not yet reachable by anyone else.** Three
-things stand between here and a family member signing in, none of them code:
+**Next up, in code:** a submitted `categoryId` is never checked against the
+space it is being filed in — see the entry under Known follow-ups. That is the
+branch in progress.
+
+**Next up, in configuration:** the app is deployed but **not yet reachable by
+anyone else.** Three things stand between here and a family member signing in,
+none of them code:
 
 1. **Vercel Deployment Protection is on.** Both `/` and `/sign-up` answer `302`
    to `vercel.com/sso-api`, so the deployment is gated behind the Vercel
@@ -692,6 +709,18 @@ Not blocking, but worth doing.
       itself, since that scan predates the merge. `main` now carries the fixes,
       so the next scan should clear them. Worth a glance at the Dependabot tab
       to confirm it did.
+- [ ] **A submitted `categoryId` is never scoped to the space.** The zod schema
+      turns it into a number and `createExpense` spreads it into the row; the
+      only guard is the foreign key, which enforces that the category _exists_,
+      in any space. So an entry in space A can carry space B's category id, and
+      the list joins categories by id — B's category name would render to A's
+      members. Every other write path re-checks scope rather than trusting the
+      client, which is what `SpaceContext` and `UserInput<T>` are for; this one
+      does not. It also decides what happens when a category is deleted while
+      someone else's form is open: today that is a foreign-key violation
+      surfacing as a generic error, and it should be a sentence. Found by asking
+      why a category created in one session did not appear in another's picker
+      — the staleness itself is expected and harmless, this was underneath it.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
