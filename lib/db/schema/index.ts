@@ -5,6 +5,7 @@ export * from "@/lib/db/schema/exchange-rates";
 export * from "@/lib/db/schema/expenses";
 export * from "@/lib/db/schema/income";
 export * from "@/lib/db/schema/notifications";
+export * from "@/lib/db/schema/push-subscriptions";
 export * from "@/lib/db/schema/organization";
 export * from "@/lib/db/schema/recurring-transactions";
 export * from "@/lib/db/schema/savings-goals";

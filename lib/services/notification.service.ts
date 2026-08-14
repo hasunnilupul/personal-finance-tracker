@@ -1,11 +1,25 @@
+import { after } from "next/server";
+
 import { notificationRepository } from "@/lib/repositories/notification.repository";
 import { spaceRepository } from "@/lib/repositories/space.repository";
+import { pushService } from "@/lib/services/push.service";
 import { Notification, NotificationInput } from "@/lib/db/models/notification.model";
 import { SpaceContext } from "@/lib/services/types";
 import { logger } from "@/lib/logger";
 
 /** How many the bell shows. Older ones stay in the table, unread. */
 export const NOTIFICATION_PAGE_SIZE = 20;
+
+/**
+ * What happened to a notification somebody explicitly asked for.
+ *
+ * `notifySpace` can stay silent about failure because it always follows a
+ * write that already succeeded — the expense is recorded either way. An
+ * invitation notice is different: sending it *is* the action, so the caller
+ * has to be able to tell "already sent" from "did not send", and say so.
+ * Reporting success for a row that was never written is worse than an error.
+ */
+export type NotifyOutcome = "created" | "duplicate" | "failed";
 
 export class NotificationService {
   /**
@@ -37,7 +51,7 @@ export class NotificationService {
         return [];
       }
 
-      return await notificationRepository.createManyIfAbsent(
+      const created = await notificationRepository.createManyIfAbsent(
         recipients.map((userId) => ({
           organizationId,
           userId,
@@ -48,6 +62,13 @@ export class NotificationService {
           dedupeKey: input.dedupeKey,
         })),
       );
+
+      this.push(
+        created.map((notification) => notification.userId),
+        input,
+      );
+
+      return created;
     } catch (error) {
       logger.error("Failed to raise a notification", error, {
         organizationId,
@@ -68,9 +89,9 @@ export class NotificationService {
    * contract as {@link notifySpace}: the invitation is already created, and
    * failing to mention it must not undo it.
    */
-  async notifyUser(userId: string, input: NotificationInput): Promise<Notification | undefined> {
+  async notifyUser(userId: string, input: NotificationInput): Promise<NotifyOutcome> {
     try {
-      return await notificationRepository.createIfAbsent({
+      const created = await notificationRepository.createIfAbsent({
         organizationId: null,
         userId,
         type: input.type,
@@ -79,6 +100,14 @@ export class NotificationService {
         href: input.href ?? null,
         dedupeKey: input.dedupeKey,
       });
+
+      if (!created) {
+        return "duplicate";
+      }
+
+      this.push([userId], input);
+
+      return "created";
     } catch (error) {
       logger.error("Failed to raise an account notification", error, {
         userId,
@@ -86,7 +115,48 @@ export class NotificationService {
         dedupeKey: input.dedupeKey,
       });
 
-      return undefined;
+      return "failed";
+    }
+  }
+
+  /**
+   * Pushes a notification that was just written, to whoever it was written for.
+   *
+   * **Only for rows that were actually created.** `createManyIfAbsent` returns
+   * what it inserted, so a repeat that the dedupe key turned into a no-op
+   * pushes nothing either — the phone stays quiet for the same reason the bell
+   * does not gain a second entry.
+   *
+   * Deferred with `after()`, so the send happens once the response is on its
+   * way. A push is several HTTPS round trips to Apple or Google, and none of
+   * them belong in the time it takes to save an expense. Not awaiting without
+   * `after()` would be worse than either: a serverless function can be frozen
+   * the moment it responds, killing the request half-sent.
+   */
+  private push(userIds: string[], input: NotificationInput): void {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const send = async () => {
+      await pushService.sendToUsers(userIds, {
+        title: input.title,
+        body: input.body,
+        href: input.href ?? null,
+        // Collapses a repeat on the device, the way the dedupe key does in the
+        // database — belt and braces for a phone that was offline.
+        tag: input.dedupeKey,
+      });
+    };
+
+    try {
+      after(send);
+    } catch {
+      // `after` needs a request to come after. The seed script has none, and
+      // neither would any future job that writes entries outside a request, so
+      // a missing scope means "nowhere to defer to" rather than an error —
+      // the notification row is written either way.
+      logger.debug("Push not scheduled: no request scope");
     }
   }
 
