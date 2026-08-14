@@ -47,9 +47,23 @@ The three deployment blockers recorded below were **fixed on 2026-08-14**,
 outside the repo. Their notes are kept for the traps they explain, not as
 outstanding work.
 
-**In progress:** `feat/pwa-install-prompt` — the manifest shipped and no
-install prompt ever appeared. Two separate causes, one per platform; see
-Feature 8.
+**Released 2026-08-14 (second)** — `d73622e` (PR #30), carrying #29: the
+service worker Chrome needs before it will offer to install, and the hint iOS
+needs because Safari never offers at all. Verified on the live site (`/sw.js`
+answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
+is the whole point) **and confirmed installed on a real iPhone** — the first
+end-to-end proof the PWA works.
+
+**In progress:** `feat/speed-insights` — `@vercel/speed-insights` in the root
+layout, for real-user Core Web Vitals.
+
+**Next:** notifications, then offline. Decided: budget overspend and recurring
+entries, recorded **in-app first with push as a delivery layer on top** — the
+same shape as invitations, where the copyable link is the mechanism and email
+sits above it. A denied permission or an undelivered push must not mean the
+overspend was never recorded anywhere. Offline will cache the shell **and what
+was last viewed**, which means account data on the device and therefore a cache
+clear on sign-out.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -563,7 +577,7 @@ the crop if it ever looks wrong on a device.
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
-| `CRON_SECRET`           | Both cron routes | **Not set.** Both refuse to run without it     |
+| `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
@@ -591,10 +605,18 @@ and they do address one endpoint. It acts only when `VERCEL_ENV` is
 `production`; the development database stays the developer's to migrate. See
 the follow-up at the end for why a release checklist was not enough.
 
-**On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
-by design. Rates are fetched on demand when a conversion misses the cache, and
-recurring entries are materialised when someone loads a page. Setting it buys
-freshness in a space nobody has opened, not correctness.
+**On `CRON_SECRET`:** neither cron route runs without it, and that was
+survivable by design. Rates are fetched on demand when a conversion misses the
+cache, and recurring entries are materialised when someone loads a page. It buys
+freshness in a space nobody has opened, not correctness. **It is now set** —
+earlier notes here saying otherwise were stale.
+
+**But only one of the two routes is scheduled.** `vercel.json` lists
+`/api/cron/refresh-rates` and nothing else, so `/api/cron/materialise-recurring`
+has never been called by anything: it is a guarded endpoint that exists and
+waits. Occurrences therefore still appear only when somebody opens the app,
+which is exactly the gap the notifications work has to close — a "your rent was
+recorded" message is worth nothing if the recording waits for you to look.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
