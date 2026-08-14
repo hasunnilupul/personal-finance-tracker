@@ -1,6 +1,7 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import type { BatchStatement } from "@/lib/db/batch";
 import { budgets } from "@/lib/db/schema/budgets";
 import { categories } from "@/lib/db/schema/categories";
 import { Budget, NewBudget } from "@/lib/db/models/budget.model";
@@ -105,6 +106,41 @@ export class BudgetRepository {
       .where(and(eq(budgets.id, id), eq(budgets.organizationId, organizationId)))
       .returning();
     return result.length > 0;
+  }
+
+  /**
+   * Re-expresses every limit in a new base currency, in one statement.
+   *
+   * The same inline-`VALUES` join the entries use, and for the same reason —
+   * each limit converts to its own figure, so this would otherwise be one
+   * `UPDATE` per budget. See `reconvertEntriesStatement` for the mechanics.
+   *
+   * Sync on purpose — see {@link BatchStatement}.
+   */
+  reconvertStatement(
+    organizationId: string,
+    updatedBy: string,
+    amounts: { id: number; amount: string }[],
+  ): BatchStatement | null {
+    if (amounts.length === 0) {
+      return null;
+    }
+
+    const [first, ...rest] = amounts;
+
+    const values = sql.join(
+      [
+        sql`(${first.id}::integer, ${first.amount}::numeric)`,
+        ...rest.map((row) => sql`(${row.id}, ${row.amount})`),
+      ],
+      sql`, `,
+    );
+
+    return db
+      .update(budgets)
+      .set({ amount: sql`v.amount`, updatedBy })
+      .from(sql`(values ${values}) as v(id, amount)`)
+      .where(and(eq(budgets.id, sql`v.id`), eq(budgets.organizationId, organizationId)));
   }
 }
 

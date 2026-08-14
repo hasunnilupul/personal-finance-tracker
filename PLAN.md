@@ -10,18 +10,20 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Cleared the Dependabot advisories — 40 down to 0, verified
-by `pnpm audit` on both the full and the production-only tree. Pushed to
-`chore/security-advisories`, PR #20 open into `dev`, awaiting the repo owner's
-merge.
+**Last completed:** Made the two multi-table writes atomic — one `db.batch`
+each, instead of parallel un-transacted statements. Pushed to
+`fix/atomic-multi-statement-writes`, PR #21 open into `dev`, awaiting the repo
+owner's merge.
 
-**Next up:** Nothing on the roadmap. The Known follow-ups below are what is
-left, and none of them is urgent now the advisories are cleared.
+**Next up:** Nothing on the roadmap. The largest remaining follow-up is now the
+**split `DATABASE_URL` / `DATABASE_URL_UNPOOLED`** at the bottom of the list —
+the app's runtime connection string is currently rejecting its password, and
+the migration URL points at a different database.
 
-| Branch | State                                                                  |
-| ------ | ---------------------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 7.                        |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, and #19. |
+| Branch | State                                                                      |
+| ------ | -------------------------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 7.                            |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19 and #20. |
 
 ---
 
@@ -92,6 +94,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded      |
 | Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS            |
 | Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast    |
+| Multi-table writes       | One `db.batch`, via `lib/db/batch.ts`     | The HTTP driver has no _interactive_ transactions, but a batch is still one transaction  |
+| Reassigning a category   | Budgets are not moved; they cascade       | The dialog already counts them destroyed, and moving one trips the unique period index   |
 | Recurring trigger        | On-read catch-up; cron as an accelerator  | `CRON_SECRET` is unset, so a cron-only sweep would never fire in this deployment         |
 | Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
 | Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
@@ -138,6 +142,23 @@ needed its own patched version. Check an override still does something before
 keeping it: once the direct dependency catches up, the entry is a no-op that
 pins the tree for no reason. `pnpm why <pkg>` and the resolved versions in
 `pnpm-lock.yaml` are how to tell.
+
+**Multi-table writes go through `runBatch`** (`lib/db/batch.ts`). The HTTP
+driver has no _interactive_ transactions — it cannot hold `BEGIN` open across
+round trips — but `db.batch` sends a list of statements in one request as one
+non-interactive transaction, so either all of them land or none do. Anything
+that has to be all-or-nothing is composed as statements and run through it.
+
+The constraint that comes with it: **the whole batch is decided before it
+opens.** Nothing inside can read a result and choose what to write next, so
+every lookup, every rate fetch and every refusal happens first. That is not a
+new discipline here — it is the same "compute everything that can fail before
+writing anything" the un-transacted code already followed — but now the payoff
+is a rollback rather than a tidier partial write.
+
+Repositories expose statement builders (`…Statement`) beside their normal
+methods; services compose them and call `runBatch`. `db` still only appears in
+repositories. **Statement builders must not be `async`** — see Gotchas.
 
 **Migrations.** `pnpm db:generate` then review the SQL before applying.
 drizzle-kit 1.0-rc asks for `--hints` on ambiguous rename-vs-create; pass
@@ -476,9 +497,21 @@ Things already hit, so they are not hit twice.
   collection began has nothing to look back to, so `getRate` falls forward to
   the earliest rate on record and logs that it approximated. Without this,
   saving a backdated expense fails outright.
-- **The HTTP database driver has no interactive transactions.** Multi-step
-  writes have to compute everything that can fail _before_ writing anything —
-  see `changeBaseCurrency`.
+- **The HTTP database driver has no interactive transactions,** but it does
+  have batched ones. `db.batch` is a real transaction and rolls back — verified
+  against the database by putting a constraint violation last in a batch and
+  confirming the two successful statements before it were undone. Multi-step
+  writes still have to compute everything that can fail _before_ writing
+  anything, because a batch cannot read a result and decide what to write next.
+- **A statement builder must not be an `async` function.** Drizzle query
+  builders are thenables, so `async` awaits one on the way out and executes the
+  statement then and there — exactly what a batch exists to avoid, and it fails
+  silently by still returning something plausible. Every `…Statement` method is
+  deliberately sync.
+- **`(values …)` needs casts on its first tuple.** Postgres infers the column
+  types of a `VALUES` list from its first row, so an uncast literal arrives as
+  `text` and fails to compare against an `integer` id or assign to a `numeric`.
+  Only the first tuple needs them; see `reconvertEntriesStatement`.
 - **`react-hooks/set-state-in-effect` will fail lint** for resetting a
   dialog's fields when the record changes. Remount the form with a `key`
   instead of syncing state in an effect.
@@ -544,29 +577,58 @@ Not blocking, but worth doing.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
-- [x] ~~No tests yet.~~ 223 unit tests across the RBAC policy, space scoping,
-      currency conversion and the date arithmetic behind budgets, reports and
-      recurring entries. Still untested: Server Actions, components, and
-      anything that needs a database.
+- [x] ~~No tests yet.~~ 255 unit tests across the RBAC policy, space scoping,
+      currency conversion, the date arithmetic behind budgets, reports and
+      recurring entries, and the atomicity of the two multi-table writes. Still
+      untested: Server Actions, components, and anything that needs a database.
 - [ ] `expenses` and `income` are structurally identical tables. A single
       `transactions` table with a `type` column would have been simpler; the
       shared query and service layer hide most of the cost, so this is only
       worth revisiting if a third kind ever appears.
-- [ ] Reassigning a category updates four tables in four statements with no
-      transaction to wrap them (the HTTP driver has none). A failure part-way
-      leaves some rows moved and the category still present. Recoverable —
-      every moved row points at a valid same-type category and the delete can
-      be retried — but a `transactions` table would reduce it to two.
-- [ ] Changing a space's base currency writes entries and budget limits as
-      parallel un-transacted statements, for the same missing-transaction
-      reason. Every conversion is computed before anything is written, so a
-      failure is a partial write rather than a wrong one — but a partial write
-      leaves the space holding a mix of old-currency and new-currency amounts,
-      with the space's own `baseCurrency` already switched, so nothing on screen
-      says which row is in which. Worse than the reassign case, which stays
-      internally consistent throughout. Re-running the change would convert the
-      already-converted rows a second time, so recovery is manual. Second
-      instance of this pattern; worth one shared answer — a batched multi-
-      statement write, or a per-row marker that makes a re-run idempotent.
+- [x] ~~Reassigning a category updates four tables in four statements with no
+      transaction to wrap them.~~ Now one `db.batch` — the three reassignments
+      and the delete land together or not at all. Fixing it surfaced a real bug
+      underneath: `budgets` was being reassigned along with the other three,
+      which both contradicted the delete dialog (it counts budgets as
+      _destroyed_, since they cascade) and tripped
+      `budgets_organizationId_categoryId_period_key` whenever the replacement
+      category already had a limit for the same period. Budgets are no longer
+      moved; they cascade, as the dialog always said they would.
+- [x] ~~Changing a space's base currency writes entries and budget limits as
+      parallel un-transacted statements.~~ The switch, the entries and the
+      budget limits are now one `db.batch`, so the space can no longer end up
+      holding a mix of old- and new-currency amounts under an already-switched
+      `baseCurrency`. The shared answer was the batched multi-statement write
+      rather than a per-row marker — it fixed both instances without adding a
+      column or a recovery path to maintain.
+
+      The per-row updates became **one statement per table** on the way, joining
+          against an inline `VALUES` list. Each entry converts at its own date and
+          so needs its own figures; a space with years of history would otherwise
+          have been thousands of statements in one request. The remaining ceiling is
+          Postgres' 65535 parameters per statement — three per entry, so roughly
+          20k entries, far past anything a household ledger will reach and much
+          further than the old code got.
+
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.
+- [ ] **Finish the database verification of the batched writes.** What was
+      confirmed against the real database before access broke: each entry gets
+      its own figures from the `VALUES` join, original `amount`s are untouched,
+      a wrong-space id changes nothing, and — the guarantee itself — a batch
+      whose last statement violates a constraint rolls back the two successful
+      statements before it, leaving `baseCurrency` and the amounts as they were.
+      What is **not** yet confirmed against the database is the reassign-plus-
+      delete batch, because the run that reached it is what exposed the budgets
+      bug, and the re-run could not connect. It is covered by unit tests; it has
+      not been seen working on real rows.
+- [ ] **`DATABASE_URL` and `DATABASE_URL_UNPOOLED` point at different
+      databases.** Found while verifying the batched writes. `DATABASE_URL`
+      (`ep-empty-pond-…-pooler`) is the real one with the schema, and it started
+      rejecting `neondb_owner`'s password part-way through the session —
+      it worked, then did not, with nothing changed locally. `DATABASE_URL_UNPOOLED`
+      (`ep-still-flower-…`) authenticates fine but has no `organization` table,
+      so it is a different branch or project. Two separate problems, both worth
+      fixing before the next database-backed change: - the app's runtime connection string is currently dead, so check what
+      Vercel holds for it as well as `.env`; - `db:generate` / `db:migrate` use the unpooled URL, so a migration run
+      today would apply to the **wrong database**.

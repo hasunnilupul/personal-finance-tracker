@@ -1,6 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import { budgets } from "@/lib/db/schema/budgets";
@@ -96,28 +97,40 @@ export class CategoryUsageRepository {
   }
 
   /**
-   * Points every reference at another category.
+   * Points every reference at another category — as statements, not as writes.
    *
    * Scoped by `organizationId` on both sides, so this cannot drag rows across
    * a space boundary. `updatedBy` is stamped for the same reason every other
    * write is — a reassignment edits real history and should say who did it.
    *
-   * @returns How many rows moved, across all four tables.
+   * These are returned rather than executed so they can go into the same batch
+   * as the delete that follows them. Moving the rows and removing the category
+   * they came from is one decision; running it as independent statements meant
+   * a failure part-way left rows moved and the category still standing.
+   *
+   * Each carries a `returning` clause, so the batch response says how many rows
+   * each table actually moved — the authoritative count, as opposed to the
+   * advisory one the manage screen renders.
+   *
+   * **Budgets are deliberately not here**, which is why this covers three of
+   * the four referencing tables. A budget cascades when its category goes, and
+   * the delete dialog says so — it is the part a reassignment cannot save.
+   * Moving one instead would also collide with
+   * `budgets_organizationId_categoryId_period_key` whenever the replacement
+   * category already has a limit for the same period, which is the common case:
+   * a category worth reassigning to is a category likely to have a budget.
+   *
+   * Sync on purpose — see {@link BatchStatement}.
    */
-  async reassign(
+  reassignStatements(
     fromId: number,
     toId: number,
     organizationId: string,
     updatedBy: string,
-  ): Promise<number> {
-    const results = await Promise.all([
-      this.reassignIn(expenses, fromId, toId, organizationId, updatedBy),
-      this.reassignIn(income, fromId, toId, organizationId, updatedBy),
-      this.reassignIn(recurringTransactions, fromId, toId, organizationId, updatedBy),
-      this.reassignIn(budgets, fromId, toId, organizationId, updatedBy),
-    ]);
-
-    return results.reduce((total, moved) => total + moved, 0);
+  ): BatchStatement[] {
+    return [expenses, income, recurringTransactions].map((table) =>
+      this.reassignIn(table, fromId, toId, organizationId, updatedBy),
+    );
   }
 
   private async countIn(
@@ -155,20 +168,18 @@ export class CategoryUsageRepository {
     return totals;
   }
 
-  private async reassignIn(
+  private reassignIn(
     table: ReferencingTable,
     fromId: number,
     toId: number,
     organizationId: string,
     updatedBy: string,
-  ): Promise<number> {
-    const moved = await db
+  ): BatchStatement {
+    return db
       .update(table)
       .set({ categoryId: toId, updatedBy })
       .where(and(eq(table.categoryId, fromId), eq(table.organizationId, organizationId)))
       .returning({ id: table.id });
-
-    return moved.length;
   }
 }
 

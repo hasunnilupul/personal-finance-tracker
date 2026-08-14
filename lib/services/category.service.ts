@@ -1,5 +1,6 @@
 import { categoryRepository } from "@/lib/repositories/category.repository";
 import { EMPTY_USAGE, categoryUsageRepository } from "@/lib/repositories/category-usage.repository";
+import { BatchStatement, rowsReturned, runBatch } from "@/lib/db/batch";
 import { Category, CategoryInput, CategoryWithUsage } from "@/lib/db/models/category.model";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
@@ -91,7 +92,9 @@ export class CategoryService {
     const usage = await categoryUsageRepository.count(id, ctx.organizationId);
     const inUse = usage.reassignable + usage.destroyed;
 
-    let moved = 0;
+    // Everything that can refuse the delete is checked before a statement is
+    // built, so the batch below is only ever opened on a decision already made.
+    let reassignments: BatchStatement[] = [];
 
     if (reassignToId !== undefined) {
       if (reassignToId === id) {
@@ -111,7 +114,7 @@ export class CategoryService {
         );
       }
 
-      moved = await categoryUsageRepository.reassign(
+      reassignments = categoryUsageRepository.reassignStatements(
         id,
         reassignToId,
         ctx.organizationId,
@@ -124,7 +127,21 @@ export class CategoryService {
       );
     }
 
-    const deleted = await categoryRepository.delete(id, ctx.organizationId);
+    // The reassignment and the delete are one decision, so they are one write.
+    // Run separately, a failure between them left rows pointing at a category
+    // that was supposed to be gone — or worse, moved off a category that then
+    // survived. Either every row moves and the category goes, or nothing did.
+    const results = await runBatch([
+      ...reassignments,
+      categoryRepository.deleteStatement(id, ctx.organizationId),
+    ]);
+
+    const deleteResult = results[results.length - 1];
+    const moved = reassignments
+      .map((_, index) => rowsReturned(results[index]))
+      .reduce((total, rows) => total + rows, 0);
+
+    const deleted = rowsReturned(deleteResult) > 0;
 
     logger.info("Category deleted", { organizationId: ctx.organizationId, id, moved });
 
