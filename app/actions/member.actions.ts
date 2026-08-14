@@ -179,7 +179,7 @@ export async function notifyInvitationAction(invitationId: string): Promise<Memb
       return { error: "That address has no account yet, so send the email or the link instead." };
     }
 
-    await notificationService.notifyUser(account.id, {
+    const outcome = await notificationService.notifyUser(account.id, {
       type: "space_invitation",
       title: `You have been invited to ${invitation.spaceName}`,
       body: `${invitation.inviterName ?? "Someone"} invited you to share the ${invitation.spaceName} ledger.`,
@@ -188,7 +188,20 @@ export async function notifyInvitationAction(invitationId: string): Promise<Memb
       dedupeKey: `invitation:${invitation.id}`,
     });
 
-    return { success: `${account.name || account.email} will see it in the app.` };
+    // Sending it is the whole action here, so a failure has to be said out
+    // loud rather than swallowed the way a trigger's notice can be.
+    if (outcome === "failed") {
+      return { error: "Could not notify them. Send the link or the email instead." };
+    }
+
+    const name = account.name || account.email;
+
+    return {
+      success:
+        outcome === "duplicate"
+          ? `${name} has already been notified about this invitation.`
+          : `${name} will see it in the app.`,
+    };
   } catch (error) {
     logger.error("Failed to notify an invitation", error, { invitationId });
 

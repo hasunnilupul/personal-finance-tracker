@@ -132,7 +132,7 @@ describe("an invitation reaches somebody outside the space", () => {
     // being offered — so a row scoped to it would be visible to nobody.
     createIfAbsent.mockImplementation(async (row: unknown) => row);
 
-    await notificationService.notifyUser("user-invitee", invite);
+    await expect(notificationService.notifyUser("user-invitee", invite)).resolves.toBe("created");
 
     const [row] = createIfAbsent.mock.calls[0] as [{ organizationId: null; userId: string }];
 
@@ -150,10 +150,19 @@ describe("an invitation reaches somebody outside the space", () => {
     expect(row.dedupeKey).toBe("invitation:inv-1");
   });
 
-  it("never fails the invitation that caused it", async () => {
+  it("reports a failure rather than throwing, so the caller can say so", async () => {
+    // Sending it *is* the action here, unlike a trigger's notice. Returning
+    // success for a row that was never written is worse than an error — which
+    // is exactly what happened when the column was still NOT NULL.
     createIfAbsent.mockRejectedValue(new Error("connection lost"));
 
-    await expect(notificationService.notifyUser("user-invitee", invite)).resolves.toBeUndefined();
+    await expect(notificationService.notifyUser("user-invitee", invite)).resolves.toBe("failed");
+  });
+
+  it("reports a repeat as a duplicate, not as a fresh send", async () => {
+    createIfAbsent.mockResolvedValue(undefined);
+
+    await expect(notificationService.notifyUser("user-invitee", invite)).resolves.toBe("duplicate");
   });
 });
 

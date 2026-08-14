@@ -10,6 +10,17 @@ import { logger } from "@/lib/logger";
 /** How many the bell shows. Older ones stay in the table, unread. */
 export const NOTIFICATION_PAGE_SIZE = 20;
 
+/**
+ * What happened to a notification somebody explicitly asked for.
+ *
+ * `notifySpace` can stay silent about failure because it always follows a
+ * write that already succeeded — the expense is recorded either way. An
+ * invitation notice is different: sending it *is* the action, so the caller
+ * has to be able to tell "already sent" from "did not send", and say so.
+ * Reporting success for a row that was never written is worse than an error.
+ */
+export type NotifyOutcome = "created" | "duplicate" | "failed";
+
 export class NotificationService {
   /**
    * Raises one notification for every member of a space.
@@ -78,7 +89,7 @@ export class NotificationService {
    * contract as {@link notifySpace}: the invitation is already created, and
    * failing to mention it must not undo it.
    */
-  async notifyUser(userId: string, input: NotificationInput): Promise<Notification | undefined> {
+  async notifyUser(userId: string, input: NotificationInput): Promise<NotifyOutcome> {
     try {
       const created = await notificationRepository.createIfAbsent({
         organizationId: null,
@@ -90,11 +101,13 @@ export class NotificationService {
         dedupeKey: input.dedupeKey,
       });
 
-      if (created) {
-        this.push([userId], input);
+      if (!created) {
+        return "duplicate";
       }
 
-      return created;
+      this.push([userId], input);
+
+      return "created";
     } catch (error) {
       logger.error("Failed to raise an account notification", error, {
         userId,
@@ -102,7 +115,7 @@ export class NotificationService {
         dedupeKey: input.dedupeKey,
       });
 
-      return undefined;
+      return "failed";
     }
   }
 
@@ -125,7 +138,7 @@ export class NotificationService {
       return;
     }
 
-    after(async () => {
+    const send = async () => {
       await pushService.sendToUsers(userIds, {
         title: input.title,
         body: input.body,
@@ -134,7 +147,17 @@ export class NotificationService {
         // database — belt and braces for a phone that was offline.
         tag: input.dedupeKey,
       });
-    });
+    };
+
+    try {
+      after(send);
+    } catch {
+      // `after` needs a request to come after. The seed script has none, and
+      // neither would any future job that writes entries outside a request, so
+      // a missing scope means "nowhere to defer to" rather than an error —
+      // the notification row is written either way.
+      logger.debug("Push not scheduled: no request scope");
+    }
   }
 
   async list(ctx: SpaceContext, limit = NOTIFICATION_PAGE_SIZE): Promise<Notification[]> {

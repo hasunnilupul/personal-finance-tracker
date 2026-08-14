@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { BellIcon, PiggyBankIcon, RepeatIcon, UsersIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,15 @@ const ICONS: Record<NotificationType, typeof BellIcon> = {
  */
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
+/**
+ * How often to re-read the list while the tab is in front.
+ *
+ * Slow on purpose: each tick is a server round trip for the whole layout, and
+ * a household ledger produces a notification a few times a week. Coming back
+ * to the tab refreshes immediately, which is the case people actually notice.
+ */
+const POLL_INTERVAL_MS = 60_000;
+
 function timeAgo(from: Date): string {
   const seconds = Math.round((from.getTime() - Date.now()) / 1000);
   const minutes = Math.round(seconds / 60);
@@ -58,6 +67,30 @@ function timeAgo(from: Date): string {
 const NotificationBell = ({ notifications, unreadCount }: NotificationBellProps) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // The list is rendered with the page, so without this a notification raised
+  // by somebody else only appears when you happen to navigate. There is no
+  // live channel here and adding one would mean a socket for a household of
+  // four; refreshing when you come back to the tab covers the case that
+  // actually happens, and a slow poll covers sitting on one screen.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    };
+
+    const interval = setInterval(refresh, POLL_INTERVAL_MS);
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [router]);
 
   const open = (notification: Notification) => {
     startTransition(async () => {
@@ -108,7 +141,7 @@ const NotificationBell = ({ notifications, unreadCount }: NotificationBellProps)
 
         {notifications.length === 0 ? (
           <p className="text-muted-foreground px-3 py-6 text-center text-sm">
-            Nothing yet. Budget overspends and recurring entries show up here.
+            Nothing yet. Overspent budgets, recurring entries and invitations show up here.
           </p>
         ) : (
           <ul className="max-h-96 overflow-y-auto py-1">

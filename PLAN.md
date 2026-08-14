@@ -539,6 +539,21 @@ expense. Not awaiting *without* `after()` would be worse than either: a
 serverless function can be frozen the moment it responds, killing the request
 half-sent.
 
+**The bell refreshes on focus and on a slow poll, not on a live channel.**
+Rendered with the page, so without that a notification raised by somebody else
+appears only when the reader happens to navigate — which is what "I sent an
+invitation and nothing showed up" turned out to mean. Coming back to the tab
+refreshes immediately, a 60s interval covers sitting on one screen, and push
+covers the app being closed. A socket for a household of four is not worth
+running.
+
+**An explicitly requested notification must report failure.** `notifySpace`
+can stay silent because it always follows a write that already succeeded — the
+expense is recorded either way. Sending an invitation notice *is* the action,
+so `notifyUser` returns `created` / `duplicate` / `failed` and the action says
+which. It reported success while writing nothing when the column was still
+`NOT NULL` locally, and that is the failure worth designing against.
+
 **404 and 410 prune; nothing else does.** Those two mean the browser has
 discarded the subscription — permission revoked, app uninstalled — and pruning
 on discovery is the only way they are ever cleaned up, since nothing tells the
