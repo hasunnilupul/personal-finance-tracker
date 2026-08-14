@@ -14,7 +14,8 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 one Neon endpoint, the schema is applied there from the nine committed
 migrations, and `drizzle.config.ts` refuses to migrate if they ever disagree
 again. The batched-write verification left outstanding by PR #21 now passes in
-full — 15 of 15 against the real database.
+full — 15 of 15 against the real database. Pushed to `fix/database-url-split`,
+PR #22 open into `dev`, awaiting the repo owner's merge.
 
 **Next up:** Nothing on the roadmap, and nothing urgent in the follow-ups. The
 database is fresh and empty, so the first thing worth doing is signing up to
