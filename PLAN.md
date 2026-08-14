@@ -50,6 +50,23 @@ outstanding work.
 **In progress:** `feat/notifications` — Feature 9a. Budget overspend and
 recurring entries, recorded in-app, with the bell in the topbar. Web push (9b)
 and offline (10) follow.
+**Released 2026-08-14 (second)** — `d73622e` (PR #30), carrying #29: the
+service worker Chrome needs before it will offer to install, and the hint iOS
+needs because Safari never offers at all. Verified on the live site (`/sw.js`
+answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
+is the whole point) **and confirmed installed on a real iPhone** — the first
+end-to-end proof the PWA works.
+
+**In progress:** `feat/speed-insights` — `@vercel/speed-insights` in the root
+layout, for real-user Core Web Vitals.
+
+**Next:** notifications, then offline. Decided: budget overspend and recurring
+entries, recorded **in-app first with push as a delivery layer on top** — the
+same shape as invitations, where the copyable link is the mechanism and email
+sits above it. A denied permission or an undelivered push must not mean the
+overspend was never recorded anywhere. Offline will cache the shell **and what
+was last viewed**, which means account data on the device and therefore a cache
+clear on sign-out.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -499,59 +516,6 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
-### Feature 9a — Notifications, in-app ✅ done, PR open
-
-- [x] `notifications` table, one row per recipient, keyed against duplicates
-- [x] Budget overspend, raised at write time
-- [x] Recurring entries, raised as each occurrence is materialised
-- [x] A bell in the topbar with an unread dot, and mark-read
-- [x] Scheduled the recurring sweep, which nothing had ever called
-
-**In-app first, push as a layer on top.** The same shape as invitations, where
-the copyable link is the mechanism and the email sits above it. Push can be
-denied, is only delivered to an installed PWA on iOS, and fails silently; if
-the notification existed only as an OS toast then a denied permission would
-mean the overspend was never recorded anywhere. Stored, it is durable, it can
-be read later, and it can be tested without a push round trip.
-
-**Both triggers hang off writes that already happen.** Crossing a budget is
-*caused* by recording an expense, so the check runs there rather than on a
-sweep — noticed when it happens, not when someone next opens the app. A
-recurring entry is announced as it is materialised. Neither needs a scheduler
-to be correct.
-
-**`dedupeKey` carries the whole feature.** Unique on
-`(organizationId, userId, dedupeKey)`. Every caller can run twice: the second
-expense of an overspent month crosses the same limit again, and the cron sweep
-races page loads. The key makes the repeat a no-op at the database, which is
-the same answer the `(organizationId, recurringId, date)` occurrence key gave
-the entries themselves. Keyed on the budget and its window, not on the entry —
-keying on the entry would notify per purchase.
-
-**Raising one can never fail the write that caused it.** Every call follows a
-write that has already succeeded, so `notifySpace` catches and logs rather than
-throwing. An expense that was recorded stays recorded even if the notice fails.
-Six tests break if that `catch` is removed, including the materialiser's own —
-which is the point.
-
-**Overspend costs one query in the usual case.** Most categories have no
-budget, and `findByCategory` answers that without summing a window. Only when a
-limit exists is the spend computed, through the same
-`sumBaseAmountByCategory` + `windowFor` pair the budgets page reads. A second
-way to decide what "over" means would eventually disagree with the bar on
-screen.
-
-**No `createdBy` / `updatedBy`,** unlike every other space-scoped table. Nobody
-authors a notification: it is raised by a write somebody else made, or by a
-cron sweep with no acting user at all. A nullable attribution column that is
-usually null would invite reading null as "system".
-
-**`/api/cron/materialise-recurring` is now scheduled**, daily at 04:00, an hour
-after the rate refresh so conversions have fresh rates. It had existed, guarded
-and correct, and nothing had ever called it — so occurrences only appeared when
-someone opened the app. A notification saying "your rent was recorded" is worth
-nothing if the recording waits for you to look.
-
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
@@ -606,6 +570,59 @@ safe circle.
 largest art the sheet contains. Re-export from the original at 512 and rerun
 the crop if it ever looks wrong on a device.
 
+### Feature 9a — Notifications, in-app ✅ done, PR open
+
+- [x] `notifications` table, one row per recipient, keyed against duplicates
+- [x] Budget overspend, raised at write time
+- [x] Recurring entries, raised as each occurrence is materialised
+- [x] A bell in the topbar with an unread dot, and mark-read
+- [x] Scheduled the recurring sweep, which nothing had ever called
+
+**In-app first, push as a layer on top.** The same shape as invitations, where
+the copyable link is the mechanism and the email sits above it. Push can be
+denied, is only delivered to an installed PWA on iOS, and fails silently; if
+the notification existed only as an OS toast then a denied permission would
+mean the overspend was never recorded anywhere. Stored, it is durable, it can
+be read later, and it can be tested without a push round trip.
+
+**Both triggers hang off writes that already happen.** Crossing a budget is
+*caused* by recording an expense, so the check runs there rather than on a
+sweep — noticed when it happens, not when someone next opens the app. A
+recurring entry is announced as it is materialised. Neither needs a scheduler
+to be correct.
+
+**`dedupeKey` carries the whole feature.** Unique on
+`(organizationId, userId, dedupeKey)`. Every caller can run twice: the second
+expense of an overspent month crosses the same limit again, and the cron sweep
+races page loads. The key makes the repeat a no-op at the database, which is
+the same answer the `(organizationId, recurringId, date)` occurrence key gave
+the entries themselves. Keyed on the budget and its window, not on the entry —
+keying on the entry would notify per purchase.
+
+**Raising one can never fail the write that caused it.** Every call follows a
+write that has already succeeded, so `notifySpace` catches and logs rather than
+throwing. An expense that was recorded stays recorded even if the notice fails.
+Six tests break if that `catch` is removed, including the materialiser's own —
+which is the point.
+
+**Overspend costs one query in the usual case.** Most categories have no
+budget, and `findByCategory` answers that without summing a window. Only when a
+limit exists is the spend computed, through the same
+`sumBaseAmountByCategory` + `windowFor` pair the budgets page reads. A second
+way to decide what "over" means would eventually disagree with the bar on
+screen.
+
+**No `createdBy` / `updatedBy`,** unlike every other space-scoped table. Nobody
+authors a notification: it is raised by a write somebody else made, or by a
+cron sweep with no acting user at all. A nullable attribution column that is
+usually null would invite reading null as "system".
+
+**`/api/cron/materialise-recurring` is now scheduled**, daily at 04:00, an hour
+after the rate refresh so conversions have fresh rates. It had existed, guarded
+and correct, and nothing had ever called it — so occurrences only appeared when
+someone opened the app. A notification saying "your rent was recorded" is worth
+nothing if the recording waits for you to look.
+
 ---
 
 ## Environment
@@ -619,7 +636,7 @@ the crop if it ever looks wrong on a device.
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
-| `CRON_SECRET`           | Both cron routes | **Not set.** Both refuse to run without it     |
+| `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
@@ -647,10 +664,18 @@ and they do address one endpoint. It acts only when `VERCEL_ENV` is
 `production`; the development database stays the developer's to migrate. See
 the follow-up at the end for why a release checklist was not enough.
 
-**On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
-by design. Rates are fetched on demand when a conversion misses the cache, and
-recurring entries are materialised when someone loads a page. Setting it buys
-freshness in a space nobody has opened, not correctness.
+**On `CRON_SECRET`:** neither cron route runs without it, and that was
+survivable by design. Rates are fetched on demand when a conversion misses the
+cache, and recurring entries are materialised when someone loads a page. It buys
+freshness in a space nobody has opened, not correctness. **It is now set** —
+earlier notes here saying otherwise were stale.
+
+**But only one of the two routes is scheduled.** `vercel.json` lists
+`/api/cron/refresh-rates` and nothing else, so `/api/cron/materialise-recurring`
+has never been called by anything: it is a guarded endpoint that exists and
+waits. Occurrences therefore still appear only when somebody opens the app,
+which is exactly the gap the notifications work has to close — a "your rent was
+recorded" message is worth nothing if the recording waits for you to look.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend

@@ -6,6 +6,7 @@ import { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import PwaProvider from "@/components/pwa-provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
@@ -69,6 +70,13 @@ export default function RootLayout({
           {children}
           <PwaProvider />
           <Toaster />
+          {/*
+            Real-user Core Web Vitals, sampled from actual devices rather than
+            a lab run. It reports nothing until Speed Insights is enabled for
+            the project in the Vercel dashboard, and is inert outside Vercel —
+            so local development and the test suite are unaffected.
+          */}
+          <SpeedInsights />
         </ThemeProvider>
       </body>
     </html>
