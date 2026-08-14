@@ -19,6 +19,7 @@ const expenseUpdate = vi.fn();
 const expenseFindById = vi.fn();
 const budgetCreate = vi.fn();
 const budgetFindByCategoryAndPeriod = vi.fn();
+const budgetFindByCategory = vi.fn();
 const categoryFindById = vi.fn();
 const convert = vi.fn();
 
@@ -35,6 +36,10 @@ vi.mock("@/lib/repositories/budget.repository", () => ({
   budgetRepository: {
     create: (...args: unknown[]) => budgetCreate(...args),
     findByCategoryAndPeriod: (...args: unknown[]) => budgetFindByCategoryAndPeriod(...args),
+    // Writing a transaction now asks whether it crossed a budget. These tests
+    // are about scoping, so the answer is "no budgets" and the overspend path
+    // stops there.
+    findByCategory: (...args: unknown[]) => budgetFindByCategory(...args),
   },
 }));
 
@@ -70,6 +75,7 @@ beforeEach(() => {
   expenseCreateIfAbsent.mockImplementation(async (row: unknown) => row);
   budgetCreate.mockImplementation(async (row: unknown) => ({ id: 1, ...(row as object) }));
   budgetFindByCategoryAndPeriod.mockResolvedValue(undefined);
+  budgetFindByCategory.mockResolvedValue([]);
   categoryFindById.mockResolvedValue({ id: 5, type: "expense", organizationId: "org-mine" });
   expenseUpdate.mockImplementation(async (_id: unknown, _org: unknown, row: unknown) => row);
   expenseFindById.mockResolvedValue({
