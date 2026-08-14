@@ -10,16 +10,18 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Committed the lockfile. Pushed to `chore/commit-lockfile`,
-PR #19 open into `dev`, awaiting the repo owner's merge.
+**Last completed:** Cleared the Dependabot advisories — 40 down to 0, verified
+by `pnpm audit` on both the full and the production-only tree. Pushed to
+`chore/security-advisories`, PR #20 open into `dev`, awaiting the repo owner's
+merge.
 
 **Next up:** Nothing on the roadmap. The Known follow-ups below are what is
-left — the Dependabot advisories are the largest.
+left, and none of them is urgent now the advisories are cleared.
 
-| Branch | State                                                            |
-| ------ | ---------------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 7.                  |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6 and 7. |
+| Branch | State                                                                  |
+| ------ | ---------------------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 7.                        |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, and #19. |
 
 ---
 
@@ -127,6 +129,15 @@ that was tested rather than re-resolving it. That makes the lockfile part of
 any change that touches `package.json` — run `pnpm install` and commit both
 together, or a CI install with `--frozen-lockfile` fails. Prettier is told to
 leave it alone, for the same reason it leaves migrations alone.
+
+**Transitive security fixes go in `pnpm.overrides`**, keyed by the range they
+replace (`nanoid@^3.0.0`, not bare `nanoid`) so a package that legitimately
+wants a different major is not dragged along with it. `brace-expansion` carries
+two entries for exactly that reason — v1 and v5 are both in the tree and each
+needed its own patched version. Check an override still does something before
+keeping it: once the direct dependency catches up, the entry is a no-op that
+pins the tree for no reason. `pnpm why <pkg>` and the resolved versions in
+`pnpm-lock.yaml` are how to tell.
 
 **Migrations.** `pnpm db:generate` then review the SQL before applying.
 drizzle-kit 1.0-rc asks for `--hints` on ambiguous rename-vs-create; pass
@@ -520,7 +531,16 @@ Not blocking, but worth doing.
 - [x] ~~`pnpm-lock.yaml` is git-ignored.~~ Committed, so every build resolves the
       same tree. `drizzle-orm` and `drizzle-kit` are pinned at `1.0.0-rc.4`
       rather than being re-resolved on each deploy.
-- [ ] GitHub reports 40 Dependabot vulnerabilities (19 high) on the default branch.
+- [x] ~~GitHub reports 40 Dependabot vulnerabilities (19 high) on the default
+      branch.~~ Cleared: `pnpm audit` reports 0 across all severities, on the
+      production-only tree as well as the full one. Fixed by bumping `next` and
+      `eslint-config-next` to 16.2.11 and overriding five transitive packages
+      (`postcss`, `nanoid`, `js-yaml`, `brace-expansion` ×2, `sharp`). `shadcn`
+      moved to `devDependencies` at the same time — it is a CLI, nothing imports
+      it, and shipping it as a runtime dependency pulled its whole tree into the
+      production audit. **The advisories are counted against `main`,** which is
+      still behind `dev` by every feature, so GitHub will keep reporting them
+      until `dev` reaches `main`.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
