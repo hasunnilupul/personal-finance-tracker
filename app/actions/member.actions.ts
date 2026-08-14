@@ -5,13 +5,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth/auth";
-import { requireActiveSpace, requirePermission } from "@/lib/auth/dal";
+import { getCurrentUser, requireActiveSpace, requirePermission } from "@/lib/auth/dal";
 import { buildInvitationUrl } from "@/lib/auth/urls";
 import { isEmailConfigured } from "@/lib/email/client";
 import { sendInvitationEmail } from "@/lib/email/invitation-email";
 import { invitationRepository } from "@/lib/repositories/invitation.repository";
 import { userRepository } from "@/lib/repositories/user.repository";
-import { notificationService } from "@/lib/services/notification.service";
+import { notificationService, NotifyOutcome } from "@/lib/services/notification.service";
 import { spaceService } from "@/lib/services/space.service";
 import { isServiceError } from "@/lib/services/errors";
 import { logger } from "@/lib/logger";
@@ -22,6 +22,20 @@ const inviteSchema = z.object({
   email: z.email("Enter a valid email address.").trim().toLowerCase(),
 });
 
+/**
+ * What became of the in-app notice raised for an invited account.
+ *
+ * Only present when the address already had an account — with no account there
+ * is nobody to notify, and the email goes instead. `outcome` is carried rather
+ * than folded into a message because `failed` has to be visibly different: the
+ * recipient has not heard about the invitation at all, and the owner is the
+ * only one who can put that right.
+ */
+export interface InviteNotice {
+  name: string;
+  outcome: NotifyOutcome;
+}
+
 export interface InviteState {
   error?: string;
   /** Present on success — always shown so the owner can send it themselves. */
@@ -30,14 +44,8 @@ export interface InviteState {
   emailSent?: boolean;
   /** Lets the follow-up channel actions target this invitation. */
   invitationId?: string;
-  /**
-   * The name on the account behind the address, when there is one.
-   *
-   * Its presence is what puts the choice of channel on screen. Nothing was
-   * sent yet in that case: somebody with an account is better served by an
-   * in-app notice, which arrives regardless of how email is configured.
-   */
-  existingAccountName?: string;
+  /** How the in-app notice went, when the address had an account. */
+  notice?: InviteNotice;
 }
 
 export interface MemberActionState {
@@ -69,11 +77,45 @@ function toUserMessage(error: unknown, fallback: string): string {
 }
 
 /**
+ * Raises the in-app notice for an invitation.
+ *
+ * Shared by the automatic send and the manual retry, so the two cannot drift:
+ * this wording is what the recipient reads in the bell and on their phone, and
+ * the `dedupeKey` is what stops a retry after a *successful* send from writing
+ * a second row.
+ *
+ * The notice is account-level rather than space-scoped: the recipient is not a
+ * member of the inviting space — that is what is being offered — so a notice
+ * tied to that space would be visible to nobody.
+ */
+async function notifyInvitedAccount(params: {
+  userId: string;
+  invitationId: string;
+  spaceName: string;
+  inviterName: string | null;
+}): Promise<NotifyOutcome> {
+  return notificationService.notifyUser(params.userId, {
+    type: "space_invitation",
+    title: `You have been invited to ${params.spaceName}`,
+    body: `${params.inviterName ?? "Someone"} invited you to share the ${params.spaceName} ledger.`,
+    // Relative: this one is read inside the app, unlike the emailed link.
+    href: `/accept-invitation/${params.invitationId}`,
+    dedupeKey: `invitation:${params.invitationId}`,
+  });
+}
+
+/**
  * Invites someone to the active shared space.
  *
  * Only the owner may do this, enforced here and again by better-auth. The
  * invite link is returned either way so it can be copied — email is a
  * convenience layer that may not be configured.
+ *
+ * An address that already has an account is notified in the app immediately,
+ * without being asked about: that channel reaches the bell and the phone, and
+ * arrives whatever `RESEND_FROM` is set to, so there is no choice left worth
+ * putting on screen. Email stays available as an extra, and is what the screen
+ * recommends when the notice could not be raised.
  */
 export async function inviteMemberAction(
   _previous: InviteState,
@@ -103,16 +145,33 @@ export async function inviteMemberAction(
 
     // The same lookup the email hook just made, and the reason it held off.
     const account = await userRepository.findByEmail(parsed.data.email);
+    let notice: InviteNotice | undefined;
+
+    if (account) {
+      // Memoized on the request, and `requirePermission` has already read the
+      // session, so this costs nothing.
+      const inviter = await getCurrentUser();
+
+      notice = {
+        name: account.name || account.email,
+        outcome: await notifyInvitedAccount({
+          userId: account.id,
+          invitationId: invitation.id,
+          spaceName: space.name,
+          inviterName: inviter?.name || inviter?.email || null,
+        }),
+      };
+    }
 
     revalidatePath(MEMBERS_PATH);
 
     return {
       inviteUrl: buildInvitationUrl(invitation.id),
       invitationId: invitation.id,
-      // Nothing is emailed to an existing account until the inviter picks a
-      // channel, so this must not claim otherwise.
+      // An existing account gets the in-app notice instead, so this must not
+      // claim an email went out.
       emailSent: account ? false : isEmailConfigured(),
-      existingAccountName: account?.name || account?.email,
+      notice,
     };
   } catch (error) {
     logger.error("Failed to invite member", error);
@@ -160,9 +219,10 @@ export async function sendInvitationEmailAction(invitationId: string): Promise<M
 /**
  * Notifies an existing account about an invitation, inside the app.
  *
- * The notice is account-level rather than space-scoped: the recipient is not a
- * member of the inviting space — that is what is being offered — so a notice
- * tied to that space would be visible to nobody.
+ * The retry behind the failure alert. `inviteMemberAction` already does this
+ * automatically; this exists for the send that did not go through, and is safe
+ * to run against one that did — the dedupe key turns that into "already
+ * notified" rather than a second row.
  */
 export async function notifyInvitationAction(invitationId: string): Promise<MemberActionState> {
   try {
@@ -179,13 +239,11 @@ export async function notifyInvitationAction(invitationId: string): Promise<Memb
       return { error: "That address has no account yet, so send the email or the link instead." };
     }
 
-    const outcome = await notificationService.notifyUser(account.id, {
-      type: "space_invitation",
-      title: `You have been invited to ${invitation.spaceName}`,
-      body: `${invitation.inviterName ?? "Someone"} invited you to share the ${invitation.spaceName} ledger.`,
-      // Relative: this one is read inside the app, unlike the emailed link.
-      href: `/accept-invitation/${invitation.id}`,
-      dedupeKey: `invitation:${invitation.id}`,
+    const outcome = await notifyInvitedAccount({
+      userId: account.id,
+      invitationId: invitation.id,
+      spaceName: invitation.spaceName,
+      inviterName: invitation.inviterName,
     });
 
     // Sending it is the whole action here, so a failure has to be said out

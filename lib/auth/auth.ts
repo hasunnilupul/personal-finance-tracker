@@ -107,11 +107,15 @@ export const auth = betterAuth({
        * Emails the invitation when Resend is configured — unless the address
        * already has an account.
        *
-       * Somebody with an account will see an in-app notice the next time they
-       * open the app, which arrives whatever `RESEND_FROM` is set to. So the
-       * inviter is offered the choice instead of having the email sent out
-       * from under them, and `inviteMemberAction` reports which case it was.
-       * Emailing anyway would make the choice a lie.
+       * Somebody with an account is notified in the app instead, by
+       * `inviteMemberAction`: that reaches the bell and, if they have push on,
+       * the phone, and it arrives whatever `RESEND_FROM` is set to — which is
+       * not true of the mail. Sending both by default would be two pings for
+       * one invitation, so the email becomes something the owner can add.
+       *
+       * The lookup lives here rather than at the call site because this hook is
+       * the choke point every route into `createInvitation` passes through; the
+       * action then repeats it to decide what to tell the owner.
        *
        * The link is the real mechanism — the members page always shows it for
        * copying — so a missing or failed email is logged and ignored rather
@@ -119,7 +123,7 @@ export const auth = betterAuth({
        */
       sendInvitationEmail: async ({ id, email, organization: space, inviter }) => {
         if (await userRepository.findByEmail(email)) {
-          logger.info("Invitation email deferred: the address already has an account", {
+          logger.info("Invitation email skipped: the address already has an account", {
             invitationId: id,
           });
 
