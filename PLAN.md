@@ -31,25 +31,32 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**In progress:** `fix/category-scoping` — a submitted `categoryId` was checked
-for existence by the foreign key but never against the space it was being filed
-in. Done and ticked under Known follow-ups; PR open.
+**In progress:** `feat/pwa-installable` — Feature 8. The app installs to a home
+screen and runs standalone. No service worker and no notifications; both are
+filed under Known follow-ups.
 
-**Next up, in configuration:** the app is deployed but **not yet reachable by
-anyone else.** Three things stand between here and a family member signing in,
-none of them code:
+**Since the last release:** `fix/ui-polish` (#25) and `fix/category-scoping`
+(#26) are both merged into `dev`, which is now two ahead of `main`. The three
+deployment blockers recorded below — Vercel Deployment Protection,
+`BETTER_AUTH_URL` and `RESEND_FROM` — **were fixed on 2026-08-14**, outside the
+repo. The notes are kept for what they explain, not as outstanding work.
 
-1. **Vercel Deployment Protection is on.** Both `/` and `/sign-up` answer `302`
-   to `vercel.com/sso-api`, so the deployment is gated behind the Vercel
-   account's own login. Nobody else can load the app at all until production is
-   set to public in Settings → Deployment Protection.
-2. **`BETTER_AUTH_URL` must be the project's stable production domain** — not
-   the per-deployment hash URL, which changes on every deploy and would rot
+**~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
+trap that can come back, not because any is outstanding:
+
+1. ~~**Vercel Deployment Protection is on.**~~ Both `/` and `/sign-up` answered
+   `302` to `vercel.com/sso-api`, so the deployment sat behind the Vercel
+   account's own login and nobody else could load the app at all. It is not an
+   app setting: no amount of correct configuration inside the app works around
+   it. Production had to be set public in Settings → Deployment Protection.
+2. ~~**`BETTER_AUTH_URL` must be the project's stable production domain**~~ —
+   not the per-deployment hash URL, which changes on every deploy and would rot
    every invitation link built from it.
-3. **`RESEND_FROM` is `onboarding@resend.dev`**, which delivers only to the
+3. ~~**`RESEND_FROM` is `onboarding@resend.dev`**~~, which delivers only to the
    Resend account's own address. Invitations still work by copying the link;
-   the email just never arrives and nothing on screen says so. Verify a real
-   domain or clear the variable so the app falls back to copy-the-link honestly.
+   the email just never arrives and nothing on screen says so. A real domain
+   has to be verified, or the variable cleared so the app falls back to
+   copy-the-link honestly.
 
 Then **sign up first, before sharing the URL.** The production database is
 empty and its own bootstrap is unspent, so whoever creates the first account
@@ -479,6 +486,37 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
+### Feature 8 — Installable PWA ✅ done, PR open
+
+- [x] `app/manifest.ts` — name, standalone display, categories, icons
+- [x] A real icon set: 192, 512, 512 maskable, 180 apple-touch, two 32px favicons
+- [x] `themeColor` per colour scheme, and the `appleWebApp` metadata iOS needs
+- [x] Fixed four icon references in the root layout that had always 404ed
+
+**Deliberately not included: offline support and push notifications.** Neither
+is needed to be installable — the browser prompt asks for a manifest, icons and
+HTTPS, nothing more. Push is the next slice when there is something worth
+notifying about; offline is a bigger question than it sounds, because every
+dashboard page is dynamic and cookie-gated, so caching pages means writing
+somebody's balances to disk. See the follow-up below.
+
+**The icons are cropped out of `design/icons-sheet.png`.** That file is a
+presentation mockup rather than an export — seven tiles laid out on one
+transparent 1536×1024 canvas — so the assets were extracted by flood-filling
+the alpha channel to find each tile's bounding box, cropping square around it,
+and resizing. The sheet is kept out of `public/` because everything there is
+served: it is 1.5 MB, and nothing should be able to fetch it.
+
+**The supplied maskable tile was a circle**, which is precisely what a maskable
+icon cannot be — Android masks a full square itself, so transparent corners
+punch through to whatever is behind. The one shipped is built from the square
+tile instead: opaque background, art at 88%, which keeps the mark inside the
+safe circle.
+
+**The 512 is upscaled from a 425px tile**, so it is slightly soft. It is the
+largest art the sheet contains. Re-export from the original at 512 and rerun
+the crop if it ever looks wrong on a device.
+
 ---
 
 ## Environment
@@ -649,6 +687,11 @@ Things already hit, so they are not hit twice.
   mirror-image error about extra attributes. Tie it to the same condition —
   `nativeButton={!previous}`, `nativeButton={page.page <= 1}` — so it always
   describes what was actually rendered.
+- **Chrome checks a manifest icon's real pixels against its `sizes`.** An entry
+  claiming `192x192` whose file is 276×284 is discarded, and with no valid 192
+  and 512 the install prompt never appears at all — the app simply is not
+  installable, with nothing on screen to say why. Check exports with their IHDR
+  rather than their filenames.
 - **`pnpm format` does not converge on this file.** Prettier's markdown printer
   adds four spaces to the continuation lines of a _second_ paragraph inside a
   `- [x]` item, every run — so two entries under Known follow-ups crept right by
@@ -730,6 +773,16 @@ Not blocking, but worth doing.
       Seven tests cover it, and each was checked against the unfixed code:
       disabling the create guard fails three, disabling the update guard fails
       one. Not verified against the database — the refusal happens above it.
+- [ ] **PWA: offline support and push notifications.** Deferred deliberately
+      from Feature 8. Push needs VAPID keys, a subscriptions table and a reason
+      to fire — budget overspend, or a recurring entry falling due — and that
+      last part is a product decision. Offline needs deciding what may be
+      cached: the shell is safe, pages are not, since they are dynamic and
+      cookie-gated and would put balances in the browser cache. Real offline
+      _entry_ means IndexedDB and a sync queue, with the same idempotency care
+      the recurring materialiser already needed. Note the Next guide recommends
+      Serwist and says it requires webpack configuration; this project builds
+      with Turbopack.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
