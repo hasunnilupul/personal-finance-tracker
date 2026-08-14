@@ -9,8 +9,13 @@ import { auth } from "@/lib/auth/auth";
  * `/accept-invitation` is public because the whole point is that the recipient
  * may not have an account yet — the page tells them to create one. Accepting
  * still requires a signed-in session whose email matches the invitation.
+ *
+ * `/offline` is public because the service worker precaches it, and a fetch of
+ * a guarded route follows the redirect — which would store the sign-in page
+ * under the offline page's URL. It holds nothing worth guarding: no session, no
+ * data, just an explanation.
  */
-const publicRoutes = ["/sign-in", "/sign-up", "/accept-invitation"];
+const publicRoutes = ["/sign-in", "/sign-up", "/accept-invitation", "/offline"];
 
 /**
  * Routes that an authenticated user should never see.

@@ -64,6 +64,9 @@ function dismissHint(): void {
  * before it will offer to install at all; Safari has never offered, on any
  * version, and never will — on iOS the only route is Share ▸ Add to Home
  * Screen, so the app has to say so itself or nobody finds it.
+ *
+ * The worker now also serves offline reads and shows pushes, which raises the
+ * cost of a stale one: it would keep answering navigations from an old cache.
  */
 const PwaProvider = () => {
   const showHint = useSyncExternalStore(subscribe, shouldShowHint, () => false);
@@ -73,10 +76,19 @@ const PwaProvider = () => {
       return;
     }
 
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
-      // A failed registration costs the install prompt, not the app.
-      logger.error("Service worker registration failed", error);
-    });
+    navigator.serviceWorker
+      .register("/sw.js", {
+        // Never satisfy the worker's own update check from the HTTP cache.
+        // `next.config.ts` already sends `no-store` for `/sw.js`; this is the
+        // half that does not depend on a host or a CDN honouring it, and a
+        // worker that cannot update is a PWA pinned to an old build.
+        updateViaCache: "none",
+      })
+      .catch((error) => {
+        // A failed registration costs the install prompt and offline reads,
+        // not the app.
+        logger.error("Service worker registration failed", error);
+      });
   }, []);
 
   if (!showHint) {

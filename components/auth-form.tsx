@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { logger } from "@/lib/logger";
+import { purgePrivateCaches } from "@/lib/pwa/private-cache";
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up";
@@ -59,6 +60,12 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
             throw new Error(error.message);
           }
         }
+
+        // The other half of the sign-out purge, and the half that actually
+        // holds: sign-out can be skipped by closing the app, but arriving here
+        // means a session is starting. Whatever the last one cached — possibly
+        // somebody else's ledger on a shared phone — goes now.
+        await purgePrivateCaches();
 
         router.push(redirectTo);
         router.refresh();

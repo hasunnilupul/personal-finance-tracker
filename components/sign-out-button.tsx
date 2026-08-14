@@ -6,6 +6,8 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOutIcon } from "lucide-react";
 
+import { purgePrivateCaches } from "@/lib/pwa/private-cache";
+
 const SignOutButton = () => {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -14,7 +16,13 @@ const SignOutButton = () => {
     setIsSigningOut(true);
     await signOut({
       fetchOptions: {
-        onSuccess: () => {
+        onSuccess: async () => {
+          // Before the redirect, and awaited: offline mode keeps rendered
+          // pages — and therefore balances — on the device, and this is what
+          // ends that with the session. A delete still running when the
+          // document unloads is abandoned half-done.
+          await purgePrivateCaches();
+
           router.push("/sign-in"); // redirect to login page
           setIsSigningOut(false);
         },
