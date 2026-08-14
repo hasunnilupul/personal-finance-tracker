@@ -10,29 +10,39 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Made the production deploy apply its own migrations.
-Development and production are now separate Neon instances, which meant nothing
-in the path to production opened the production database — `db:migrate` runs
-from a developer's `.env`, and that is development. `vercel.json` now builds
-through `pnpm run build:deploy`, which migrates before `next build` and only
-when `VERCEL_ENV` is `production`. Pushed to `fix/migrate-on-deploy`.
+**Last completed:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+`ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
+the first exercise of the deploy-time migration added in #24: the deployment
+went green, which on a production build means the migrate step ran rather than
+skipped, so `DATABASE_URL_UNPOOLED` was already set in Vercel's Production
+environment, the two connection strings agreed, and the nine migrations applied
+to the empty production database. A missing variable, a mismatched pair or a
+failing migration would each have taken the build down instead.
 
-**Next up:** `main` has still never been deployed — it is behind `dev` by every
-feature. Merging `dev` into it is both the first production release and the
-first exercise of the deploy-time migration, so watch that build's log: it
-should apply all nine migrations to an empty production database. Before
-sharing the URL, sign up first — the bootstrap makes the first account owner,
-and the production database has no accounts in it.
+**Next up:** The app is deployed but **not yet reachable by anyone else.** Three
+things stand between here and a family member signing in, none of them code:
 
-Two Vercel settings still block other people using it, neither of them code:
-`BETTER_AUTH_URL` must be the public production URL, and `RESEND_FROM` is
-`onboarding@resend.dev`, which only delivers to the Resend account's own
-address.
+1. **Vercel Deployment Protection is on.** Both `/` and `/sign-up` answer `302`
+   to `vercel.com/sso-api`, so the deployment is gated behind the Vercel
+   account's own login. Nobody else can load the app at all until production is
+   set to public in Settings → Deployment Protection.
+2. **`BETTER_AUTH_URL` must be the project's stable production domain** — not
+   the per-deployment hash URL, which changes on every deploy and would rot
+   every invitation link built from it.
+3. **`RESEND_FROM` is `onboarding@resend.dev`**, which delivers only to the
+   Resend account's own address. Invitations still work by copying the link;
+   the email just never arrives and nothing on screen says so. Verify a real
+   domain or clear the variable so the app falls back to copy-the-link honestly.
 
-| Branch | State                                                                                |
-| ------ | ------------------------------------------------------------------------------------ |
-| `main` | Production. Behind `dev` by Features 0 up to 7. Never deployed.                      |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19, #20, #21 and #22. |
+Then **sign up first, before sharing the URL.** The production database is
+empty and its own bootstrap is unspent, so whoever creates the first account
+becomes the owner. The development account does not exist there — the two
+databases are separate.
+
+| Branch | State                                                                      |
+| ------ | -------------------------------------------------------------------------- |
+| `main` | Production. Level with `dev` as of `ae12bc9`. Deployed and green.          |
+| `dev`  | Integration branch. Features 0 through 7, plus #19, #20, #21, #22 and #24. |
 
 ---
 
@@ -458,9 +468,9 @@ options argument.
 | Variable                | Needed for       | Notes                                          |
 | ----------------------- | ---------------- | ---------------------------------------------- |
 | `BETTER_AUTH_SECRET`    | Auth             | `openssl rand -base64 32`                      |
-| `BETTER_AUTH_URL`       | Auth             | App base URL                                   |
+| `BETTER_AUTH_URL`       | Auth             | Stable production domain, not the deploy URL   |
 | `DATABASE_URL`          | Runtime          | Pooled Neon connection. Same endpoint as below |
-| `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection for drizzle-kit              |
+| `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection. Needed in Production too    |
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
@@ -486,9 +496,11 @@ accounts, so signing up in development does not create the production owner.
 **Production migrates itself on deploy.** Nobody applies migrations to the
 production database by hand, so `vercel.json` points Vercel's build command at
 `pnpm run build:deploy`, which runs `scripts/migrate-on-deploy.ts` before
-`next build`. It acts only when `VERCEL_ENV` is `production`; the development
-database stays the developer's to migrate. See the follow-up at the end for why
-a release checklist was not enough.
+`next build`. **Exercised for the first time by the 2026-08-14 release**, which
+went green — so the production environment does hold both connection strings,
+and they do address one endpoint. It acts only when `VERCEL_ENV` is
+`production`; the development database stays the developer's to migrate. See
+the follow-up at the end for why a release checklist was not enough.
 
 **On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
 by design. Rates are fetched on demand when a conversion misses the cache, and
@@ -500,6 +512,20 @@ freshness in a space nobody has opened, not correctness.
 account's own address, so it cannot reach family members. A `*.vercel.app`
 domain cannot be verified — you do not control its DNS. Until a real domain is
 verified, invites work by copying the link.
+
+**On Vercel Deployment Protection:** it is **on**, and it is not an app setting,
+so no amount of correct configuration inside the app works around it. Checked
+against the first production deployment: `/` and `/sign-up` both answer `302` to
+`vercel.com/sso-api`, meaning every request is gated behind the Vercel account's
+own login before it ever reaches Next.js. Invited family members would hit a
+Vercel sign-in page for an account they do not have. Production has to be set
+public in Settings → Deployment Protection before anyone else can use the app.
+
+**On `BETTER_AUTH_URL` and which URL to use:** every deployment gets a unique
+hash URL (`…-2qbchvrkd-….vercel.app`), and the project also has a stable domain.
+Use the stable one. Invitation links are built from this value and sit in
+someone's inbox for days, so pointing it at a per-deployment URL means every
+link dies at the next deploy.
 
 ---
 
@@ -613,9 +639,11 @@ Not blocking, but worth doing.
       (`postcss`, `nanoid`, `js-yaml`, `brace-expansion` ×2, `sharp`). `shadcn`
       moved to `devDependencies` at the same time — it is a CLI, nothing imports
       it, and shipping it as a runtime dependency pulled its whole tree into the
-      production audit. **The advisories are counted against `main`,** which is
-      still behind `dev` by every feature, so GitHub will keep reporting them
-      until `dev` reaches `main`.
+      production audit. The advisories were counted against `main`, which lagged
+      `dev` by every feature — GitHub still printed the 40 on the release push
+      itself, since that scan predates the merge. `main` now carries the fixes,
+      so the next scan should clear them. Worth a glance at the Dependabot tab
+      to confirm it did.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
