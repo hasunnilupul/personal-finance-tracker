@@ -10,7 +10,10 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **UI polish** (`fix/ui-polish`) — eight commits of
+**Last completed:** **Feature 9b — web push** (PR #34). Notifications reach the
+phone when the app is closed, which also carries the invitation notice.
+
+**Before that:** **UI polish** (`fix/ui-polish`) — eight commits of
 presentation fixes found by using the app rather than by planning it. Two were
 whole classes rather than single sightings: no `Select` passed `items`, so every
 trigger printed its raw value (the space switcher showed an organization id),
@@ -22,7 +25,7 @@ the topbar extracted into `components/app-topbar.tsx` and taught to reflow, and
 four spaces deeper on every run. All four checks pass; none of it was exercised
 in a browser, since signing in needs the owner's own credentials.
 
-**Before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+**And before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
 `ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
 the first exercise of the deploy-time migration added in #24: the deployment
 went green, which on a production build means the migrate step ran rather than
@@ -55,13 +58,19 @@ is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
 **Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
-enabling in the Vercel dashboard before it collects anything) and #32
-(Feature 9a — notifications). Neither is in `main` yet.
+enabling in the Vercel dashboard before it collects anything), #32 (Feature 9a
+— notifications), #33 (Feature 9c — invitations through the app) and #34
+(Feature 9b — web push). None of the four is in `main` yet.
 
-**In progress:** `feat/web-push` — Feature 9b. Notifications reach the phone
-when the app is closed. **Needs the four VAPID variables set in Vercel before
-it does anything in production**; without them the toggle says push is not
-configured and everything else carries on unchanged.
+**Push needs the four VAPID variables set in Vercel before it does anything in
+production**; without them the toggle says push is not configured and
+everything else carries on unchanged. That is the one outstanding piece of
+configuration, and it is what decides whether an invited account's phone rings
+or only their bell fills.
+
+**In progress:** `feat/auto-notify-invited-accounts` — Feature 9d. The channel
+choice #33 put on screen is gone; the notice is raised as the invitation is
+created, and a failure to raise it is alerted rather than left to be noticed.
 
 **Still to come:** offline (10), which will cache the shell **and what was last
 viewed** — account data on the device, and therefore a cache clear on sign-out
@@ -571,9 +580,10 @@ can be asked for and denied — the API is simply absent until the app is on the
 home screen, which is why the toggle reads that state and says so rather than
 offering a button that would throw.
 
-### Feature 9c — Invitations through the app ✅ done, PR open
+### Feature 9c — Invitations through the app ✅ merged (PR #33)
 
-- [x] An invited address that already has an account offers a channel choice
+- [x] An invited address that already has an account is reached in the app
+      (the channel *choice* this feature added was replaced in 9d)
 - [x] An address with no account is emailed automatically, as before
 - [x] The copyable link is shown in every case
 - [x] Account-level notifications, which follow the reader between spaces
@@ -591,18 +601,54 @@ stop meaning anything for exactly the rows most likely to repeat — an
 invitation sent twice. The old `uniqueIndex` cannot express that; a `unique`
 table constraint can.
 
-**Nothing is emailed to an existing account until the inviter chooses.** The
-`sendInvitationEmail` hook now looks the address up and holds off when it finds
-one, because otherwise the choice on screen would be a lie — the mail would
-already be gone. Somebody with an account is better served by the in-app notice
-anyway: it arrives whatever `RESEND_FROM` is set to, which is not true of the
-email.
+**Nothing is emailed to an existing account.** The `sendInvitationEmail` hook
+looks the address up and holds off when it finds one. Somebody with an account
+is better served by the in-app notice: it arrives whatever `RESEND_FROM` is set
+to, which is not true of the email.
 
 **The disclosure is deliberate.** The form tells the inviter whether an address
 already has an account, which is account enumeration. Accepted knowingly: only
-a space owner can invite, sign-up is invite-only, and the alternative — always
-offering both channels and letting the in-app one quietly do nothing — is a
-less honest screen. Revisit if sign-up is ever opened up.
+a space owner can invite, sign-up is invite-only, and the alternative — saying
+nothing about which channel was used — is a less honest screen. Revisit if
+sign-up is ever opened up.
+
+### Feature 9d — Invitations notify without asking ✅ done, PR open
+
+- [x] An invited address with an account is notified in the app as the
+      invitation is created, with no channel question
+- [x] A failed notice **alerts**, with a retry and an email beside it
+- [x] Email stays available afterwards as an extra, not as a choice
+- [x] The wording of the notice lives in one place, used by both paths
+
+**The choice was only ever worth asking before push existed.** 9c put two
+buttons on screen because the in-app notice might go unread; 9b then made that
+notice ring the phone. Once one channel reaches both the bell and the device
+and does not depend on `RESEND_FROM`, asking which to use is a question with an
+obvious answer, which is a good sign it should not be a question. Email did not
+go away — it moved to *after* the notice, where it costs nothing to skip.
+
+**The send moved out of the auth hook and into the action.** `sendInvitationEmail`
+still decides that an existing account gets no mail, because it is the choke
+point every route into `createInvitation` passes through. But its return value
+is discarded by better-auth, so a notice raised there could never be reported.
+`inviteMemberAction` raises it instead and returns the outcome, which is the
+only reason the failure can be shown at all.
+
+**A failed notice has to be loud.** `notifyUser` already distinguished
+`created` / `duplicate` / `failed`, and 9c surfaced the failure only on the
+manual button. Now that nobody presses a button, a swallowed failure would mean
+an invitation nobody has been told about, looking exactly like one that
+worked — so the panel turns destructive, takes `role="alert"`, and leads with
+the retry and the email. The three outcomes are covered by the existing
+`notification.service` tests; the action layer has no test harness here.
+
+**Only the failure is announced to a screen reader.** A notice that worked is a
+confirmation, and `role="alert"` on a confirmation is an interruption for news
+that is not urgent.
+
+**`InviteLink` needed to know.** It read `emailSent` alone, and an existing
+account is never emailed — so on a correctly configured install it told the
+owner "email is not configured". It now takes whether *anything* reached them.
 
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
