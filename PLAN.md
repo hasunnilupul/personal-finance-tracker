@@ -31,15 +31,25 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**In progress:** `feat/pwa-installable` — Feature 8. The app installs to a home
-screen and runs standalone. No service worker and no notifications; both are
-filed under Known follow-ups.
+**Released 2026-08-14** — `main` brought level with `dev` (merge `bb58048`,
+PR #28), carrying #25 (UI fixes), #26 (category scoping) and #27 (installable
+PWA). The deploy went green. It held **no migrations and no dependency
+changes**, so the deploy-time migrate step was a no-op — the lowest-risk shape
+a release here can have, and worth aiming for deliberately.
 
-**Since the last release:** `fix/ui-polish` (#25) and `fix/category-scoping`
-(#26) are both merged into `dev`, which is now two ahead of `main`. The three
-deployment blockers recorded below — Vercel Deployment Protection,
-`BETTER_AUTH_URL` and `RESEND_FROM` — **were fixed on 2026-08-14**, outside the
-repo. The notes are kept for what they explain, not as outstanding work.
+Verified against the live site, which is the first place these could be
+checked: `/manifest.webmanifest` answers 200 as `application/manifest+json`,
+every icon answers 200 at exactly its declared size, and `/` answers 307 to
+sign-in rather than redirecting to `vercel.com/sso-api` — which is independent
+proof the deployment protection below is genuinely off.
+
+The three deployment blockers recorded below were **fixed on 2026-08-14**,
+outside the repo. Their notes are kept for the traps they explain, not as
+outstanding work.
+
+**In progress:** `feat/pwa-install-prompt` — the manifest shipped and no
+install prompt ever appeared. Two separate causes, one per platform; see
+Feature 8.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -486,12 +496,35 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
-### Feature 8 — Installable PWA ✅ done, PR open
+### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
 - [x] A real icon set: 192, 512, 512 maskable, 180 apple-touch, two 32px favicons
 - [x] `themeColor` per colour scheme, and the `appleWebApp` metadata iOS needs
 - [x] Fixed four icon references in the root layout that had always 404ed
+- [x] A service worker, without which Chrome never offers to install
+- [x] An iOS install hint, because Safari never offers either
+
+**A manifest and icons do not make an app installable.** #27 shipped both,
+correct and verified, and no prompt ever appeared on any device. There are two
+unrelated reasons, and each needed its own answer:
+
+**Chrome requires a registered service worker with a `fetch` handler.** Not
+offline support — the handler. The Next guide's line that install prompts work
+"without needing offline support" is true and was misread here as meaning no
+worker at all. `public/sw.js` now exists to satisfy exactly that and does
+nothing else: it caches nothing, because every dashboard page is dynamic and
+cookie-gated, and caching one would put somebody's balances in a phone's
+browser cache. Chrome has said it may eventually require a valid offline
+response rather than merely a handler; that is the one thing that would force
+this decision open again.
+
+**Safari has never shown an install prompt and never will.** On iOS the only
+route is Share ▸ Add to Home Screen, so the app says so itself — a dismissible
+hint, shown only on iOS, only when not already running standalone, and only
+until it is dismissed. It renders after mount rather than on the server:
+it depends on the user agent and on `localStorage`, and deciding it server-side
+would make every page vary by user agent.
 
 **Deliberately not included: offline support and push notifications.** Neither
 is needed to be installable — the browser prompt asks for a manifest, icons and
@@ -687,6 +720,17 @@ Things already hit, so they are not hit twice.
   mirror-image error about extra attributes. Tie it to the same condition —
   `nativeButton={!previous}`, `nativeButton={page.page <= 1}` — so it always
   describes what was actually rendered.
+- **A PWA with no service worker is not installable in Chrome,** however
+  correct its manifest is. The check is for a registered worker with a `fetch`
+  handler; offline behaviour is not required, and an empty handler passes. The
+  failure is silent — no console warning, no prompt, nothing to suggest the
+  manifest is being read at all. Safari is a separate case: it has no prompt on
+  any version, so iOS needs the app to explain Share ▸ Add to Home Screen.
+- **`/sw.js` must not be cached, and must be served as JavaScript.** A cached
+  worker is how a PWA gets stuck on an old build — the browser keeps serving
+  the worker it has, and that worker is what would have told it to update.
+  `next.config.ts` sets `no-store` and an explicit content type on that one
+  path.
 - **Chrome checks a manifest icon's real pixels against its `sizes`.** An entry
   claiming `192x192` whose file is 276×284 is discarded, and with no valid 192
   and 512 the install prompt never appears at all — the app simply is not

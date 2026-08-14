@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import PwaProvider from "@/components/pwa-provider";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
@@ -66,6 +67,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <PwaProvider />
           <Toaster />
         </ThemeProvider>
       </body>
