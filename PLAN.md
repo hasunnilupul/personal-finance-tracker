@@ -605,9 +605,16 @@ Things already hit, so they are not hit twice.
   The Button carries the padding, the height and the full width, but the anchor
   inside it is the only part that navigates — so the sidebar's tabs answered a
   click on the label and ignored one anywhere in the surrounding gap. It is also
-  invalid HTML: an `<a>` cannot live inside a `<button>`. Use Base UI's `render`
-  prop so the Button _becomes_ the link — `render={<Link href={…} />}` — and the
-  whole styled box is one anchor. Same rule for any control that navigates.
+  invalid HTML: an `<a>` cannot live inside a `<button>`.
+- **A link that looks like a button is `buttonVariants`, not `<Button render>`.**
+  The obvious repair for the nesting above is Base UI's `render` prop, and it is
+  wrong: Base UI's own docs rule it out, because Button _enforces button
+  semantics_. Left as-is it puts `type="button"` on an `<a>`; with
+  `nativeButton={false}` it stamps `role="button"`, so a navigation link is
+  announced as a button and loses every link affordance. Style the anchor
+  instead — `className={cn(buttonVariants({ variant }), …)}` — which is one
+  element, correctly announced, with the whole padded box clickable. `render` is
+  still right for a Menu item, whose `role="menuitem"` is what a menu wants.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -690,12 +697,12 @@ Not blocking, but worth doing.
       column or a recovery path to maintain.
 
       The per-row updates became **one statement per table** on the way, joining
-                      against an inline `VALUES` list. Each entry converts at its own date and
-                      so needs its own figures; a space with years of history would otherwise
-                      have been thousands of statements in one request. The remaining ceiling is
-                      Postgres' 65535 parameters per statement — three per entry, so roughly
-                      20k entries, far past anything a household ledger will reach and much
-                      further than the old code got.
+                          against an inline `VALUES` list. Each entry converts at its own date and
+                          so needs its own figures; a space with years of history would otherwise
+                          have been thousands of statements in one request. The remaining ceiling is
+                          Postgres' 65535 parameters per statement — three per entry, so roughly
+                          20k entries, far past anything a household ledger will reach and much
+                          further than the old code got.
 
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.
@@ -723,13 +730,13 @@ Not blocking, but worth doing.
       variables against _each other_, and in development both are correct.
 
       The production deploy now migrates its own database:
-              `vercel.json` → `pnpm run build:deploy` → `scripts/migrate-on-deploy.ts`,
-              then `next build`. Chosen over a release checklist because the whole class
-              of bug is _forgetting_, and a checklist is another thing to forget. It
-              applies migrations **only** when `VERCEL_ENV` is `production` — preview
-              builds share the development database with whoever is working locally, and
-              a preview build has no business migrating it out from under them. A failed
-              migration exits non-zero and takes the build with it, so a deployment whose
-              schema is missing never goes live. The `drizzle.config.ts` check runs
-              inside that child process, so a mismatched pair in the production
-              environment fails the build too.
+                  `vercel.json` → `pnpm run build:deploy` → `scripts/migrate-on-deploy.ts`,
+                  then `next build`. Chosen over a release checklist because the whole class
+                  of bug is _forgetting_, and a checklist is another thing to forget. It
+                  applies migrations **only** when `VERCEL_ENV` is `production` — preview
+                  builds share the development database with whoever is working locally, and
+                  a preview build has no business migrating it out from under them. A failed
+                  migration exits non-zero and takes the build with it, so a deployment whose
+                  schema is missing never goes live. The `drizzle.config.ts` check runs
+                  inside that child process, so a mismatched pair in the production
+                  environment fails the build too.
