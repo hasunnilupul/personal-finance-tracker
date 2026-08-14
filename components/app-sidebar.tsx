@@ -70,15 +70,16 @@ export default function AppSidebar() {
 
         <nav className="flex-1 space-y-2 px-3 py-4">
           {tabs.map((tab) => (
+            // `render` makes the Button *be* the link rather than wrap one, so
+            // the whole padded row navigates — see Gotchas.
             <Button
               key={tab.href}
               variant={pathname === tab.href ? "default" : "ghost"}
               className="w-full justify-start"
+              render={<Link href={tab.href} />}
             >
-              <Link href={tab.href} className="flex w-full">
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
-              </Link>
+              <span className="mr-2">{tab.icon}</span>
+              {tab.label}
             </Button>
           ))}
         </nav>
