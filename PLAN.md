@@ -31,9 +31,9 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**Next up, in code:** a submitted `categoryId` is never checked against the
-space it is being filed in — see the entry under Known follow-ups. That is the
-branch in progress.
+**In progress:** `fix/category-scoping` — a submitted `categoryId` was checked
+for existence by the foreign key but never against the space it was being filed
+in. Done and ticked under Known follow-ups; PR open.
 
 **Next up, in configuration:** the app is deployed but **not yet reachable by
 anyone else.** Three things stand between here and a family member signing in,
@@ -136,6 +136,7 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
 | Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
 | Savings goals            | A target, not an account; no money moves  | Keeps one place for money to live; a contribution marks intent, not a transfer           |
+| Category scoping         | Services assert; the FK is a backstop     | A foreign key enforces existence in _any_ space, so ownership has to be asked separately |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -709,18 +710,26 @@ Not blocking, but worth doing.
       itself, since that scan predates the merge. `main` now carries the fixes,
       so the next scan should clear them. Worth a glance at the Dependabot tab
       to confirm it did.
-- [ ] **A submitted `categoryId` is never scoped to the space.** The zod schema
-      turns it into a number and `createExpense` spreads it into the row; the
-      only guard is the foreign key, which enforces that the category _exists_,
-      in any space. So an entry in space A can carry space B's category id, and
-      the list joins categories by id — B's category name would render to A's
-      members. Every other write path re-checks scope rather than trusting the
-      client, which is what `SpaceContext` and `UserInput<T>` are for; this one
-      does not. It also decides what happens when a category is deleted while
-      someone else's form is open: today that is a foreign-key violation
-      surfacing as a generic error, and it should be a sentence. Found by asking
-      why a category created in one session did not appear in another's picker
-      — the staleness itself is expected and harmless, this was underneath it.
+- [x] ~~**A submitted `categoryId` is never scoped to the space.**~~ Fixed.
+      `categoryService.assertUsable` is now the single answer to "may this space
+      file under this id", and `transactionService.create` / `update` call it.
+      Budgets and recurring templates already had the rule as a private method
+      each; both now delegate, so there is one copy rather than the three this
+      would have become. A wrong-space or deleted id is refused with
+      `NOT_FOUND`, an income category on an expense with `VALIDATION_FAILED`,
+      and `toUserMessage` passes both through — so the deleted-category race
+      reads "That category no longer exists." instead of a foreign-key error.
+
+      **A materialised occurrence is exempt.** The recurring machinery passes a
+      category the template already validated, and `deleteCategory` refuses
+      while a template still points at it, so the answer cannot have changed. A
+      catch-up run writes up to sixty entries inside one page render, and a
+      lookup each would be a query per entry for an answer already known. The
+      exemption keys off `options.recurringId`, which only that machinery sets.
+
+      Seven tests cover it, and each was checked against the unfixed code:
+      disabling the create guard fails three, disabling the update guard fails
+      one. Not verified against the database — the refusal happens above it.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.

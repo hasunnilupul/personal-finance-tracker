@@ -2,7 +2,7 @@ import {
   recurringTransactionRepository,
   RecurringWithCategory,
 } from "@/lib/repositories/recurring-transaction.repository";
-import { categoryRepository } from "@/lib/repositories/category.repository";
+import { categoryService } from "@/lib/services/category.service";
 import { spaceRepository } from "@/lib/repositories/space.repository";
 import { transactionService } from "@/lib/services/transaction.service";
 import { RecurringTransaction } from "@/lib/db/models/recurring-transaction.model";
@@ -326,22 +326,7 @@ export class RecurringTransactionService {
     categoryId: number | null,
     type: TransactionKind,
   ): Promise<void> {
-    if (categoryId === null) {
-      return;
-    }
-
-    const category = await categoryRepository.findById(categoryId, ctx.organizationId);
-
-    if (!category) {
-      throw new ServiceError("NOT_FOUND", "That category no longer exists.");
-    }
-
-    if (category.type !== type) {
-      throw new ServiceError(
-        "VALIDATION_FAILED",
-        `That category is for ${category.type}, not ${type}.`,
-      );
-    }
+    return categoryService.assertUsable(ctx, categoryId, type);
   }
 
   private assertUsableSchedule(fields: RecurringFields): void {

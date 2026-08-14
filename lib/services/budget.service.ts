@@ -1,5 +1,5 @@
 import { budgetRepository, BudgetWithCategory } from "@/lib/repositories/budget.repository";
-import { categoryRepository } from "@/lib/repositories/category.repository";
+import { categoryService } from "@/lib/services/category.service";
 import { sumBaseAmountByCategory } from "@/lib/repositories/transaction-query";
 import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
@@ -322,15 +322,9 @@ export class BudgetService {
    * never offer, and a category from another space would leak its name.
    */
   private async assertUsableCategory(ctx: SpaceContext, categoryId: number): Promise<void> {
-    const category = await categoryRepository.findById(categoryId, ctx.organizationId);
-
-    if (!category) {
-      throw new ServiceError("NOT_FOUND", "That category no longer exists.");
-    }
-
-    if (category.type !== "expense") {
-      throw new ServiceError("VALIDATION_FAILED", "Budgets apply to expense categories.");
-    }
+    return categoryService.assertUsable(ctx, categoryId, "expense", {
+      mismatchMessage: "Budgets apply to expense categories.",
+    });
   }
 }
 

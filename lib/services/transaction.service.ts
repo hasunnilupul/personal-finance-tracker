@@ -6,6 +6,7 @@ import {
   sumTransactions,
   TransactionTable,
 } from "@/lib/repositories/transaction-query";
+import { categoryService } from "@/lib/services/category.service";
 import { expenseService } from "@/lib/services/expense.service";
 import { incomeService } from "@/lib/services/income.service";
 import { SpaceContext } from "@/lib/services/types";
@@ -72,6 +73,15 @@ export class TransactionService {
     data: TransactionInput,
     options: { recurringId?: number; ifAbsent?: boolean } = {},
   ) {
+    // A materialised occurrence carries the template's own category, which was
+    // checked when the template was saved and cannot have been deleted since —
+    // `deleteCategory` refuses while a template still points at it. Re-checking
+    // would be a query per generated entry, and a catch-up run writes up to
+    // sixty of them inside one page render.
+    if (options.recurringId === undefined) {
+      await categoryService.assertUsable(ctx, data.categoryId, kind);
+    }
+
     return kind === "expense"
       ? expenseService.createExpense(ctx, data, options)
       : incomeService.createIncome(ctx, data, options);
@@ -83,6 +93,10 @@ export class TransactionService {
     id: number,
     data: Partial<TransactionInput>,
   ) {
+    // `undefined` means the edit does not touch the category; `null` means it
+    // is being cleared. Neither needs a lookup, and `assertUsable` says so.
+    await categoryService.assertUsable(ctx, data.categoryId, kind);
+
     return kind === "expense"
       ? expenseService.updateExpense(ctx, id, data)
       : incomeService.updateIncome(ctx, id, data);
