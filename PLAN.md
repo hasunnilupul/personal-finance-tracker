@@ -615,6 +615,22 @@ Things already hit, so they are not hit twice.
   instead — `className={cn(buttonVariants({ variant }), …)}` — which is one
   element, correctly announced, with the whole padded box clickable. `render` is
   still right for a Menu item, whose `role="menuitem"` is what a menu wants.
+- **`<Button render={<Link/>}>` needs `nativeButton={false}`.** Without it Base
+  UI believes it wrapped a native `<button>`: it logs "expected a native
+  <button> because the `nativeButton` prop is true", and — the part that
+  matters — `useButton` gates its link-aware keyboard handling behind
+  `!isNativeButton`, so the anchor never gets it. The cost is a `role="button"`
+  on the anchor, which is why Base UI's docs suggest styling the `<a>` with
+  `buttonVariants` instead. Both patterns are in the tree: the sidebar and the
+  create-space Cancel are styled anchors, everything else is `Button` +
+  `render` + `nativeButton={false}`.
+- **`nativeButton` must track a _conditional_ `render`.** Several controls pass
+  `render={cond ? <Link/> : undefined}` so a dead-end page arrow is a disabled
+  button rather than a link to nowhere. A static `nativeButton={false}` is then
+  right for one branch and wrong for the other, and the wrong branch logs the
+  mirror-image error about extra attributes. Tie it to the same condition —
+  `nativeButton={!previous}`, `nativeButton={page.page <= 1}` — so it always
+  describes what was actually rendered.
 - **`pnpm format` does not converge on this file.** Prettier's markdown printer
   adds four spaces to the continuation lines of a _second_ paragraph inside a
   `- [x]` item, every run — so two entries under Known follow-ups crept right by
