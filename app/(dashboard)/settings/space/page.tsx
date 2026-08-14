@@ -1,7 +1,9 @@
 import BaseCurrencyForm from "@/components/base-currency-form";
+import PushToggle from "@/components/push-toggle";
 import { Card } from "@/components/ui/card";
 import { requireActiveSpace } from "@/lib/auth/dal";
 import { roleHasPermission } from "@/lib/auth/permissions";
+import { isPushConfigured } from "@/lib/services/push.service";
 import { getCurrency } from "@/constants/currencies";
 
 const SpaceSettingsPage = async () => {
@@ -33,6 +35,15 @@ const SpaceSettingsPage = async () => {
           </p>
         </Card>
       )}
+
+      {/*
+        Push belongs to the device rather than to the space, but this is the
+        settings screen people find. The toggle reads its own browser state.
+      */}
+      <PushToggle
+        configured={isPushConfigured()}
+        publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
+      />
     </div>
   );
 };

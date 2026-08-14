@@ -29,3 +29,64 @@ self.addEventListener("fetch", () => {
   // Intentionally empty. Not calling `event.respondWith()` leaves the request
   // to the network untouched — the worker observes, it does not intercept.
 });
+
+/**
+ * Shows a pushed notification.
+ *
+ * The payload is small on purpose — the record lives in the database, this is
+ * only the pop-up. `tag` carries the same dedupe key the row was written with,
+ * so a phone that was offline and receives two of the same collapses them into
+ * one rather than stacking them.
+ */
+self.addEventListener("push", (event) => {
+  if (!event.data) {
+    return;
+  }
+
+  let payload;
+
+  try {
+    payload = event.data.json();
+  } catch {
+    // A push from something that is not this app, or a truncated body. Showing
+    // a notification with no content would be worse than showing none.
+    return;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: payload.tag,
+      data: { href: payload.href || "/" },
+    }),
+  );
+});
+
+/**
+ * Opens the app where the notification points.
+ *
+ * Focuses a window that is already open rather than adding another — an app
+ * installed to a home screen usually has exactly one, and a second copy of it
+ * is not what tapping a notification should produce.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const href = event.notification.data?.href || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate?.(href);
+
+          return client.focus();
+        }
+      }
+
+      return self.clients.openWindow(href);
+    }),
+  );
+});

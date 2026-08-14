@@ -1,11 +1,15 @@
 import SpaceSwitcher from "@/components/space-switcher";
 import SignOutButton from "@/components/sign-out-button";
+import NotificationBell from "@/components/notification-bell";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Organization, Space } from "@/lib/db/models/organization.model";
+import { Notification } from "@/lib/db/models/notification.model";
 
 interface AppTopbarProps {
   space: Organization;
   spaces: Space[];
+  notifications: Notification[];
+  unreadCount: number;
 }
 
 /**
@@ -21,7 +25,7 @@ interface AppTopbarProps {
  * both on one line. The switcher fills its row on a phone and settles at a
  * fixed width once it shares the line.
  */
-const AppTopbar = ({ space, spaces }: AppTopbarProps) => {
+const AppTopbar = ({ space, spaces, notifications, unreadCount }: AppTopbarProps) => {
   return (
     <header className="border-border bg-card border-b p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -40,6 +44,7 @@ const AppTopbar = ({ space, spaces }: AppTopbarProps) => {
           <div className="min-w-0 flex-1 sm:w-44 sm:flex-none lg:w-48">
             <SpaceSwitcher spaces={spaces} activeSpaceId={space.id} />
           </div>
+          <NotificationBell notifications={notifications} unreadCount={unreadCount} />
           <ThemeSwitcher />
           <SignOutButton />
         </div>

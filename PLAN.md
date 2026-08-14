@@ -47,9 +47,25 @@ The three deployment blockers recorded below were **fixed on 2026-08-14**,
 outside the repo. Their notes are kept for the traps they explain, not as
 outstanding work.
 
-**In progress:** `feat/pwa-install-prompt` — the manifest shipped and no
-install prompt ever appeared. Two separate causes, one per platform; see
-Feature 8.
+**Released 2026-08-14 (second)** — `d73622e` (PR #30), carrying #29: the
+service worker Chrome needs before it will offer to install, and the hint iOS
+needs because Safari never offers at all. Verified on the live site (`/sw.js`
+answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
+is the whole point) **and confirmed installed on a real iPhone** — the first
+end-to-end proof the PWA works.
+
+**Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
+enabling in the Vercel dashboard before it collects anything) and #32
+(Feature 9a — notifications). Neither is in `main` yet.
+
+**In progress:** `feat/web-push` — Feature 9b. Notifications reach the phone
+when the app is closed. **Needs the four VAPID variables set in Vercel before
+it does anything in production**; without them the toggle says push is not
+configured and everything else carries on unchanged.
+
+**Still to come:** offline (10), which will cache the shell **and what was last
+viewed** — account data on the device, and therefore a cache clear on sign-out
+as part of the feature rather than after it.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -153,6 +169,9 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
 | Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
 | Savings goals            | A target, not an account; no money moves  | Keeps one place for money to live; a contribution marks intent, not a transfer           |
+| Notification delivery    | In-app record; push as a layer on top      | A denied permission must not mean the overspend was never recorded — as with invites     |
+| Notification triggers    | At the write that causes them, not swept   | Crossing a budget is caused by an expense; there is nothing to poll for                  |
+| Notification idempotency | Unique `(org, user, dedupeKey)`            | Every later expense re-crosses the same limit; a sweep races page loads                  |
 | Category scoping         | Services assert; the FK is a backstop     | A foreign key enforces existence in _any_ space, so ownership has to be asked separately |
 | Package manager          | pnpm                                      |                                                                                          |
 
@@ -496,6 +515,95 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
+### Feature 9b — Web push ✅ done, PR open
+
+- [x] `push_subscriptions`, one row per device, keyed on the endpoint
+- [x] `push` and `notificationclick` in the service worker
+- [x] A per-device toggle on the space settings page
+- [x] Dead subscriptions pruned as they are found
+
+**Push is a layer, and the rows are the record.** Nothing here can lose
+information: every push follows a notification that is already written, so a
+failed send is a missed pop-up. That is what makes it safe for `sendToUsers`
+never to throw.
+
+**Only newly created rows are pushed.** `createManyIfAbsent` returns what it
+actually inserted, so a repeat the dedupe key turned into a no-op pushes
+nothing either — the phone stays quiet for the same reason the bell gains no
+second entry. The dedupe key also rides along as the notification `tag`, so a
+device that was offline collapses duplicates rather than stacking them.
+
+**Sending is deferred with `after()`.** A push is several HTTPS round trips to
+Apple or Google, and none of them belong in the time it takes to save an
+expense. Not awaiting *without* `after()` would be worse than either: a
+serverless function can be frozen the moment it responds, killing the request
+half-sent.
+
+**The bell refreshes on focus and on a slow poll, not on a live channel.**
+Rendered with the page, so without that a notification raised by somebody else
+appears only when the reader happens to navigate — which is what "I sent an
+invitation and nothing showed up" turned out to mean. Coming back to the tab
+refreshes immediately, a 60s interval covers sitting on one screen, and push
+covers the app being closed. A socket for a household of four is not worth
+running.
+
+**An explicitly requested notification must report failure.** `notifySpace`
+can stay silent because it always follows a write that already succeeded — the
+expense is recorded either way. Sending an invitation notice *is* the action,
+so `notifyUser` returns `created` / `duplicate` / `failed` and the action says
+which. It reported success while writing nothing when the column was still
+`NOT NULL` locally, and that is the failure worth designing against.
+
+**404 and 410 prune; nothing else does.** Those two mean the browser has
+discarded the subscription — permission revoked, app uninstalled — and pruning
+on discovery is the only way they are ever cleaned up, since nothing tells the
+server that somebody uninstalled. A 429 or a 500 is an outage, not consent
+withdrawn: deleting on those would silently unsubscribe the household after one
+bad afternoon at a push service. Three tests fail if that distinction is
+dropped.
+
+**The endpoint is the device's identity**, not a generated id, so re-subscribing
+upserts. A browser hands back the same endpoint after a permission reset while
+possibly rotating its keys; inserting would leave two rows pushing to one place.
+
+**iOS only exposes the push API to an installed PWA.** Not a permission that
+can be asked for and denied — the API is simply absent until the app is on the
+home screen, which is why the toggle reads that state and says so rather than
+offering a button that would throw.
+
+### Feature 9c — Invitations through the app ✅ done, PR open
+
+- [x] An invited address that already has an account offers a channel choice
+- [x] An address with no account is emailed automatically, as before
+- [x] The copyable link is shown in every case
+- [x] Account-level notifications, which follow the reader between spaces
+
+**An invitation notice cannot be space-scoped.** The recipient is not a member
+of the inviting space — that is the whole point of the invitation — so a row
+keyed to it would be visible to nobody. `notifications.organizationId` is now
+nullable, meaning "about you rather than about a space", and the bell shows
+those wherever the reader happens to be.
+
+**Which forced `NULLS NOT DISTINCT` on the unique constraint.** Postgres treats
+nulls as distinct in a unique index by default, so without it every
+account-level row would be unique to itself and the dedupe key would silently
+stop meaning anything for exactly the rows most likely to repeat — an
+invitation sent twice. The old `uniqueIndex` cannot express that; a `unique`
+table constraint can.
+
+**Nothing is emailed to an existing account until the inviter chooses.** The
+`sendInvitationEmail` hook now looks the address up and holds off when it finds
+one, because otherwise the choice on screen would be a lie — the mail would
+already be gone. Somebody with an account is better served by the in-app notice
+anyway: it arrives whatever `RESEND_FROM` is set to, which is not true of the
+email.
+
+**The disclosure is deliberate.** The form tells the inviter whether an address
+already has an account, which is account enumeration. Accepted knowingly: only
+a space owner can invite, sign-up is invite-only, and the alternative — always
+offering both channels and letting the in-app one quietly do nothing — is a
+less honest screen. Revisit if sign-up is ever opened up.
+
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
@@ -550,6 +658,59 @@ safe circle.
 largest art the sheet contains. Re-export from the original at 512 and rerun
 the crop if it ever looks wrong on a device.
 
+### Feature 9a — Notifications, in-app ✅ done, PR open
+
+- [x] `notifications` table, one row per recipient, keyed against duplicates
+- [x] Budget overspend, raised at write time
+- [x] Recurring entries, raised as each occurrence is materialised
+- [x] A bell in the topbar with an unread dot, and mark-read
+- [x] Scheduled the recurring sweep, which nothing had ever called
+
+**In-app first, push as a layer on top.** The same shape as invitations, where
+the copyable link is the mechanism and the email sits above it. Push can be
+denied, is only delivered to an installed PWA on iOS, and fails silently; if
+the notification existed only as an OS toast then a denied permission would
+mean the overspend was never recorded anywhere. Stored, it is durable, it can
+be read later, and it can be tested without a push round trip.
+
+**Both triggers hang off writes that already happen.** Crossing a budget is
+*caused* by recording an expense, so the check runs there rather than on a
+sweep — noticed when it happens, not when someone next opens the app. A
+recurring entry is announced as it is materialised. Neither needs a scheduler
+to be correct.
+
+**`dedupeKey` carries the whole feature.** Unique on
+`(organizationId, userId, dedupeKey)`. Every caller can run twice: the second
+expense of an overspent month crosses the same limit again, and the cron sweep
+races page loads. The key makes the repeat a no-op at the database, which is
+the same answer the `(organizationId, recurringId, date)` occurrence key gave
+the entries themselves. Keyed on the budget and its window, not on the entry —
+keying on the entry would notify per purchase.
+
+**Raising one can never fail the write that caused it.** Every call follows a
+write that has already succeeded, so `notifySpace` catches and logs rather than
+throwing. An expense that was recorded stays recorded even if the notice fails.
+Six tests break if that `catch` is removed, including the materialiser's own —
+which is the point.
+
+**Overspend costs one query in the usual case.** Most categories have no
+budget, and `findByCategory` answers that without summing a window. Only when a
+limit exists is the spend computed, through the same
+`sumBaseAmountByCategory` + `windowFor` pair the budgets page reads. A second
+way to decide what "over" means would eventually disagree with the bar on
+screen.
+
+**No `createdBy` / `updatedBy`,** unlike every other space-scoped table. Nobody
+authors a notification: it is raised by a write somebody else made, or by a
+cron sweep with no acting user at all. A nullable attribution column that is
+usually null would invite reading null as "system".
+
+**`/api/cron/materialise-recurring` is now scheduled**, daily at 04:00, an hour
+after the rate refresh so conversions have fresh rates. It had existed, guarded
+and correct, and nothing had ever called it — so occurrences only appeared when
+someone opened the app. A notification saying "your rent was recorded" is worth
+nothing if the recording waits for you to look.
+
 ---
 
 ## Environment
@@ -563,7 +724,11 @@ the crop if it ever looks wrong on a device.
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
-| `CRON_SECRET`           | Both cron routes | **Not set.** Both refuse to run without it     |
+| `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
+| `VAPID_PUBLIC_KEY`      | Web push         | Same value as the `NEXT_PUBLIC_` one below     |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push  | The browser needs it to subscribe              |
+| `VAPID_PRIVATE_KEY`     | Web push         | Server-side only; signs every push             |
+| `VAPID_SUBJECT`         | Web push         | `mailto:` contact for the push services        |
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
@@ -591,10 +756,18 @@ and they do address one endpoint. It acts only when `VERCEL_ENV` is
 `production`; the development database stays the developer's to migrate. See
 the follow-up at the end for why a release checklist was not enough.
 
-**On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
-by design. Rates are fetched on demand when a conversion misses the cache, and
-recurring entries are materialised when someone loads a page. Setting it buys
-freshness in a space nobody has opened, not correctness.
+**On `CRON_SECRET`:** neither cron route runs without it, and that was
+survivable by design. Rates are fetched on demand when a conversion misses the
+cache, and recurring entries are materialised when someone loads a page. It buys
+freshness in a space nobody has opened, not correctness. **It is now set** —
+earlier notes here saying otherwise were stale.
+
+**But only one of the two routes is scheduled.** `vercel.json` lists
+`/api/cron/refresh-rates` and nothing else, so `/api/cron/materialise-recurring`
+has never been called by anything: it is a guarded endpoint that exists and
+waits. Occurrences therefore still appear only when somebody opens the app,
+which is exactly the gap the notifications work has to close — a "your rent was
+recorded" message is worth nothing if the recording waits for you to look.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
@@ -731,6 +904,14 @@ Things already hit, so they are not hit twice.
   the worker it has, and that worker is what would have told it to update.
   `next.config.ts` sets `no-store` and an explicit content type on that one
   path.
+- **A unique index treats nulls as distinct, so it stops guarding.** Postgres
+  considers two nulls unequal, which means a unique index over a nullable
+  column silently permits duplicates for exactly the rows that have none. It
+  bit here when `notifications.organizationId` became nullable for
+  account-level notices: the dedupe key would have kept working for every
+  space-scoped row and quietly stopped working for invitations. `unique(...)
+  .nullsNotDistinct()` fixes it — and note `uniqueIndex()` has no such option,
+  so the constraint has to be a table constraint rather than an index.
 - **Chrome checks a manifest icon's real pixels against its `sizes`.** An entry
   claiming `192x192` whose file is 276×284 is discarded, and with no valid 192
   and 512 the install prompt never appears at all — the app simply is not

@@ -82,6 +82,20 @@ export class BudgetRepository {
     return result;
   }
 
+  /**
+   * Every limit standing against one category, across both periods.
+   *
+   * The overspend check runs on every expense write, and most categories have
+   * no budget at all — this answers that in one query rather than fetching the
+   * space's whole set.
+   */
+  async findByCategory(organizationId: string, categoryId: number): Promise<Budget[]> {
+    return db
+      .select()
+      .from(budgets)
+      .where(and(eq(budgets.organizationId, organizationId), eq(budgets.categoryId, categoryId)));
+  }
+
   async create(data: NewBudget): Promise<Budget> {
     const [result] = await db.insert(budgets).values(data).returning();
     return result;
