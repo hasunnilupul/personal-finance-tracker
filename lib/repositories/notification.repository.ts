@@ -1,8 +1,22 @@
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNull, or, SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { notifications } from "@/lib/db/schema/notifications";
 import { NewNotification, Notification } from "@/lib/db/models/notification.model";
+
+/**
+ * Mine, here — plus anything addressed to me rather than to a space.
+ *
+ * An account-level notice (`organizationId` null) follows the reader between
+ * spaces, because it is about them: an invitation is issued by a space they
+ * are not in yet, so scoping it to the active one would show it to nobody.
+ */
+function visibleTo(organizationId: string, userId: string): SQL | undefined {
+  return and(
+    eq(notifications.userId, userId),
+    or(eq(notifications.organizationId, organizationId), isNull(notifications.organizationId)),
+  );
+}
 
 export class NotificationRepository {
   /**
@@ -35,9 +49,7 @@ export class NotificationRepository {
     return db
       .select()
       .from(notifications)
-      .where(
-        and(eq(notifications.organizationId, organizationId), eq(notifications.userId, userId)),
-      )
+      .where(visibleTo(organizationId, userId))
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limit);
   }
@@ -46,13 +58,7 @@ export class NotificationRepository {
     const [result] = await db
       .select({ value: count() })
       .from(notifications)
-      .where(
-        and(
-          eq(notifications.organizationId, organizationId),
-          eq(notifications.userId, userId),
-          isNull(notifications.readAt),
-        ),
-      );
+      .where(and(visibleTo(organizationId, userId), isNull(notifications.readAt)));
 
     return result?.value ?? 0;
   }
@@ -65,8 +71,7 @@ export class NotificationRepository {
       .where(
         and(
           eq(notifications.id, id),
-          eq(notifications.organizationId, organizationId),
-          eq(notifications.userId, userId),
+          visibleTo(organizationId, userId),
           isNull(notifications.readAt),
         ),
       )
@@ -79,13 +84,7 @@ export class NotificationRepository {
     const result = await db
       .update(notifications)
       .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notifications.organizationId, organizationId),
-          eq(notifications.userId, userId),
-          isNull(notifications.readAt),
-        ),
-      )
+      .where(and(visibleTo(organizationId, userId), isNull(notifications.readAt)))
       .returning({ id: notifications.id });
 
     return result.length;

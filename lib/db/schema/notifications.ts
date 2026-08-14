@@ -1,12 +1,4 @@
-import {
-  pgTable,
-  timestamp,
-  integer,
-  varchar,
-  text,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { pgTable, timestamp, integer, varchar, text, index, unique } from "drizzle-orm/pg-core";
 
 import { user } from "@/lib/db/schema/better-auth";
 import { organization } from "@/lib/db/schema/organization";
@@ -35,9 +27,18 @@ export const notifications = pgTable(
   "notifications",
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * The space it belongs to, or **null for an account-level notice**.
+     *
+     * Almost everything here is about a space, and the bell shows the active
+     * one. An invitation is the exception: it reaches somebody who is not a
+     * member of the inviting space yet — that is the whole point of it — so
+     * scoping it to that space would hide it from the only person who needs
+     * it. Null means "about you", and those show wherever you are.
+     */
+    organizationId: text("organizationId").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
     /** The member who should see it. */
     userId: text("userId")
       .notNull()
@@ -62,10 +63,14 @@ export const notifications = pgTable(
     ),
     // The guard, not an optimisation. The service checks before inserting, but
     // a check cannot win a race against a concurrent sweep; this can.
-    uniqueIndex("notifications_organizationId_userId_dedupeKey_key").on(
-      table.organizationId,
-      table.userId,
-      table.dedupeKey,
-    ),
+    //
+    // `nullsNotDistinct` is what keeps it working for account-level rows.
+    // Postgres treats nulls as distinct in a unique index by default, so
+    // without it every account-level notice would be unique to itself and the
+    // dedupe key would silently stop meaning anything for exactly the rows
+    // that repeat most — an invitation re-sent twice.
+    unique("notifications_organizationId_userId_dedupeKey_key")
+      .on(table.organizationId, table.userId, table.dedupeKey)
+      .nullsNotDistinct(),
   ],
 );

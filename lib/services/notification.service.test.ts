@@ -19,6 +19,7 @@ const listMembers = vi.fn();
 const createManyIfAbsent = vi.fn();
 const countUnread = vi.fn();
 const markRead = vi.fn();
+const createIfAbsent = vi.fn();
 
 vi.mock("@/lib/repositories/space.repository", () => ({
   spaceRepository: {
@@ -33,7 +34,7 @@ vi.mock("@/lib/repositories/notification.repository", () => ({
     markRead: (...args: unknown[]) => markRead(...args),
     listForUser: vi.fn(),
     markAllRead: vi.fn(),
-    createIfAbsent: vi.fn(),
+    createIfAbsent: (...args: unknown[]) => createIfAbsent(...args),
   },
 }));
 
@@ -114,6 +115,45 @@ describe("raising one never fails the write that caused it", () => {
 
     await expect(notificationService.notifySpace("org-mine", input)).resolves.toEqual([]);
     expect(createManyIfAbsent).not.toHaveBeenCalled();
+  });
+});
+
+describe("an invitation reaches somebody outside the space", () => {
+  const invite = {
+    type: "space_invitation" as const,
+    title: "You have been invited to Household",
+    body: "Nilupul invited you to share the Household ledger.",
+    href: "/accept-invitation/inv-1",
+    dedupeKey: "invitation:inv-1",
+  };
+
+  it("writes an account-level row, belonging to no space", async () => {
+    // The recipient is not a member of the inviting space — that is what is
+    // being offered — so a row scoped to it would be visible to nobody.
+    createIfAbsent.mockImplementation(async (row: unknown) => row);
+
+    await notificationService.notifyUser("user-invitee", invite);
+
+    const [row] = createIfAbsent.mock.calls[0] as [{ organizationId: null; userId: string }];
+
+    expect(row.organizationId).toBeNull();
+    expect(row.userId).toBe("user-invitee");
+  });
+
+  it("keys on the invitation, so re-notifying is a no-op", async () => {
+    createIfAbsent.mockImplementation(async (row: unknown) => row);
+
+    await notificationService.notifyUser("user-invitee", invite);
+
+    const [row] = createIfAbsent.mock.calls[0] as [{ dedupeKey: string }];
+
+    expect(row.dedupeKey).toBe("invitation:inv-1");
+  });
+
+  it("never fails the invitation that caused it", async () => {
+    createIfAbsent.mockRejectedValue(new Error("connection lost"));
+
+    await expect(notificationService.notifyUser("user-invitee", invite)).resolves.toBeUndefined();
   });
 });
 
