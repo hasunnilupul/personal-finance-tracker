@@ -2,6 +2,11 @@ import { spaceRepository } from "@/lib/repositories/space.repository";
 import { invitationRepository } from "@/lib/repositories/invitation.repository";
 import { expenseRepository } from "@/lib/repositories/expense.repository";
 import { incomeRepository } from "@/lib/repositories/income.repository";
+import { reconvertEntriesStatement } from "@/lib/repositories/transaction-query";
+import { runBatch, statements } from "@/lib/db/batch";
+// Aliased because `changeBaseCurrency` binds the fetched rows to `expenses`.
+import { expenses as expenseTable } from "@/lib/db/schema/expenses";
+import { income as incomeTable } from "@/lib/db/schema/income";
 import { categoryService } from "@/lib/services/category.service";
 import { budgetService } from "@/lib/services/budget.service";
 import { exchangeRateService } from "@/lib/services/exchange-rate.service";
@@ -106,8 +111,8 @@ export class SpaceService {
     // Every conversion is computed before anything is written. A missing rate
     // throws here, with the space still on its old currency — rather than
     // halfway through, leaving converted and unconverted entries side by side.
-    // The HTTP database driver has no interactive transactions, so ordering the
-    // work this way is what keeps the change coherent.
+    // The batch below cannot read a result and decide what to write next, so
+    // all the rate lookups have to happen up here regardless.
     const convert = async (entry: {
       id: number;
       amount: string;
@@ -123,17 +128,10 @@ export class SpaceService {
       )),
     });
 
-    const [expenseConversions, incomeConversions] = await Promise.all([
+    const [expenseConversions, incomeConversions, budgetReconversion] = await Promise.all([
       Promise.all(expenses.map(convert)),
       Promise.all(incomeEntries.map(convert)),
-    ]);
-
-    await spaceRepository.updateBaseCurrency(organizationId, baseCurrency);
-
-    const budgetsReconverted = await budgetService.reconvertAmounts(
-      organizationId,
-      ctx.userId,
-      async (amount) => {
+      budgetService.reconvertStatement(organizationId, ctx.userId, async (amount) => {
         const { baseAmount } = await exchangeRateService.convert(
           amount,
           ctx.baseCurrency,
@@ -141,24 +139,25 @@ export class SpaceService {
         );
 
         return baseAmount;
-      },
-    );
-
-    await Promise.all([
-      ...expenseConversions.map((conversion) =>
-        expenseRepository.update(conversion.id, organizationId, {
-          baseAmount: conversion.baseAmount,
-          exchangeRate: conversion.rate,
-        }),
-      ),
-      ...incomeConversions.map((conversion) =>
-        incomeRepository.update(conversion.id, organizationId, {
-          baseAmount: conversion.baseAmount,
-          exchangeRate: conversion.rate,
-        }),
-      ),
+      }),
     ]);
 
+    // One transaction, so the space's `baseCurrency` and every amount held in
+    // it move together. Written as separate statements this was the worst of
+    // the un-transacted writes in this codebase: a partial failure left the
+    // space already switched, with some rows in the new currency and some in
+    // the old, and nothing on screen saying which was which. Re-running to
+    // recover would have converted the already-converted rows a second time.
+    await runBatch(
+      statements(
+        spaceRepository.updateBaseCurrencyStatement(organizationId, baseCurrency),
+        reconvertEntriesStatement(expenseTable, organizationId, expenseConversions),
+        reconvertEntriesStatement(incomeTable, organizationId, incomeConversions),
+        budgetReconversion.statement,
+      ),
+    );
+
+    const budgetsReconverted = budgetReconversion.count;
     const entries = expenseConversions.length + incomeConversions.length;
 
     logger.info("Base currency changed", {

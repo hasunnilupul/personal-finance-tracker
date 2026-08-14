@@ -1,6 +1,7 @@
 import { budgetRepository, BudgetWithCategory } from "@/lib/repositories/budget.repository";
 import { categoryRepository } from "@/lib/repositories/category.repository";
 import { sumBaseAmountByCategory } from "@/lib/repositories/transaction-query";
+import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
 import {
   Budget,
@@ -281,39 +282,38 @@ export class BudgetService {
    *
    * Converted at today's rate rather than at each budget's `startDate`: a limit
    * is a forward-looking intention, not a historical fact, so what it is worth
-   * now is the figure that matters. Every conversion is computed before
-   * anything is written, for the reason `changeBaseCurrency` explains.
+   * now is the figure that matters.
+   *
+   * Returns the write rather than performing it, so it can go into the same
+   * transaction as the entry re-conversion and the currency switch itself —
+   * see `changeBaseCurrency`. Every conversion is still computed here, before
+   * any statement is handed back, so a missing rate throws with nothing written.
    *
    * @param convert Supplied by the caller so this stays free of the exchange
    * rate service, which would otherwise be a cycle through `space.service`.
    *
-   * @returns How many budgets were re-converted.
+   * @returns The statement, and how many budgets it covers. The statement is
+   * `null` when the space has no budgets.
    */
-  async reconvertAmounts(
+  async reconvertStatement(
     organizationId: string,
     userId: string,
     convert: (amount: string) => Promise<string>,
-  ): Promise<number> {
+  ): Promise<{ statement: BatchStatement | null; count: number }> {
     const all = await budgetRepository.findAll(organizationId);
 
     if (all.length === 0) {
-      return 0;
+      return { statement: null, count: 0 };
     }
 
     const converted = await Promise.all(
       all.map(async (budget) => ({ id: budget.id, amount: await convert(budget.amount) })),
     );
 
-    await Promise.all(
-      converted.map((budget) =>
-        budgetRepository.update(budget.id, organizationId, {
-          amount: budget.amount,
-          updatedBy: userId,
-        }),
-      ),
-    );
-
-    return converted.length;
+    return {
+      statement: budgetRepository.reconvertStatement(organizationId, userId, converted),
+      count: converted.length,
+    };
   }
 
   /**

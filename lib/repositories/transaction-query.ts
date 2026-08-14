@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, gte, lte, sql, SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import { categories } from "@/lib/db/schema/categories";
@@ -270,4 +271,61 @@ export async function listTransactionAuthors(
     .orderBy(asc(user.name));
 
   return rows;
+}
+
+/** One entry's recomputed base-currency figures. */
+export interface Reconversion {
+  id: number;
+  baseAmount: string;
+  rate: string;
+}
+
+/**
+ * Rewrites every entry's `baseAmount` and `exchangeRate` in **one** statement.
+ *
+ * Used when a space changes its base currency. Each entry converts at its own
+ * date and so gets its own figures, which would ordinarily mean one `UPDATE`
+ * per row; a space with a few years of history would then be a few thousand
+ * statements, and putting those in one batch would mean one enormous request.
+ * Joining against an inline `VALUES` list collapses them into a single
+ * statement whose size grows with rows rather than round trips.
+ *
+ * The casts on the first tuple are what give the `VALUES` list its column
+ * types — Postgres infers them from the first row, and an uncast literal would
+ * come out as `text` and fail to compare against `id` or assign to `numeric`.
+ *
+ * `organizationId` is still matched, so a crafted id cannot reach across a
+ * space boundary even though the ids come from the caller.
+ *
+ * Returns `null` for an empty list: there is no `UPDATE` worth sending.
+ *
+ * NOTE: this is deliberately **not** `async`. It returns a built-but-unawaited
+ * query builder for {@link runBatch}, and an `async` function would await that
+ * thenable on the way out — executing the statement on its own, which is the
+ * whole thing being avoided.
+ */
+export function reconvertEntriesStatement(
+  table: TransactionTable,
+  organizationId: string,
+  conversions: Reconversion[],
+): BatchStatement | null {
+  if (conversions.length === 0) {
+    return null;
+  }
+
+  const [first, ...rest] = conversions;
+
+  const values = sql.join(
+    [
+      sql`(${first.id}::integer, ${first.baseAmount}::numeric, ${first.rate}::numeric)`,
+      ...rest.map((row) => sql`(${row.id}, ${row.baseAmount}, ${row.rate})`),
+    ],
+    sql`, `,
+  );
+
+  return db
+    .update(table)
+    .set({ baseAmount: sql`v."baseAmount"`, exchangeRate: sql`v."exchangeRate"` })
+    .from(sql`(values ${values}) as v(id, "baseAmount", "exchangeRate")`)
+    .where(and(eq(table.id, sql`v.id`), eq(table.organizationId, organizationId)));
 }

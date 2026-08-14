@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, getTableColumns } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import type { BatchStatement } from "@/lib/db/batch";
 import { organization, member } from "@/lib/db/schema/organization";
 import { user } from "@/lib/db/schema/better-auth";
 import {
@@ -35,8 +36,15 @@ export class SpaceRepository {
     return rows.map((row) => row.baseCurrency);
   }
 
-  async updateBaseCurrency(id: string, baseCurrency: string): Promise<void> {
-    await db.update(organization).set({ baseCurrency }).where(eq(organization.id, id));
+  /**
+   * The base-currency switch, as a statement for a batched write.
+   *
+   * Sync on purpose — see {@link BatchStatement}. Switching the currency and
+   * re-converting the amounts held in it have to land together, so this is
+   * never run on its own.
+   */
+  updateBaseCurrencyStatement(id: string, baseCurrency: string): BatchStatement {
+    return db.update(organization).set({ baseCurrency }).where(eq(organization.id, id));
   }
 
   async addMember(data: NewMember): Promise<Member> {

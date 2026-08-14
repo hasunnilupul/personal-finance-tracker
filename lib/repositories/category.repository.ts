@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { BatchStatement } from "@/lib/db/batch";
 import { categories } from "@/lib/db/schema/categories";
 import { Category, NewCategory } from "@/lib/db/models/category.model";
 import { eq, and, asc } from "drizzle-orm";
@@ -60,6 +61,21 @@ export class CategoryRepository {
       .where(and(eq(categories.id, id), eq(categories.organizationId, organizationId)))
       .returning();
     return result.length > 0;
+  }
+
+  /**
+   * The same delete, as a statement for a batched write.
+   *
+   * Deleting a category that entries still point at has to happen in the same
+   * transaction as the reassignment that moves them off it.
+   *
+   * Sync on purpose — see {@link BatchStatement}.
+   */
+  deleteStatement(id: number, organizationId: string): BatchStatement {
+    return db
+      .delete(categories)
+      .where(and(eq(categories.id, id), eq(categories.organizationId, organizationId)))
+      .returning({ id: categories.id });
   }
 }
 
