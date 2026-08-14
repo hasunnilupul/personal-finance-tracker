@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import AppSidebar from "@/components/app-sidebar";
 import AppTopbar from "@/components/app-topbar";
+import OfflineBanner from "@/components/offline-banner";
 import { listSpaces, requireActiveSpace } from "@/lib/auth/dal";
 import { notificationService } from "@/lib/services/notification.service";
 
@@ -20,6 +21,13 @@ const DashboardLayout = async ({
       <AppSidebar />
 
       <main className="w-full flex-1 overflow-auto pb-24 md:pb-0">
+        {/*
+          Above the topbar and inside the scroller, so it reads as part of the
+          page's own header rather than as a floating overlay — and so it
+          cannot cover the controls the way a fixed bar would on a phone.
+        */}
+        <OfflineBanner />
+
         <AppTopbar
           space={space}
           spaces={spaces}
