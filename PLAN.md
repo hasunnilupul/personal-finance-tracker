@@ -10,7 +10,19 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+**Last completed:** **UI polish** (`fix/ui-polish`) — eight commits of
+presentation fixes found by using the app rather than by planning it. Two were
+whole classes rather than single sightings: no `Select` passed `items`, so every
+trigger printed its raw value (the space switcher showed an organization id),
+and no `Button` rendering a link passed `nativeButton={false}`, which is what
+gates Base UI's link-aware keyboard handling. Also: the sidebar tab that only
+answered a click on its label, a mobile bar carrying ten tabs across a phone,
+the topbar extracted into `components/app-topbar.tsx` and taught to reflow, and
+`PLAN.md` moved into `.prettierignore` because `pnpm format` was indenting it
+four spaces deeper on every run. All four checks pass; none of it was exercised
+in a browser, since signing in needs the owner's own credentials.
+
+**Before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
 `ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
 the first exercise of the deploy-time migration added in #24: the deployment
 went green, which on a production build means the migrate step ran rather than
@@ -19,8 +31,13 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**Next up:** The app is deployed but **not yet reachable by anyone else.** Three
-things stand between here and a family member signing in, none of them code:
+**Next up, in code:** a submitted `categoryId` is never checked against the
+space it is being filed in — see the entry under Known follow-ups. That is the
+branch in progress.
+
+**Next up, in configuration:** the app is deployed but **not yet reachable by
+anyone else.** Three things stand between here and a family member signing in,
+none of them code:
 
 1. **Vercel Deployment Protection is on.** Both `/` and `/sign-up` answer `302`
    to `vercel.com/sso-api`, so the deployment is gated behind the Vercel
@@ -591,6 +608,54 @@ Things already hit, so they are not hit twice.
 - **The Select reports "nothing chosen" as `null`, not `""`.** Its
   `onValueChange` is typed `string | null`, so backing it with a `useState<string>`
   fails to typecheck.
+- **`<SelectValue />` renders the raw `value`, not the chosen item's text.**
+  Base UI resolves the trigger's label from the `items` prop on `Select` (the
+  Root), _not_ from the `<SelectItem>` children — with no `items` it falls back
+  to stringifying the value. So a picker backed by an id showed the id: the
+  space switcher printed an organization id where the space's name belonged,
+  and every category, author and preset picker did the same. Every `Select` now
+  passes `items`, and the options are built once and mapped over for both the
+  `items` prop and the `<SelectItem>` list, so the trigger and the list cannot
+  drift apart. A label may be a `ReactNode`, which is how the switcher keeps its
+  wallet/users icon in the trigger.
+- **A `<Link>` nested inside a `<Button>` is only clickable where the text is.**
+  The Button carries the padding, the height and the full width, but the anchor
+  inside it is the only part that navigates — so the sidebar's tabs answered a
+  click on the label and ignored one anywhere in the surrounding gap. It is also
+  invalid HTML: an `<a>` cannot live inside a `<button>`.
+- **A link that looks like a button is `buttonVariants`, not `<Button render>`.**
+  The obvious repair for the nesting above is Base UI's `render` prop, and it is
+  wrong: Base UI's own docs rule it out, because Button _enforces button
+  semantics_. Left as-is it puts `type="button"` on an `<a>`; with
+  `nativeButton={false}` it stamps `role="button"`, so a navigation link is
+  announced as a button and loses every link affordance. Style the anchor
+  instead — `className={cn(buttonVariants({ variant }), …)}` — which is one
+  element, correctly announced, with the whole padded box clickable. `render` is
+  still right for a Menu item, whose `role="menuitem"` is what a menu wants.
+- **`<Button render={<Link/>}>` needs `nativeButton={false}`.** Without it Base
+  UI believes it wrapped a native `<button>`: it logs "expected a native
+  <button> because the `nativeButton` prop is true", and — the part that
+  matters — `useButton` gates its link-aware keyboard handling behind
+  `!isNativeButton`, so the anchor never gets it. The cost is a `role="button"`
+  on the anchor, which is why Base UI's docs suggest styling the `<a>` with
+  `buttonVariants` instead. Both patterns are in the tree: the sidebar and the
+  create-space Cancel are styled anchors, everything else is `Button` +
+  `render` + `nativeButton={false}`.
+- **`nativeButton` must track a _conditional_ `render`.** Several controls pass
+  `render={cond ? <Link/> : undefined}` so a dead-end page arrow is a disabled
+  button rather than a link to nowhere. A static `nativeButton={false}` is then
+  right for one branch and wrong for the other, and the wrong branch logs the
+  mirror-image error about extra attributes. Tie it to the same condition —
+  `nativeButton={!previous}`, `nativeButton={page.page <= 1}` — so it always
+  describes what was actually rendered.
+- **`pnpm format` does not converge on this file.** Prettier's markdown printer
+  adds four spaces to the continuation lines of a _second_ paragraph inside a
+  `- [x]` item, every run — so two entries under Known follow-ups crept right by
+  four spaces per `pnpm format` until they were indented past twenty columns.
+  Nothing warns; it just looks like someone made a mess. `PLAN.md` is in
+  `.prettierignore` for that reason, alongside the migrations, and its
+  indentation is now hand-maintained. A single-line paragraph survives
+  untouched, if a formatted version is ever wanted back.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -644,6 +709,18 @@ Not blocking, but worth doing.
       itself, since that scan predates the merge. `main` now carries the fixes,
       so the next scan should clear them. Worth a glance at the Dependabot tab
       to confirm it did.
+- [ ] **A submitted `categoryId` is never scoped to the space.** The zod schema
+      turns it into a number and `createExpense` spreads it into the row; the
+      only guard is the foreign key, which enforces that the category _exists_,
+      in any space. So an entry in space A can carry space B's category id, and
+      the list joins categories by id — B's category name would render to A's
+      members. Every other write path re-checks scope rather than trusting the
+      client, which is what `SpaceContext` and `UserInput<T>` are for; this one
+      does not. It also decides what happens when a category is deleted while
+      someone else's form is open: today that is a foreign-key violation
+      surfacing as a generic error, and it should be a sentence. Found by asking
+      why a category created in one session did not appear in another's picker
+      — the staleness itself is expected and harmless, this was underneath it.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
@@ -673,12 +750,12 @@ Not blocking, but worth doing.
       column or a recovery path to maintain.
 
       The per-row updates became **one statement per table** on the way, joining
-              against an inline `VALUES` list. Each entry converts at its own date and
-              so needs its own figures; a space with years of history would otherwise
-              have been thousands of statements in one request. The remaining ceiling is
-              Postgres' 65535 parameters per statement — three per entry, so roughly
-              20k entries, far past anything a household ledger will reach and much
-              further than the old code got.
+      against an inline `VALUES` list. Each entry converts at its own date and
+      so needs its own figures; a space with years of history would otherwise
+      have been thousands of statements in one request. The remaining ceiling is
+      Postgres' 65535 parameters per statement — three per entry, so roughly
+      20k entries, far past anything a household ledger will reach and much
+      further than the old code got.
 
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.

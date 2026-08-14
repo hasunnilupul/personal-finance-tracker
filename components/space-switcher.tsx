@@ -27,10 +27,38 @@ interface SpaceSwitcherProps {
  *
  * The personal space always sorts first. Choosing "New shared space" routes to
  * the creation form rather than switching.
+ *
+ * The options are built once and feed both the trigger and the list: `items` is
+ * what lets the trigger render a space's name instead of its id — see Gotchas.
  */
 const SpaceSwitcher = ({ spaces, activeSpaceId }: SpaceSwitcherProps) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  const items = [
+    ...spaces.map((space) => ({
+      value: space.id,
+      label: (
+        <>
+          {space.isPersonal ? (
+            <WalletIcon className="text-muted-foreground" />
+          ) : (
+            <UsersIcon className="text-muted-foreground" />
+          )}
+          {space.name}
+        </>
+      ),
+    })),
+    {
+      value: CREATE_SPACE_VALUE,
+      label: (
+        <>
+          <PlusIcon className="text-muted-foreground" />
+          New shared space
+        </>
+      ),
+    },
+  ];
 
   const handleChange = (value: unknown) => {
     const nextId = String(value);
@@ -57,27 +85,17 @@ const SpaceSwitcher = ({ spaces, activeSpaceId }: SpaceSwitcherProps) => {
   };
 
   return (
-    <Select value={activeSpaceId} onValueChange={handleChange} disabled={isPending}>
+    <Select items={items} value={activeSpaceId} onValueChange={handleChange} disabled={isPending}>
       <SelectTrigger size="sm" className="w-full" aria-label="Active space">
         <SelectValue />
       </SelectTrigger>
 
       <SelectContent>
-        {spaces.map((space) => (
-          <SelectItem key={space.id} value={space.id}>
-            {space.isPersonal ? (
-              <WalletIcon className="text-muted-foreground" />
-            ) : (
-              <UsersIcon className="text-muted-foreground" />
-            )}
-            {space.name}
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
           </SelectItem>
         ))}
-
-        <SelectItem value={CREATE_SPACE_VALUE}>
-          <PlusIcon className="text-muted-foreground" />
-          New shared space
-        </SelectItem>
       </SelectContent>
     </Select>
   );

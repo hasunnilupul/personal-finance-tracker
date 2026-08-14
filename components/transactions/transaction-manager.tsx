@@ -167,10 +167,16 @@ const TransactionManager = ({
                 </p>
 
                 <div className="flex gap-2">
+                  {/*
+                    `nativeButton` tracks what `render` produced: an anchor when
+                    there is a page to go to, a real <button> when there is not.
+                    See Gotchas.
+                  */}
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={page.page <= 1}
+                    nativeButton={page.page <= 1}
                     render={page.page > 1 ? <Link href={pageHref(page.page - 1)} /> : undefined}
                   >
                     Previous
@@ -180,6 +186,7 @@ const TransactionManager = ({
                     variant="outline"
                     size="sm"
                     disabled={page.page >= pageCount}
+                    nativeButton={page.page >= pageCount}
                     render={
                       page.page < pageCount ? <Link href={pageHref(page.page + 1)} /> : undefined
                     }

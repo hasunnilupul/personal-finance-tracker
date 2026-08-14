@@ -2,28 +2,48 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { EllipsisIcon } from "lucide-react";
 
+import { buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+/**
+ * Every destination, in sidebar order.
+ *
+ * `primary` marks the four that earn a slot in the mobile bar. The rest are
+ * reached through "More" — ten tabs do not fit across a phone, and a bar that
+ * overflows hides its last items with nothing to say they are there.
+ */
 const tabs = [
   {
     href: "/",
     label: "Dashboard",
     icon: "📊",
+    primary: true,
   },
   {
     href: "/expenses",
     label: "Expenses",
     icon: "💰",
+    primary: true,
   },
   {
     href: "/income",
     label: "Income",
     icon: "💵",
+    primary: true,
   },
   {
     href: "/budgets",
     label: "Budgets",
     icon: "📈",
+    primary: true,
   },
   {
     href: "/reports",
@@ -57,8 +77,17 @@ const tabs = [
   },
 ];
 
+const primaryTabs = tabs.filter((tab) => tab.primary);
+const overflowTabs = tabs.filter((tab) => !tab.primary);
+
+// One column per primary tab plus one for More, so the bar divides the width it
+// has rather than growing past it.
+const barItem =
+  "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 transition-colors";
+
 export default function AppSidebar() {
   const pathname = usePathname();
+  const inOverflow = overflowTabs.some((tab) => tab.href === pathname);
 
   return (
     <>
@@ -70,16 +99,21 @@ export default function AppSidebar() {
 
         <nav className="flex-1 space-y-2 px-3 py-4">
           {tabs.map((tab) => (
-            <Button
+            // A link styled as a button, not a Button rendering a link: the
+            // whole padded row navigates and it is still announced as a link.
+            // See Gotchas.
+            <Link
               key={tab.href}
-              variant={pathname === tab.href ? "default" : "ghost"}
-              className="w-full justify-start"
+              href={tab.href}
+              aria-current={pathname === tab.href ? "page" : undefined}
+              className={cn(
+                buttonVariants({ variant: pathname === tab.href ? "default" : "ghost" }),
+                "w-full justify-start",
+              )}
             >
-              <Link href={tab.href} className="flex w-full">
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
-              </Link>
-            </Button>
+              <span className="mr-2">{tab.icon}</span>
+              {tab.label}
+            </Link>
           ))}
         </nav>
 
@@ -89,23 +123,53 @@ export default function AppSidebar() {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="bg-card border-border fixed right-0 bottom-0 left-0 w-screen border-t md:hidden">
-        <div className="flex items-center justify-around">
-          {tabs.map((tab) => (
+      <nav className="bg-card border-border fixed inset-x-0 bottom-0 border-t md:hidden">
+        <div className="flex items-stretch">
+          {primaryTabs.map((tab) => (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex min-w-16 flex-col items-center justify-center px-4 py-3 transition-colors ${
+              aria-current={pathname === tab.href ? "page" : undefined}
+              className={cn(
+                barItem,
                 pathname === tab.href
                   ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              title={tab.label}
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
-              <span className="mb-1 text-xl">{tab.icon}</span>
-              <span className="text-xs font-medium">{tab.label}</span>
+              <span className="text-xl">{tab.icon}</span>
+              <span className="w-full truncate text-center text-[11px] font-medium">
+                {tab.label}
+              </span>
             </Link>
           ))}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="More pages"
+              className={cn(
+                barItem,
+                inOverflow ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <EllipsisIcon className="size-5" />
+              <span className="w-full truncate text-center text-[11px] font-medium">More</span>
+            </DropdownMenuTrigger>
+
+            {/* Anchored to a narrow trigger, so the popup sets its own width. */}
+            <DropdownMenuContent side="top" align="end" className="w-56">
+              {overflowTabs.map((tab) => (
+                <DropdownMenuItem
+                  key={tab.href}
+                  className={cn(pathname === tab.href && "text-primary")}
+                  render={<Link href={tab.href} />}
+                >
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </nav>
 

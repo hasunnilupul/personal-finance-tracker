@@ -44,7 +44,7 @@ const AcceptInvitationPage = async ({ params }: AcceptInvitationPageProps) => {
         <p className="text-muted-foreground mt-2 text-sm">
           The link may have been mistyped, or the invitation was withdrawn.
         </p>
-        <Button className="mt-4" render={<Link href="/" />}>
+        <Button className="mt-4" nativeButton={false} render={<Link href="/" />}>
           Go to FinanceFlow
         </Button>
       </Shell>
@@ -67,7 +67,7 @@ const AcceptInvitationPage = async ({ params }: AcceptInvitationPageProps) => {
             ? `You may already be a member of ${invitation.spaceName}. Sign in to check.`
             : `Ask ${invitation.inviterName ?? "whoever invited you"} to send a new one.`}
         </p>
-        <Button className="mt-4" render={<Link href="/sign-in" />}>
+        <Button className="mt-4" nativeButton={false} render={<Link href="/sign-in" />}>
           Sign in
         </Button>
       </Shell>
@@ -96,6 +96,7 @@ const AcceptInvitationPage = async ({ params }: AcceptInvitationPageProps) => {
 
         <div className="mt-6 flex flex-col gap-2">
           <Button
+            nativeButton={false}
             render={
               <Link href={`/sign-up?redirect=${encodeURIComponent(`/accept-invitation/${id}`)}`} />
             }
@@ -105,6 +106,7 @@ const AcceptInvitationPage = async ({ params }: AcceptInvitationPageProps) => {
 
           <Button
             variant="outline"
+            nativeButton={false}
             render={
               <Link href={`/sign-in?redirect=${encodeURIComponent(`/accept-invitation/${id}`)}`} />
             }
@@ -133,7 +135,7 @@ const AcceptInvitationPage = async ({ params }: AcceptInvitationPageProps) => {
           Sign out and sign back in with the invited address to accept it.
         </p>
 
-        <Button className="mt-6" variant="outline" render={<Link href="/" />}>
+        <Button className="mt-6" variant="outline" nativeButton={false} render={<Link href="/" />}>
           Back to FinanceFlow
         </Button>
       </Shell>

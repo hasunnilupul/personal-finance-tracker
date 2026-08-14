@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSpaceAction, SpaceActionState } from "@/app/actions/space.actions";
+import { cn } from "@/lib/utils";
 
 const initialState: SpaceActionState = {};
 
@@ -59,9 +60,17 @@ const CreateSpaceForm = () => {
             {pending ? "Creating..." : "Create space"}
           </Button>
 
-          <Button type="button" variant="ghost" disabled={pending} render={<Link href="/" />}>
+          {/* A link styled as a button, not a Button rendering a link — see Gotchas. */}
+          <Link
+            href="/"
+            aria-disabled={pending || undefined}
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              pending && "pointer-events-none opacity-50",
+            )}
+          >
             Cancel
-          </Button>
+          </Link>
         </div>
       </form>
     </Card>

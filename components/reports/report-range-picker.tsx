@@ -85,23 +85,33 @@ const ReportRangePicker = ({ basePath, range }: ReportRangePickerProps) => {
 
   const isCustom = range.key === CUSTOM;
 
+  // `items` is what makes the trigger show a preset's label rather than its key
+  // — see Gotchas.
+  const rangeItems = [
+    ...RANGE_PRESETS.map((preset) => ({ value: preset.key, label: preset.label })),
+    { value: CUSTOM, label: "Custom range" },
+  ];
+
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="report-range" className="text-xs">
           Period
         </Label>
-        <Select value={range.key} onValueChange={(value) => choosePreset(String(value))}>
+        <Select
+          items={rangeItems}
+          value={range.key}
+          onValueChange={(value) => choosePreset(String(value))}
+        >
           <SelectTrigger id="report-range" className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {RANGE_PRESETS.map((preset) => (
-              <SelectItem key={preset.key} value={preset.key}>
-                {preset.label}
+            {rangeItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
               </SelectItem>
             ))}
-            <SelectItem value={CUSTOM}>Custom range</SelectItem>
           </SelectContent>
         </Select>
       </div>

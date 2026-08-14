@@ -111,6 +111,17 @@ const BudgetForm = ({
   const selected = available.find((category) => String(category.id) === effectiveCategoryId);
   const noun = PERIOD_NOUN[selectedPeriod];
 
+  // `items` is what makes each trigger show a label rather than the raw value
+  // the form posts — see Gotchas.
+  const categoryItems = available.map((category) => ({
+    value: String(category.id),
+    label: `${category.icon} ${category.name}`,
+  }));
+  const periodItems = (Object.keys(PERIOD_LABEL) as BudgetPeriod[]).map((option) => ({
+    value: option,
+    label: PERIOD_LABEL[option],
+  }));
+
   return (
     <>
       <DialogHeader>
@@ -137,6 +148,7 @@ const BudgetForm = ({
             </p>
           ) : (
             <Select
+              items={categoryItems}
               value={effectiveCategoryId}
               onValueChange={(value) => setCategoryId(String(value))}
             >
@@ -144,9 +156,9 @@ const BudgetForm = ({
                 <SelectValue placeholder="Pick a category" />
               </SelectTrigger>
               <SelectContent>
-                {available.map((category) => (
-                  <SelectItem key={category.id} value={String(category.id)}>
-                    {category.icon} {category.name}
+                {categoryItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -175,6 +187,7 @@ const BudgetForm = ({
           <div className="flex w-32 flex-col gap-2">
             <Label htmlFor="budget-period">Resets</Label>
             <Select
+              items={periodItems}
               value={selectedPeriod}
               onValueChange={(value) => setSelectedPeriod(String(value) as BudgetPeriod)}
             >
@@ -182,9 +195,9 @@ const BudgetForm = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PERIOD_LABEL) as BudgetPeriod[]).map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {PERIOD_LABEL[option]}
+                {periodItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
