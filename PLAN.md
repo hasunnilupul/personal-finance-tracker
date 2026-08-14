@@ -10,7 +10,13 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **UI polish** (`fix/ui-polish`) — eight commits of
+**Last completed:** **Feature 9d — invitations notify without asking** (PR #36,
+merged into `dev`). The channel choice is gone; a failed notice alerts.
+
+**Before that:** **Feature 9b — web push** (PR #34). Notifications reach the
+phone when the app is closed, which also carries the invitation notice.
+
+**Before that:** **UI polish** (`fix/ui-polish`) — eight commits of
 presentation fixes found by using the app rather than by planning it. Two were
 whole classes rather than single sightings: no `Select` passed `items`, so every
 trigger printed its raw value (the space switcher showed an organization id),
@@ -22,7 +28,7 @@ the topbar extracted into `components/app-topbar.tsx` and taught to reflow, and
 four spaces deeper on every run. All four checks pass; none of it was exercised
 in a browser, since signing in needs the owner's own credentials.
 
-**Before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+**And before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
 `ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
 the first exercise of the deploy-time migration added in #24: the deployment
 went green, which on a production build means the migrate step ran rather than
@@ -55,17 +61,23 @@ is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
 **Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
-enabling in the Vercel dashboard before it collects anything) and #32
-(Feature 9a — notifications). Neither is in `main` yet.
+enabling in the Vercel dashboard before it collects anything), #32 (Feature 9a
+— notifications), #33 (Feature 9c — invitations through the app) and #34
+(Feature 9b — web push). None of the four is in `main` yet.
 
-**In progress:** `feat/web-push` — Feature 9b. Notifications reach the phone
-when the app is closed. **Needs the four VAPID variables set in Vercel before
-it does anything in production**; without them the toggle says push is not
-configured and everything else carries on unchanged.
+**The four VAPID variables are now set in Vercel** (2026-08-14). But they were
+added *after* the `89ffd52` release built, and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is
+inlined into the client bundle at build time rather than read at runtime — so
+production push stays inert until something rebuilds. The next release is that
+rebuild. **Verify by pressing the toggle, not by loading the page:** a missing
+server-side key makes the toggle say "not configured", but a missing or
+mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Still to come:** offline (10), which will cache the shell **and what was last
-viewed** — account data on the device, and therefore a cache clear on sign-out
-as part of the feature rather than after it.
+**In progress:** `feat/offline` — Feature 10.
+
+**Still to come:** nothing planned beyond offline. The known gaps are
+`/api/cron/materialise-recurring`, which `vercel.json` still does not schedule,
+and offline *entry*, which 10 deliberately leaves out.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -571,9 +583,10 @@ can be asked for and denied — the API is simply absent until the app is on the
 home screen, which is why the toggle reads that state and says so rather than
 offering a button that would throw.
 
-### Feature 9c — Invitations through the app ✅ done, PR open
+### Feature 9c — Invitations through the app ✅ merged (PR #33)
 
-- [x] An invited address that already has an account offers a channel choice
+- [x] An invited address that already has an account is reached in the app
+      (the channel *choice* this feature added was replaced in 9d)
 - [x] An address with no account is emailed automatically, as before
 - [x] The copyable link is shown in every case
 - [x] Account-level notifications, which follow the reader between spaces
@@ -591,18 +604,121 @@ stop meaning anything for exactly the rows most likely to repeat — an
 invitation sent twice. The old `uniqueIndex` cannot express that; a `unique`
 table constraint can.
 
-**Nothing is emailed to an existing account until the inviter chooses.** The
-`sendInvitationEmail` hook now looks the address up and holds off when it finds
-one, because otherwise the choice on screen would be a lie — the mail would
-already be gone. Somebody with an account is better served by the in-app notice
-anyway: it arrives whatever `RESEND_FROM` is set to, which is not true of the
-email.
+**Nothing is emailed to an existing account.** The `sendInvitationEmail` hook
+looks the address up and holds off when it finds one. Somebody with an account
+is better served by the in-app notice: it arrives whatever `RESEND_FROM` is set
+to, which is not true of the email.
 
 **The disclosure is deliberate.** The form tells the inviter whether an address
 already has an account, which is account enumeration. Accepted knowingly: only
-a space owner can invite, sign-up is invite-only, and the alternative — always
-offering both channels and letting the in-app one quietly do nothing — is a
-less honest screen. Revisit if sign-up is ever opened up.
+a space owner can invite, sign-up is invite-only, and the alternative — saying
+nothing about which channel was used — is a less honest screen. Revisit if
+sign-up is ever opened up.
+
+### Feature 9d — Invitations notify without asking ✅ done, PR open
+
+- [x] An invited address with an account is notified in the app as the
+      invitation is created, with no channel question
+- [x] A failed notice **alerts**, with a retry and an email beside it
+- [x] Email stays available afterwards as an extra, not as a choice
+- [x] The wording of the notice lives in one place, used by both paths
+
+**The choice was only ever worth asking before push existed.** 9c put two
+buttons on screen because the in-app notice might go unread; 9b then made that
+notice ring the phone. Once one channel reaches both the bell and the device
+and does not depend on `RESEND_FROM`, asking which to use is a question with an
+obvious answer, which is a good sign it should not be a question. Email did not
+go away — it moved to *after* the notice, where it costs nothing to skip.
+
+**The send moved out of the auth hook and into the action.** `sendInvitationEmail`
+still decides that an existing account gets no mail, because it is the choke
+point every route into `createInvitation` passes through. But its return value
+is discarded by better-auth, so a notice raised there could never be reported.
+`inviteMemberAction` raises it instead and returns the outcome, which is the
+only reason the failure can be shown at all.
+
+**A failed notice has to be loud.** `notifyUser` already distinguished
+`created` / `duplicate` / `failed`, and 9c surfaced the failure only on the
+manual button. Now that nobody presses a button, a swallowed failure would mean
+an invitation nobody has been told about, looking exactly like one that
+worked — so the panel turns destructive, takes `role="alert"`, and leads with
+the retry and the email. The three outcomes are covered by the existing
+`notification.service` tests; the action layer has no test harness here.
+
+**Only the failure is announced to a screen reader.** A notice that worked is a
+confirmation, and `role="alert"` on a confirmation is an interruption for news
+that is not urgent.
+
+**`InviteLink` needed to know.** It read `emailSent` alone, and an existing
+account is never emailed — so on a correctly configured install it told the
+owner "email is not configured". It now takes whether *anything* reached them.
+
+### Feature 10 — Offline reads ✅ done, PR open
+
+- [x] Two caches with different lifetimes: a shell that survives sign-out, and
+      pages that do not
+- [x] Cache-first for `/_next/static/` and icons; network-first for navigations
+- [x] `/offline` as the last resort, precached and public
+- [x] Private caches purged on sign-out **and** on sign-in
+- [x] A banner that says the page came off the device
+- [x] `updateViaCache: "none"` on registration
+
+**The decision the worker had been avoiding since #29 is now made.** It cached
+nothing because every dashboard page is dynamic and cookie-gated, so caching one
+writes somebody's balances to a phone. That is still exactly what happens — the
+change is that it now ends with the session instead of outliving it. Two caches:
+`financeflow-shell-*` is build output and icons, about nobody, and survives;
+`financeflow-private-*` is rendered pages, and is wiped at both ends of a
+session.
+
+**Purged on sign-in as well as sign-out, and sign-in is the half that holds.**
+Sign-out can be skipped by closing the app, uninstalling it, or letting the
+session expire; arriving at a successful sign-in cannot be. On a phone two
+people in the household share, that is what stops the second person opening the
+first one's ledger from the cache.
+
+**The purge runs in the page, not in the worker.** A document can reach the
+Cache API directly, and one code path that always runs beats a `postMessage`
+that needs a live worker to hear it — sign-out is precisely when the worker may
+be starting, being replaced, or absent. The cost is that
+`PRIVATE_CACHE_PREFIX` exists twice, in `lib/pwa/private-cache.ts` and in
+`public/sw.js`; `sw.js` is served as-is rather than bundled, so it cannot import
+anything. Both copies say so, and the test writes the names out literally so a
+drift fails rather than silently stops matching.
+
+**Awaited before the redirect.** A `caches.delete` still running when the
+document unloads is abandoned, which would leave the pages on disk under a
+session that has ended — the one failure that would make all of this decorative.
+
+**RSC requests are deliberately not intercepted.** They are what the router
+sends when navigating inside the app, and caching them means keying on the
+`_rsc` hash and risking a client half served against a different server half.
+Left alone, an offline RSC fetch fails the way Next expects and the router falls
+back to a full navigation — which the worker *does* answer from the page cache.
+Not handling a request is a strategy here, not a gap.
+
+**Only a plain 200 is cached for a navigation.** A redirect is the proxy sending
+an expired session to sign-in, and storing that under the page's own URL would
+pin the app to the sign-in screen for as long as it stayed offline.
+
+**`/offline` had to be public.** The worker precaches it at install time, when
+the user may well be signed in; a `fetch` of a guarded route follows the
+redirect, so the sign-in page would have been stored under `/offline`. It holds
+no session and no data, so `publicRoutes` costs nothing. It builds as `○
+(Static)`, which is the check that it needs no server at all.
+
+**`install` adds assets one at a time.** `cache.addAll` rejects the whole batch
+on a single 404 and leaves the worker uninstalled — losing push and the install
+prompt over a missing icon.
+
+**Deliberately not included: offline _entry_.** Writes are not queued; the
+banner says changes will not save, and non-GET requests are never touched by the
+worker. Real offline entry means IndexedDB and a replay queue with the same
+idempotency care the recurring materialiser needed, and it is a feature, not a
+corner of this one.
+
+**Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
+and notes it requires webpack configuration; this project builds with Turbopack.
 
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
@@ -903,7 +1019,19 @@ Things already hit, so they are not hit twice.
   worker is how a PWA gets stuck on an old build — the browser keeps serving
   the worker it has, and that worker is what would have told it to update.
   `next.config.ts` sets `no-store` and an explicit content type on that one
-  path.
+  path. Registration also passes `updateViaCache: "none"`, which is the half
+  that does not depend on a host or a CDN honouring the header.
+- **Guard the thing you are about to call.** `purgePrivateCaches` first tested
+  `"caches" in window` and then called the *global* `caches`. In a browser both
+  exist so it worked; under test the guard saw a stubbed `window` without the
+  property and returned early, silently purging nothing. A check on one object
+  and a call on another is a guard that can pass while its call still throws —
+  or, as here, refuse while its call would have worked. Its test caught it.
+- **A precached route must be public, or you cache the redirect.** The worker
+  fetches `/offline` at install time with the user's cookies, so a guarded route
+  would follow the proxy's 307 and store the *sign-in page* under `/offline`.
+  The same trap applies to any navigation cached from a response that redirected,
+  which is why `networkFirst` stores only a non-redirected basic 200.
 - **A unique index treats nulls as distinct, so it stops guarding.** Postgres
   considers two nulls unequal, which means a unique index over a nullable
   column silently permits duplicates for exactly the rows that have none. It
@@ -998,16 +1126,15 @@ Not blocking, but worth doing.
       Seven tests cover it, and each was checked against the unfixed code:
       disabling the create guard fails three, disabling the update guard fails
       one. Not verified against the database — the refusal happens above it.
-- [ ] **PWA: offline support and push notifications.** Deferred deliberately
-      from Feature 8. Push needs VAPID keys, a subscriptions table and a reason
-      to fire — budget overspend, or a recurring entry falling due — and that
-      last part is a product decision. Offline needs deciding what may be
-      cached: the shell is safe, pages are not, since they are dynamic and
-      cookie-gated and would put balances in the browser cache. Real offline
-      _entry_ means IndexedDB and a sync queue, with the same idempotency care
-      the recurring materialiser already needed. Note the Next guide recommends
-      Serwist and says it requires webpack configuration; this project builds
-      with Turbopack.
+- [x] ~~**PWA: offline support and push notifications.**~~ Push shipped in
+      Feature 9b, offline **reads** in Feature 10. The question that had been
+      deferred — whether pages may be cached, given that they are dynamic,
+      cookie-gated, and full of balances — was answered "yes, if the cache ends
+      with the session", which is why 10 purges at both ends of one. What is
+      still open is offline _entry_: IndexedDB and a replay queue, with the same
+      idempotency care the recurring materialiser needed. Still hand-written
+      rather than Serwist, which the Next guide recommends and which requires
+      webpack; this project builds with Turbopack.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
