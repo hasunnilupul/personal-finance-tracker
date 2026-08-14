@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm run build:deploy",
+  "crons": [
+    {
+      "path": "/api/cron/refresh-rates",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

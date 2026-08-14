@@ -4,3 +4,52 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * Narrows an untrusted `?redirect=` value down to a safe in-app path.
+ *
+ * Anything that could send the user to another origin — an absolute URL,
+ * a protocol-relative `//evil.com`, or a backslash variant — is discarded
+ * in favour of the fallback.
+ *
+ * @example
+ * ```ts
+ * safeRedirectPath("/expenses"); // "/expenses"
+ * safeRedirectPath("//evil.com"); // "/"
+ * ```
+ */
+/**
+ * Partially hides an email address.
+ *
+ * Invitation links land on a page anyone holding the URL can open, and showing
+ * the full address there would leak it. The invited person still recognises
+ * their own.
+ *
+ * @example
+ * ```ts
+ * maskEmail("family@example.com"); // "fa****@example.com"
+ * ```
+ */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+
+  if (!domain) {
+    return email;
+  }
+
+  const visible = local.slice(0, Math.min(2, local.length));
+
+  return `${visible}${"*".repeat(Math.max(local.length - visible.length, 1))}@${domain}`;
+}
+
+export function safeRedirectPath(path: string | undefined | null, fallback = "/") {
+  if (!path || !path.startsWith("/")) {
+    return fallback;
+  }
+
+  if (path.startsWith("//") || path.startsWith("/\\")) {
+    return fallback;
+  }
+
+  return path;
+}

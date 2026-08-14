@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "budgets_organizationId_categoryId_period_key" ON "budgets" ("organizationId","categoryId","period");

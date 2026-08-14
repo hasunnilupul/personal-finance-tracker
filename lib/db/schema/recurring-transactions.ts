@@ -1,0 +1,50 @@
+import { pgTable, timestamp, integer, varchar, numeric, boolean, index } from "drizzle-orm/pg-core";
+
+import { auditColumns } from "@/lib/db/schema/columns";
+import { categories } from "@/lib/db/schema/categories";
+import { DEFAULT_CURRENCY } from "@/constants/currencies";
+
+/**
+ * A transaction template that repeats on a schedule, e.g. rent or a salary.
+ *
+ * `nextDate` is the next occurrence still to be materialised into a real
+ * expense or income row.
+ */
+export const recurringTransactions = pgTable(
+  "recurringTransactions",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    categoryId: integer("categoryId").references(() => categories.id, { onDelete: "set null" }),
+    type: varchar("type", { length: 10 }).notNull(), // 'expense' or 'income'
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    /**
+     * The currency the template is denominated in.
+     *
+     * Unlike a real entry this carries no `baseAmount`: a template is not a
+     * transaction, and converting it once would freeze a rate that should be
+     * applied afresh each time an occurrence is created.
+     */
+    currency: varchar("currency", { length: 3 }).notNull().default(DEFAULT_CURRENCY),
+    description: varchar("description", { length: 255 }),
+    frequency: varchar("frequency", { length: 20 }).notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
+    /**
+     * The first occurrence, and the anchor every later one is measured from.
+     *
+     * Stepping from `nextDate` would drift: rent due on the 31st becomes the
+     * 28th in February, and stepping on from there gives the 28th of March for
+     * ever after. Occurrences are computed as `startDate` plus N periods
+     * instead, so a clamped month is a one-off rather than a permanent shift.
+     */
+    startDate: timestamp("startDate").notNull(),
+    nextDate: timestamp("nextDate").notNull(),
+    /** Optional stop. Null means it runs until it is paused or deleted. */
+    endDate: timestamp("endDate"),
+    isActive: boolean("isActive").notNull().default(true),
+    ...auditColumns(),
+  },
+  (table) => [
+    index("recurringTransactions_organizationId_idx").on(table.organizationId),
+    // Drives the "what is due?" sweep.
+    index("recurringTransactions_nextDate_idx").on(table.nextDate),
+  ],
+);
