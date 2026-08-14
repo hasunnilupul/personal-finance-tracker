@@ -10,20 +10,20 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Made the two multi-table writes atomic — one `db.batch`
-each, instead of parallel un-transacted statements. Pushed to
-`fix/atomic-multi-statement-writes`, PR #21 open into `dev`, awaiting the repo
-owner's merge.
+**Last completed:** Closed the `DATABASE_URL` split. Both variables now address
+one Neon endpoint, the schema is applied there from the nine committed
+migrations, and `drizzle.config.ts` refuses to migrate if they ever disagree
+again. The batched-write verification left outstanding by PR #21 now passes in
+full — 15 of 15 against the real database.
 
-**Next up:** Nothing on the roadmap. The largest remaining follow-up is now the
-**split `DATABASE_URL` / `DATABASE_URL_UNPOOLED`** at the bottom of the list —
-the app's runtime connection string is currently rejecting its password, and
-the migration URL points at a different database.
+**Next up:** Nothing on the roadmap, and nothing urgent in the follow-ups. The
+database is fresh and empty, so the first thing worth doing is signing up to
+recreate an account and giving the app a pass against real rows.
 
-| Branch | State                                                                      |
-| ------ | -------------------------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 7.                            |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19 and #20. |
+| Branch | State                                                                           |
+| ------ | ------------------------------------------------------------------------------- |
+| `main` | Production. Behind `dev` by Features 0 up to 7.                                 |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19, #20 and #21. |
 
 ---
 
@@ -450,12 +450,20 @@ options argument.
 | ----------------------- | ---------------- | ---------------------------------------------- |
 | `BETTER_AUTH_SECRET`    | Auth             | `openssl rand -base64 32`                      |
 | `BETTER_AUTH_URL`       | Auth             | App base URL                                   |
-| `DATABASE_URL`          | Runtime          | Pooled Neon connection                         |
+| `DATABASE_URL`          | Runtime          | Pooled Neon connection. Same endpoint as below |
 | `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection for drizzle-kit              |
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
 | `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
 | `CRON_SECRET`           | Both cron routes | **Not set.** Both refuse to run without it     |
+
+**On the two database URLs:** they are the pooled and direct connections of one
+Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
+Gotchas. The current endpoint is `ep-lingering-grass-avsghlb7`, and it is a
+**fresh database**: the schema was applied from the nine committed migrations on
+2026-08-14, and it holds no data. The first account to sign up is allowed
+through by the bootstrap, so a new personal space is created on sign-up as
+normal. `pnpm db:seed` is there if demo data is wanted instead.
 
 **On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
 by design. Rates are fetched on demand when a conversion misses the cache, and
@@ -483,6 +491,15 @@ Things already hit, so they are not hit twice.
 - **`createOrganization` activates the new space** immediately.
 - **The `neon_auth` schema in the database is not ours.** It is an unused Neon
   Auth integration sitting alongside `public`. Consider disabling it in Neon.
+- **`DATABASE_URL` and `DATABASE_URL_UNPOOLED` must be one database.** They are
+  two variables describing the same Neon endpoint — pooled for the app, direct
+  for drizzle-kit — and nothing keeps them in step. When they drifted onto
+  different databases the failure was silent in the worst way: `db:migrate`
+  reported success while applying to a database the app never opens, so the
+  schema looked current and was not. `drizzle.config.ts` now compares the two
+  hostnames (Neon's pooled host is the direct host with `-pooler` inserted) and
+  throws before connecting. A migration is not something to run past a warning,
+  so it refuses rather than warns.
 - **shadcn's CLI prompts to overwrite existing components** even with `--yes`.
   Add components one at a time and check `git status` afterwards.
 - **`next dev` survives killing the pnpm wrapper.** If a port is stuck, kill the
@@ -603,32 +620,27 @@ Not blocking, but worth doing.
       column or a recovery path to maintain.
 
       The per-row updates became **one statement per table** on the way, joining
-          against an inline `VALUES` list. Each entry converts at its own date and
-          so needs its own figures; a space with years of history would otherwise
-          have been thousands of statements in one request. The remaining ceiling is
-          Postgres' 65535 parameters per statement — three per entry, so roughly
-          20k entries, far past anything a household ledger will reach and much
-          further than the old code got.
+              against an inline `VALUES` list. Each entry converts at its own date and
+              so needs its own figures; a space with years of history would otherwise
+              have been thousands of statements in one request. The remaining ceiling is
+              Postgres' 65535 parameters per statement — three per entry, so roughly
+              20k entries, far past anything a household ledger will reach and much
+              further than the old code got.
 
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.
-- [ ] **Finish the database verification of the batched writes.** What was
-      confirmed against the real database before access broke: each entry gets
-      its own figures from the `VALUES` join, original `amount`s are untouched,
-      a wrong-space id changes nothing, and — the guarantee itself — a batch
-      whose last statement violates a constraint rolls back the two successful
-      statements before it, leaving `baseCurrency` and the amounts as they were.
-      What is **not** yet confirmed against the database is the reassign-plus-
-      delete batch, because the run that reached it is what exposed the budgets
-      bug, and the re-run could not connect. It is covered by unit tests; it has
-      not been seen working on real rows.
-- [ ] **`DATABASE_URL` and `DATABASE_URL_UNPOOLED` point at different
-      databases.** Found while verifying the batched writes. `DATABASE_URL`
-      (`ep-empty-pond-…-pooler`) is the real one with the schema, and it started
-      rejecting `neondb_owner`'s password part-way through the session —
-      it worked, then did not, with nothing changed locally. `DATABASE_URL_UNPOOLED`
-      (`ep-still-flower-…`) authenticates fine but has no `organization` table,
-      so it is a different branch or project. Two separate problems, both worth
-      fixing before the next database-backed change: - the app's runtime connection string is currently dead, so check what
-      Vercel holds for it as well as `.env`; - `db:generate` / `db:migrate` use the unpooled URL, so a migration run
-      today would apply to the **wrong database**.
+- [x] ~~Finish the database verification of the batched writes.~~ Done — all 15
+      checks pass against the real database, including the reassign-plus-delete
+      batch that was outstanding. Confirmed on real rows: each entry gets its own
+      figures from the `VALUES` join, original `amount`s are untouched, a
+      wrong-space id changes nothing, entries and recurring templates land on the
+      replacement category while the deleted category's budget cascades and the
+      replacement keeps its own, and — the guarantee itself — a batch whose last
+      statement violates a constraint rolls back the successful statements before
+      it, leaving `baseCurrency` and the amounts as they were.
+- [x] ~~`DATABASE_URL` and `DATABASE_URL_UNPOOLED` point at different
+      databases.~~ Both now address one Neon endpoint
+      (`ep-lingering-grass-avsghlb7`, pooled and direct), and both authenticate.
+      `drizzle.config.ts` now **refuses to migrate** when the two disagree, so
+      the silent version of this cannot come back — see Gotchas for what made it
+      silent.
