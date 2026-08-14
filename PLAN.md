@@ -615,6 +615,14 @@ Things already hit, so they are not hit twice.
   instead — `className={cn(buttonVariants({ variant }), …)}` — which is one
   element, correctly announced, with the whole padded box clickable. `render` is
   still right for a Menu item, whose `role="menuitem"` is what a menu wants.
+- **`pnpm format` does not converge on this file.** Prettier's markdown printer
+  adds four spaces to the continuation lines of a _second_ paragraph inside a
+  `- [x]` item, every run — so two entries under Known follow-ups crept right by
+  four spaces per `pnpm format` until they were indented past twenty columns.
+  Nothing warns; it just looks like someone made a mess. `PLAN.md` is in
+  `.prettierignore` for that reason, alongside the migrations, and its
+  indentation is now hand-maintained. A single-line paragraph survives
+  untouched, if a formatted version is ever wanted back.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -697,12 +705,12 @@ Not blocking, but worth doing.
       column or a recovery path to maintain.
 
       The per-row updates became **one statement per table** on the way, joining
-                          against an inline `VALUES` list. Each entry converts at its own date and
-                          so needs its own figures; a space with years of history would otherwise
-                          have been thousands of statements in one request. The remaining ceiling is
-                          Postgres' 65535 parameters per statement — three per entry, so roughly
-                          20k entries, far past anything a household ledger will reach and much
-                          further than the old code got.
+      against an inline `VALUES` list. Each entry converts at its own date and
+      so needs its own figures; a space with years of history would otherwise
+      have been thousands of statements in one request. The remaining ceiling is
+      Postgres' 65535 parameters per statement — three per entry, so roughly
+      20k entries, far past anything a household ledger will reach and much
+      further than the old code got.
 
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.
@@ -730,13 +738,13 @@ Not blocking, but worth doing.
       variables against _each other_, and in development both are correct.
 
       The production deploy now migrates its own database:
-                  `vercel.json` → `pnpm run build:deploy` → `scripts/migrate-on-deploy.ts`,
-                  then `next build`. Chosen over a release checklist because the whole class
-                  of bug is _forgetting_, and a checklist is another thing to forget. It
-                  applies migrations **only** when `VERCEL_ENV` is `production` — preview
-                  builds share the development database with whoever is working locally, and
-                  a preview build has no business migrating it out from under them. A failed
-                  migration exits non-zero and takes the build with it, so a deployment whose
-                  schema is missing never goes live. The `drizzle.config.ts` check runs
-                  inside that child process, so a mismatched pair in the production
-                  environment fails the build too.
+      `vercel.json` → `pnpm run build:deploy` → `scripts/migrate-on-deploy.ts`,
+      then `next build`. Chosen over a release checklist because the whole class
+      of bug is _forgetting_, and a checklist is another thing to forget. It
+      applies migrations **only** when `VERCEL_ENV` is `production` — preview
+      builds share the development database with whoever is working locally, and
+      a preview build has no business migrating it out from under them. A failed
+      migration exits non-zero and takes the build with it, so a deployment whose
+      schema is missing never goes live. The `drizzle.config.ts` check runs
+      inside that child process, so a mismatched pair in the production
+      environment fails the build too.
