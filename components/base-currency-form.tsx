@@ -31,6 +31,13 @@ const BaseCurrencyForm = ({ currentCurrency }: BaseCurrencyFormProps) => {
   const [state, formAction, pending] = useActionState(updateBaseCurrencyAction, initialState);
   const [selected, setSelected] = useState(currentCurrency);
 
+  // `items` is what makes the trigger show a currency's full label rather than
+  // the bare code it is backed by — see Gotchas.
+  const currencyItems = SUPPORTED_CURRENCIES.map((currency) => ({
+    value: currency.code,
+    label: `${currency.code} — ${currency.name}`,
+  }));
+
   return (
     <Card className="p-6">
       <h2 className="text-foreground text-base font-semibold">Base currency</h2>
@@ -46,15 +53,19 @@ const BaseCurrencyForm = ({ currentCurrency }: BaseCurrencyFormProps) => {
         <div className="flex flex-1 flex-col gap-2">
           <Label htmlFor="currency-trigger">Currency</Label>
 
-          <Select value={selected} onValueChange={(value) => setSelected(String(value))}>
+          <Select
+            items={currencyItems}
+            value={selected}
+            onValueChange={(value) => setSelected(String(value))}
+          >
             <SelectTrigger id="currency-trigger" className="w-full">
               <SelectValue />
             </SelectTrigger>
 
             <SelectContent>
-              {SUPPORTED_CURRENCIES.map((currency) => (
-                <SelectItem key={currency.code} value={currency.code}>
-                  {currency.code} — {currency.name}
+              {currencyItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>

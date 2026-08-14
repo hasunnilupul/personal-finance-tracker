@@ -86,6 +86,13 @@ const CategoryDeleteBody = ({
     },
   ].filter((entry) => entry.value > 0);
 
+  // `items` is what makes the trigger show a category's name rather than the id
+  // it reassigns to — see Gotchas.
+  const alternativeItems = alternatives.map((option) => ({
+    value: String(option.id),
+    label: `${option.icon} ${option.name}`,
+  }));
+
   return (
     <>
       <DialogHeader>
@@ -128,14 +135,14 @@ const CategoryDeleteBody = ({
             <div className="flex flex-col gap-2">
               <Label htmlFor="reassignToId">Move entries to</Label>
 
-              <Select value={reassignToId} onValueChange={setReassignToId}>
+              <Select items={alternativeItems} value={reassignToId} onValueChange={setReassignToId}>
                 <SelectTrigger id="reassignToId">
                   <SelectValue placeholder="Pick a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {alternatives.map((option) => (
-                    <SelectItem key={option.id} value={String(option.id)}>
-                      {option.icon} {option.name}
+                  {alternativeItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

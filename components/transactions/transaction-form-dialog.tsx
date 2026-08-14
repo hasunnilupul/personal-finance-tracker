@@ -88,6 +88,21 @@ const TransactionForm = ({
   const noun = kind === "expense" ? "expense" : "income";
   const fieldError = (name: string) => state.fieldErrors?.[name];
 
+  // `items` is what makes each trigger show a label rather than the raw value
+  // the form posts — see Gotchas. The currency picker's label happens to be its
+  // own code; it is listed anyway so every Select here follows one rule.
+  const currencyItems = SUPPORTED_CURRENCIES.map((option) => ({
+    value: option.code,
+    label: option.code,
+  }));
+  const categoryItems = [
+    { value: "none", label: "Uncategorised" },
+    ...categories.map((category) => ({
+      value: String(category.id),
+      label: `${category.icon} ${category.name}`,
+    })),
+  ];
+
   return (
     <>
       <DialogHeader>
@@ -123,14 +138,18 @@ const TransactionForm = ({
 
           <div className="flex w-28 flex-col gap-2">
             <Label htmlFor="currency-trigger">Currency</Label>
-            <Select value={currency} onValueChange={(value) => setCurrency(String(value))}>
+            <Select
+              items={currencyItems}
+              value={currency}
+              onValueChange={(value) => setCurrency(String(value))}
+            >
               <SelectTrigger id="currency-trigger" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_CURRENCIES.map((option) => (
-                  <SelectItem key={option.code} value={option.code}>
-                    {option.code}
+                {currencyItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -156,15 +175,18 @@ const TransactionForm = ({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="category-trigger">Category</Label>
-          <Select value={categoryId} onValueChange={(value) => setCategoryId(String(value))}>
+          <Select
+            items={categoryItems}
+            value={categoryId}
+            onValueChange={(value) => setCategoryId(String(value))}
+          >
             <SelectTrigger id="category-trigger" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Uncategorised</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={String(category.id)}>
-                  {category.icon} {category.name}
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>

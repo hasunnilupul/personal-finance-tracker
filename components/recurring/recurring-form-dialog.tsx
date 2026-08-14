@@ -96,6 +96,29 @@ const RecurringForm = ({
 
   const fieldError = (name: string) => state.fieldErrors?.[name];
 
+  // `items` is what makes each trigger show a label rather than the raw value
+  // the form posts — see Gotchas. The currency picker's label happens to be its
+  // own code; it is listed anyway so every Select here follows one rule.
+  const currencyItems = SUPPORTED_CURRENCIES.map((option) => ({
+    value: option.code,
+    label: option.code,
+  }));
+  const typeItems = [
+    { value: "expense", label: "Expense" },
+    { value: "income", label: "Income" },
+  ];
+  const frequencyItems = FREQUENCIES.map((option) => ({
+    value: option,
+    label: FREQUENCY_LABEL[option],
+  }));
+  const categoryItems = [
+    { value: NONE, label: "No category" },
+    ...categories.map((category) => ({
+      value: String(category.id),
+      label: `${category.icon} ${category.name}`,
+    })),
+  ];
+
   return (
     <>
       <DialogHeader>
@@ -120,6 +143,7 @@ const RecurringForm = ({
           <div className="flex flex-1 flex-col gap-2">
             <Label htmlFor="recurring-type">Kind</Label>
             <Select
+              items={typeItems}
               value={type}
               onValueChange={(value) => setType(String(value) as TransactionKind)}
             >
@@ -127,8 +151,11 @@ const RecurringForm = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
+                {typeItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -136,6 +163,7 @@ const RecurringForm = ({
           <div className="flex flex-1 flex-col gap-2">
             <Label htmlFor="recurring-frequency">Repeats</Label>
             <Select
+              items={frequencyItems}
               value={frequency}
               onValueChange={(value) => setFrequency(String(value) as Frequency)}
             >
@@ -143,9 +171,9 @@ const RecurringForm = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {FREQUENCIES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {FREQUENCY_LABEL[option]}
+                {frequencyItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -169,14 +197,18 @@ const RecurringForm = ({
 
           <div className="flex w-28 flex-col gap-2">
             <Label htmlFor="recurring-currency">Currency</Label>
-            <Select value={currency} onValueChange={(value) => setCurrency(String(value))}>
+            <Select
+              items={currencyItems}
+              value={currency}
+              onValueChange={(value) => setCurrency(String(value))}
+            >
               <SelectTrigger id="recurring-currency" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_CURRENCIES.map((option) => (
-                  <SelectItem key={option.code} value={option.code}>
-                    {option.code}
+                {currencyItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -189,6 +221,7 @@ const RecurringForm = ({
         <div className="flex flex-col gap-2">
           <Label htmlFor="recurring-category">Category</Label>
           <Select
+            items={categoryItems}
             value={effectiveCategoryId}
             onValueChange={(value) => setCategoryId(String(value))}
           >
@@ -196,10 +229,9 @@ const RecurringForm = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>No category</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={String(category.id)}>
-                  {category.icon} {category.name}
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
