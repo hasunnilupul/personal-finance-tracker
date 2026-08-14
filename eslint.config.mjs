@@ -41,6 +41,17 @@ const eslintConfig = defineConfig([
   },
 
   {
+    // Build-time output, read by a human scrolling a Vercel build log. The app
+    // logger's structured JSON is aimed at a log aggregator and would be worse
+    // there, and this runs before the app is built — it should not import from
+    // it either.
+    files: ["scripts/migrate-on-deploy.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+
+  {
     files: ["next.config.js", "postcss.config.js"],
     languageOptions: {
       parserOptions: {

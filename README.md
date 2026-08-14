@@ -136,4 +136,28 @@ security boundary.
 ## Deployment
 
 Pushes to `main` deploy to production on Vercel; every other branch gets a
-preview deployment. Migrations are applied manually with `pnpm db:migrate`.
+preview deployment.
+
+There are **two databases**. Production has its own; `main` is the only branch
+that reaches it. Every other branch shares one development database with local
+development.
+
+Migrations follow from that. Against the development database you apply them
+yourself with `pnpm db:migrate`, before the change is committed. Against
+production nobody does — the production deploy does it, in its build:
+
+```
+pnpm run build:deploy   # scripts/migrate-on-deploy.ts, then next build
+```
+
+`vercel.json` points Vercel's build command at that script. It applies pending
+migrations **only** when `VERCEL_ENV` is `production`, so a preview build never
+migrates the database other branches are working against, and a failed
+migration fails the build rather than promoting a deployment whose schema is
+missing.
+
+Production therefore needs **both** `DATABASE_URL` and `DATABASE_URL_UNPOOLED`
+in Vercel's Production environment, even though the running app only reads the
+pooled one — drizzle-kit migrates over the direct connection. They must be the
+two connections of the same endpoint; the check in `drizzle.config.ts` runs
+inside the build and fails it if they are not.
