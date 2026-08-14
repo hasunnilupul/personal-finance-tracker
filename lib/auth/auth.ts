@@ -11,6 +11,7 @@ import { buildInvitationUrl } from "@/lib/auth/urls";
 import { spaceService } from "@/lib/services/space.service";
 import { categoryService } from "@/lib/services/category.service";
 import { sendInvitationEmail } from "@/lib/email/invitation-email";
+import { userRepository } from "@/lib/repositories/user.repository";
 import { DEFAULT_CURRENCY } from "@/constants/currencies";
 import { logger } from "@/lib/logger";
 
@@ -103,13 +104,28 @@ export const auth = betterAuth({
         },
       },
       /**
-       * Emails the invitation when Resend is configured.
+       * Emails the invitation when Resend is configured — unless the address
+       * already has an account.
+       *
+       * Somebody with an account will see an in-app notice the next time they
+       * open the app, which arrives whatever `RESEND_FROM` is set to. So the
+       * inviter is offered the choice instead of having the email sent out
+       * from under them, and `inviteMemberAction` reports which case it was.
+       * Emailing anyway would make the choice a lie.
        *
        * The link is the real mechanism — the members page always shows it for
        * copying — so a missing or failed email is logged and ignored rather
        * than failing the invitation.
        */
       sendInvitationEmail: async ({ id, email, organization: space, inviter }) => {
+        if (await userRepository.findByEmail(email)) {
+          logger.info("Invitation email deferred: the address already has an account", {
+            invitationId: id,
+          });
+
+          return;
+        }
+
         await sendInvitationEmail({
           to: email,
           spaceName: space.name,

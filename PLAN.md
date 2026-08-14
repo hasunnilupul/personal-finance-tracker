@@ -47,9 +47,6 @@ The three deployment blockers recorded below were **fixed on 2026-08-14**,
 outside the repo. Their notes are kept for the traps they explain, not as
 outstanding work.
 
-**In progress:** `feat/notifications` — Feature 9a. Budget overspend and
-recurring entries, recorded in-app, with the bell in the topbar. Web push (9b)
-and offline (10) follow.
 **Released 2026-08-14 (second)** — `d73622e` (PR #30), carrying #29: the
 service worker Chrome needs before it will offer to install, and the hint iOS
 needs because Safari never offers at all. Verified on the live site (`/sw.js`
@@ -57,16 +54,18 @@ answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
 is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
-**In progress:** `feat/speed-insights` — `@vercel/speed-insights` in the root
-layout, for real-user Core Web Vitals.
+**Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
+enabling in the Vercel dashboard before it collects anything) and #32
+(Feature 9a — notifications). Neither is in `main` yet.
 
-**Next:** notifications, then offline. Decided: budget overspend and recurring
-entries, recorded **in-app first with push as a delivery layer on top** — the
-same shape as invitations, where the copyable link is the mechanism and email
-sits above it. A denied permission or an undelivered push must not mean the
-overspend was never recorded anywhere. Offline will cache the shell **and what
-was last viewed**, which means account data on the device and therefore a cache
-clear on sign-out.
+**In progress:** `feat/invite-notifications` — Feature 9c. An invited address
+that already has an account is offered a channel; one that does not is emailed
+as before. The link shows either way.
+
+**Still to come:** web push (9b) as a delivery layer over the stored
+notifications, then offline (10), which will cache the shell **and what was
+last viewed** — account data on the device, and therefore a cache clear on
+sign-out as part of the feature rather than after it.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -516,6 +515,39 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
+### Feature 9c — Invitations through the app ✅ done, PR open
+
+- [x] An invited address that already has an account offers a channel choice
+- [x] An address with no account is emailed automatically, as before
+- [x] The copyable link is shown in every case
+- [x] Account-level notifications, which follow the reader between spaces
+
+**An invitation notice cannot be space-scoped.** The recipient is not a member
+of the inviting space — that is the whole point of the invitation — so a row
+keyed to it would be visible to nobody. `notifications.organizationId` is now
+nullable, meaning "about you rather than about a space", and the bell shows
+those wherever the reader happens to be.
+
+**Which forced `NULLS NOT DISTINCT` on the unique constraint.** Postgres treats
+nulls as distinct in a unique index by default, so without it every
+account-level row would be unique to itself and the dedupe key would silently
+stop meaning anything for exactly the rows most likely to repeat — an
+invitation sent twice. The old `uniqueIndex` cannot express that; a `unique`
+table constraint can.
+
+**Nothing is emailed to an existing account until the inviter chooses.** The
+`sendInvitationEmail` hook now looks the address up and holds off when it finds
+one, because otherwise the choice on screen would be a lie — the mail would
+already be gone. Somebody with an account is better served by the in-app notice
+anyway: it arrives whatever `RESEND_FROM` is set to, which is not true of the
+email.
+
+**The disclosure is deliberate.** The form tells the inviter whether an address
+already has an account, which is account enumeration. Accepted knowingly: only
+a space owner can invite, sign-up is invite-only, and the alternative — always
+offering both channels and letting the in-app one quietly do nothing — is a
+less honest screen. Revisit if sign-up is ever opened up.
+
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
@@ -812,6 +844,14 @@ Things already hit, so they are not hit twice.
   the worker it has, and that worker is what would have told it to update.
   `next.config.ts` sets `no-store` and an explicit content type on that one
   path.
+- **A unique index treats nulls as distinct, so it stops guarding.** Postgres
+  considers two nulls unequal, which means a unique index over a nullable
+  column silently permits duplicates for exactly the rows that have none. It
+  bit here when `notifications.organizationId` became nullable for
+  account-level notices: the dedupe key would have kept working for every
+  space-scoped row and quietly stopped working for invitations. `unique(...)
+  .nullsNotDistinct()` fixes it — and note `uniqueIndex()` has no such option,
+  so the constraint has to be a table constraint rather than an index.
 - **Chrome checks a manifest icon's real pixels against its `sizes`.** An entry
   claiming `192x192` whose file is 276×284 is discarded, and with no valid 192
   and 512 the install prompt never appears at all — the app simply is not

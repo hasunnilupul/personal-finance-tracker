@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { BellIcon, PiggyBankIcon, RepeatIcon } from "lucide-react";
+import { BellIcon, PiggyBankIcon, RepeatIcon, UsersIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ interface NotificationBellProps {
 const ICONS: Record<NotificationType, typeof BellIcon> = {
   budget_overspend: PiggyBankIcon,
   recurring_created: RepeatIcon,
+  space_invitation: UsersIcon,
 };
 
 /**

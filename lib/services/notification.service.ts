@@ -59,6 +59,37 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Raises one notification for a single person, about their account rather
+   * than about a space.
+   *
+   * For things that follow the reader between spaces — an invitation, which by
+   * definition comes from a space they are not in yet. Same "never throws"
+   * contract as {@link notifySpace}: the invitation is already created, and
+   * failing to mention it must not undo it.
+   */
+  async notifyUser(userId: string, input: NotificationInput): Promise<Notification | undefined> {
+    try {
+      return await notificationRepository.createIfAbsent({
+        organizationId: null,
+        userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        href: input.href ?? null,
+        dedupeKey: input.dedupeKey,
+      });
+    } catch (error) {
+      logger.error("Failed to raise an account notification", error, {
+        userId,
+        type: input.type,
+        dedupeKey: input.dedupeKey,
+      });
+
+      return undefined;
+    }
+  }
+
   async list(ctx: SpaceContext, limit = NOTIFICATION_PAGE_SIZE): Promise<Notification[]> {
     return notificationRepository.listForUser(ctx.organizationId, ctx.userId, limit);
   }

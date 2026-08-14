@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, CopyIcon, MailIcon } from "lucide-react";
+import { BellIcon, CheckIcon, CopyIcon, MailIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import {
   inviteMemberAction,
   InviteState,
   leaveSpaceAction,
+  notifyInvitationAction,
   removeMemberAction,
+  sendInvitationEmailAction,
 } from "@/app/actions/member.actions";
 import { Invitation, SpaceMember } from "@/lib/db/models/organization.model";
 
@@ -41,6 +43,76 @@ async function copyToClipboard(value: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The channel picker, shown only when the address already has an account.
+ *
+ * Somebody with an account is better reached in the app than by email, which
+ * may not be configured and may not arrive — so nothing is sent until the
+ * inviter chooses. Somebody without one has nowhere to be notified, so their
+ * email goes automatically and this never appears.
+ *
+ * The link below it stays either way: it is the one channel that always works.
+ */
+const InviteChannels = ({
+  invitationId,
+  accountName,
+  emailConfigured,
+}: {
+  invitationId: string;
+  accountName: string;
+  emailConfigured: boolean;
+}) => {
+  const [isPending, startTransition] = useTransition();
+  const [sent, setSent] = useState<string | null>(null);
+
+  const choose = (channel: "email" | "app") => {
+    startTransition(async () => {
+      const result =
+        channel === "email"
+          ? await sendInvitationEmailAction(invitationId)
+          : await notifyInvitationAction(invitationId);
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setSent(result.success ?? "Sent");
+      toast.success(result.success ?? "Sent");
+    });
+  };
+
+  return (
+    <div className="border-border bg-muted/40 mt-4 rounded-xl border p-4">
+      <p className="text-foreground text-sm font-medium">{accountName} already has an account</p>
+
+      <p className="text-muted-foreground mt-1 text-xs">
+        {sent ?? "Nothing has been sent yet — tell them however suits you best."}
+      </p>
+
+      {!sent && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => choose("app")} disabled={isPending}>
+            <BellIcon />
+            Notify in the app
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => choose("email")}
+            disabled={isPending || !emailConfigured}
+            title={emailConfigured ? undefined : "Email is not configured"}
+          >
+            <MailIcon />
+            Send an email
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const InviteLink = ({ url, emailSent }: { url: string; emailSent?: boolean }) => {
   const [copied, setCopied] = useState(false);
@@ -168,6 +240,14 @@ const MembersManager = ({
             <p className="text-destructive mt-3 text-sm" role="alert">
               {inviteState.error}
             </p>
+          )}
+
+          {inviteState.invitationId && inviteState.existingAccountName && (
+            <InviteChannels
+              invitationId={inviteState.invitationId}
+              accountName={inviteState.existingAccountName}
+              emailConfigured={emailConfigured}
+            />
           )}
 
           {inviteState.inviteUrl && (
