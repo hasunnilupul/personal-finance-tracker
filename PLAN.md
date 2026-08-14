@@ -10,21 +10,29 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** Closed the `DATABASE_URL` split. Both variables now address
-one Neon endpoint, the schema is applied there from the nine committed
-migrations, and `drizzle.config.ts` refuses to migrate if they ever disagree
-again. The batched-write verification left outstanding by PR #21 now passes in
-full — 15 of 15 against the real database. Pushed to `fix/database-url-split`,
-PR #22 open into `dev`, awaiting the repo owner's merge.
+**Last completed:** Made the production deploy apply its own migrations.
+Development and production are now separate Neon instances, which meant nothing
+in the path to production opened the production database — `db:migrate` runs
+from a developer's `.env`, and that is development. `vercel.json` now builds
+through `pnpm run build:deploy`, which migrates before `next build` and only
+when `VERCEL_ENV` is `production`. Pushed to `fix/migrate-on-deploy`.
 
-**Next up:** Nothing on the roadmap, and nothing urgent in the follow-ups. The
-database is fresh and empty, so the first thing worth doing is signing up to
-recreate an account and giving the app a pass against real rows.
+**Next up:** `main` has still never been deployed — it is behind `dev` by every
+feature. Merging `dev` into it is both the first production release and the
+first exercise of the deploy-time migration, so watch that build's log: it
+should apply all nine migrations to an empty production database. Before
+sharing the URL, sign up first — the bootstrap makes the first account owner,
+and the production database has no accounts in it.
 
-| Branch | State                                                                           |
-| ------ | ------------------------------------------------------------------------------- |
-| `main` | Production. Behind `dev` by Features 0 up to 7.                                 |
-| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19, #20 and #21. |
+Two Vercel settings still block other people using it, neither of them code:
+`BETTER_AUTH_URL` must be the public production URL, and `RESEND_FROM` is
+`onboarding@resend.dev`, which only delivers to the Resend account's own
+address.
+
+| Branch | State                                                                                |
+| ------ | ------------------------------------------------------------------------------------ |
+| `main` | Production. Behind `dev` by Features 0 up to 7. Never deployed.                      |
+| `dev`  | Integration branch. Has Features 0, 1a, 1b, 2, 3, 4, 5, 6, 7, #19, #20, #21 and #22. |
 
 ---
 
@@ -460,11 +468,27 @@ options argument.
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
-Gotchas. The current endpoint is `ep-lingering-grass-avsghlb7`, and it is a
-**fresh database**: the schema was applied from the nine committed migrations on
-2026-08-14, and it holds no data. The first account to sign up is allowed
-through by the bootstrap, so a new personal space is created on sign-up as
-normal. `pnpm db:seed` is there if demo data is wanted instead.
+Gotchas.
+
+**There are two databases**, each with its own endpoint and so its own pair of
+URLs. Production has one, reached only by `main`; every other branch shares the
+other with local development. `ep-lingering-grass-avsghlb7` is the endpoint that
+was verified on 2026-08-14 — _which of the two roles it now holds is not
+recorded here, and the other endpoint's id is not recorded at all._ Fill both in
+when next in the Neon dashboard.
+
+Both were **fresh databases** as of 2026-08-14, holding no data. The first
+account to sign up on either is allowed through by the bootstrap, so a personal
+space is created on sign-up as normal — and the two databases have separate
+accounts, so signing up in development does not create the production owner.
+`pnpm db:seed` is there if demo data is wanted instead.
+
+**Production migrates itself on deploy.** Nobody applies migrations to the
+production database by hand, so `vercel.json` points Vercel's build command at
+`pnpm run build:deploy`, which runs `scripts/migrate-on-deploy.ts` before
+`next build`. It acts only when `VERCEL_ENV` is `production`; the development
+database stays the developer's to migrate. See the follow-up at the end for why
+a release checklist was not enough.
 
 **On `CRON_SECRET`:** neither cron route runs without it, and that is survivable
 by design. Rates are fetched on demand when a conversion misses the cache, and
@@ -645,3 +669,22 @@ Not blocking, but worth doing.
       `drizzle.config.ts` now **refuses to migrate** when the two disagree, so
       the silent version of this cannot come back — see Gotchas for what made it
       silent.
+- [x] ~~Nothing applies migrations to the production database.~~ Splitting
+      development and production onto separate Neon instances reopened the
+      earlier failure from a new angle: `db:migrate` runs from a developer's
+      `.env`, which now addresses development, so merging to `main` shipped code
+      whose schema had never been applied to the database it would run against.
+      The guard added for the split URLs could not catch it — it compares the two
+      variables against _each other_, and in development both are correct.
+
+      The production deploy now migrates its own database:
+      `vercel.json` → `pnpm run build:deploy` → `scripts/migrate-on-deploy.ts`,
+      then `next build`. Chosen over a release checklist because the whole class
+      of bug is _forgetting_, and a checklist is another thing to forget. It
+      applies migrations **only** when `VERCEL_ENV` is `production` — preview
+      builds share the development database with whoever is working locally, and
+      a preview build has no business migrating it out from under them. A failed
+      migration exits non-zero and takes the build with it, so a deployment whose
+      schema is missing never goes live. The `drizzle.config.ts` check runs
+      inside that child process, so a mismatched pair in the production
+      environment fails the build too.

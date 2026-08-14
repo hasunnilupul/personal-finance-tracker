@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:deploy": "tsx ./scripts/migrate-on-deploy.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
