@@ -70,6 +70,21 @@ const TransactionFilters = ({
 
   const hasFilters = Boolean(current.from || current.to || current.categoryId || current.createdBy);
 
+  // `items` is what makes the trigger show a label rather than the raw id it is
+  // filtering on — see Gotchas.
+  const categoryItems = [
+    { value: ANY, label: "All categories" },
+    ...categories.map((category) => ({
+      value: String(category.id),
+      label: `${category.icon} ${category.name}`,
+    })),
+  ];
+
+  const authorItems = [
+    { value: ANY, label: "Everyone" },
+    ...authors.map((author) => ({ value: author.id, label: author.name })),
+  ];
+
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1.5">
@@ -103,6 +118,7 @@ const TransactionFilters = ({
           Category
         </Label>
         <Select
+          items={categoryItems}
           value={current.categoryId ?? ANY}
           onValueChange={(value) => apply("categoryId", String(value))}
         >
@@ -110,10 +126,9 @@ const TransactionFilters = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ANY}>All categories</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={String(category.id)}>
-                {category.icon} {category.name}
+            {categoryItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -126,6 +141,7 @@ const TransactionFilters = ({
             Added by
           </Label>
           <Select
+            items={authorItems}
             value={current.createdBy ?? ANY}
             onValueChange={(value) => apply("createdBy", String(value))}
           >
@@ -133,10 +149,9 @@ const TransactionFilters = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ANY}>Everyone</SelectItem>
-              {authors.map((author) => (
-                <SelectItem key={author.id} value={author.id}>
-                  {author.name}
+              {authorItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>

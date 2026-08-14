@@ -72,6 +72,13 @@ const GoalForm = ({ goal, baseCurrency, onDone }: GoalFormProps) => {
 
   const fieldError = (name: string) => state.fieldErrors?.[name];
 
+  // `items` is what makes the trigger show a label rather than the raw value the
+  // form posts — see Gotchas.
+  const priorityItems = (Object.keys(PRIORITY_LABEL) as GoalPriority[]).map((option) => ({
+    value: option,
+    label: PRIORITY_LABEL[option],
+  }));
+
   return (
     <>
       <DialogHeader>
@@ -115,6 +122,7 @@ const GoalForm = ({ goal, baseCurrency, onDone }: GoalFormProps) => {
           <div className="flex w-32 flex-col gap-2">
             <Label htmlFor="goal-priority">Priority</Label>
             <Select
+              items={priorityItems}
               value={priority}
               onValueChange={(value) => setPriority(String(value) as GoalPriority)}
             >
@@ -122,9 +130,9 @@ const GoalForm = ({ goal, baseCurrency, onDone }: GoalFormProps) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PRIORITY_LABEL) as GoalPriority[]).map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {PRIORITY_LABEL[option]}
+                {priorityItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>

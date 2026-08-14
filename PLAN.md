@@ -10,7 +10,19 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
+**Last completed:** **UI polish** (`fix/ui-polish`) — eight commits of
+presentation fixes found by using the app rather than by planning it. Two were
+whole classes rather than single sightings: no `Select` passed `items`, so every
+trigger printed its raw value (the space switcher showed an organization id),
+and no `Button` rendering a link passed `nativeButton={false}`, which is what
+gates Base UI's link-aware keyboard handling. Also: the sidebar tab that only
+answered a click on its label, a mobile bar carrying ten tabs across a phone,
+the topbar extracted into `components/app-topbar.tsx` and taught to reflow, and
+`PLAN.md` moved into `.prettierignore` because `pnpm format` was indenting it
+four spaces deeper on every run. All four checks pass; none of it was exercised
+in a browser, since signing in needs the owner's own credentials.
+
+**Before that:** **Shipped.** `dev` merged into `main` on 2026-08-14 (merge
 `ae12bc9`, 41 commits), and the production deploy succeeded. That build was also
 the first exercise of the deploy-time migration added in #24: the deployment
 went green, which on a production build means the migrate step ran rather than
@@ -19,20 +31,32 @@ environment, the two connection strings agreed, and the nine migrations applied
 to the empty production database. A missing variable, a mismatched pair or a
 failing migration would each have taken the build down instead.
 
-**Next up:** The app is deployed but **not yet reachable by anyone else.** Three
-things stand between here and a family member signing in, none of them code:
+**In progress:** `feat/pwa-installable` — Feature 8. The app installs to a home
+screen and runs standalone. No service worker and no notifications; both are
+filed under Known follow-ups.
 
-1. **Vercel Deployment Protection is on.** Both `/` and `/sign-up` answer `302`
-   to `vercel.com/sso-api`, so the deployment is gated behind the Vercel
-   account's own login. Nobody else can load the app at all until production is
-   set to public in Settings → Deployment Protection.
-2. **`BETTER_AUTH_URL` must be the project's stable production domain** — not
-   the per-deployment hash URL, which changes on every deploy and would rot
+**Since the last release:** `fix/ui-polish` (#25) and `fix/category-scoping`
+(#26) are both merged into `dev`, which is now two ahead of `main`. The three
+deployment blockers recorded below — Vercel Deployment Protection,
+`BETTER_AUTH_URL` and `RESEND_FROM` — **were fixed on 2026-08-14**, outside the
+repo. The notes are kept for what they explain, not as outstanding work.
+
+**~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
+trap that can come back, not because any is outstanding:
+
+1. ~~**Vercel Deployment Protection is on.**~~ Both `/` and `/sign-up` answered
+   `302` to `vercel.com/sso-api`, so the deployment sat behind the Vercel
+   account's own login and nobody else could load the app at all. It is not an
+   app setting: no amount of correct configuration inside the app works around
+   it. Production had to be set public in Settings → Deployment Protection.
+2. ~~**`BETTER_AUTH_URL` must be the project's stable production domain**~~ —
+   not the per-deployment hash URL, which changes on every deploy and would rot
    every invitation link built from it.
-3. **`RESEND_FROM` is `onboarding@resend.dev`**, which delivers only to the
+3. ~~**`RESEND_FROM` is `onboarding@resend.dev`**~~, which delivers only to the
    Resend account's own address. Invitations still work by copying the link;
-   the email just never arrives and nothing on screen says so. Verify a real
-   domain or clear the variable so the app falls back to copy-the-link honestly.
+   the email just never arrives and nothing on screen says so. A real domain
+   has to be verified, or the variable cleared so the app falls back to
+   copy-the-link honestly.
 
 Then **sign up first, before sharing the URL.** The production database is
 empty and its own bootstrap is unspent, so whoever creates the first account
@@ -119,6 +143,7 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Recurring idempotency    | Unique `(org, recurringId, date)` key     | No interactive transactions, so a retry must be a no-op rather than a duplicate          |
 | Occurrence dates         | Measured from `startDate`, not stepped    | Stepping from the last one makes a month-end clamp permanent — the 31st becomes the 28th |
 | Savings goals            | A target, not an account; no money moves  | Keeps one place for money to live; a contribution marks intent, not a transfer           |
+| Category scoping         | Services assert; the FK is a backstop     | A foreign key enforces existence in _any_ space, so ownership has to be asked separately |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -461,6 +486,37 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
+### Feature 8 — Installable PWA ✅ done, PR open
+
+- [x] `app/manifest.ts` — name, standalone display, categories, icons
+- [x] A real icon set: 192, 512, 512 maskable, 180 apple-touch, two 32px favicons
+- [x] `themeColor` per colour scheme, and the `appleWebApp` metadata iOS needs
+- [x] Fixed four icon references in the root layout that had always 404ed
+
+**Deliberately not included: offline support and push notifications.** Neither
+is needed to be installable — the browser prompt asks for a manifest, icons and
+HTTPS, nothing more. Push is the next slice when there is something worth
+notifying about; offline is a bigger question than it sounds, because every
+dashboard page is dynamic and cookie-gated, so caching pages means writing
+somebody's balances to disk. See the follow-up below.
+
+**The icons are cropped out of `design/icons-sheet.png`.** That file is a
+presentation mockup rather than an export — seven tiles laid out on one
+transparent 1536×1024 canvas — so the assets were extracted by flood-filling
+the alpha channel to find each tile's bounding box, cropping square around it,
+and resizing. The sheet is kept out of `public/` because everything there is
+served: it is 1.5 MB, and nothing should be able to fetch it.
+
+**The supplied maskable tile was a circle**, which is precisely what a maskable
+icon cannot be — Android masks a full square itself, so transparent corners
+punch through to whatever is behind. The one shipped is built from the square
+tile instead: opaque background, art at 88%, which keeps the mark inside the
+safe circle.
+
+**The 512 is upscaled from a 425px tile**, so it is slightly soft. It is the
+largest art the sheet contains. Re-export from the original at 512 and rerun
+the crop if it ever looks wrong on a device.
+
 ---
 
 ## Environment
@@ -591,6 +647,59 @@ Things already hit, so they are not hit twice.
 - **The Select reports "nothing chosen" as `null`, not `""`.** Its
   `onValueChange` is typed `string | null`, so backing it with a `useState<string>`
   fails to typecheck.
+- **`<SelectValue />` renders the raw `value`, not the chosen item's text.**
+  Base UI resolves the trigger's label from the `items` prop on `Select` (the
+  Root), _not_ from the `<SelectItem>` children — with no `items` it falls back
+  to stringifying the value. So a picker backed by an id showed the id: the
+  space switcher printed an organization id where the space's name belonged,
+  and every category, author and preset picker did the same. Every `Select` now
+  passes `items`, and the options are built once and mapped over for both the
+  `items` prop and the `<SelectItem>` list, so the trigger and the list cannot
+  drift apart. A label may be a `ReactNode`, which is how the switcher keeps its
+  wallet/users icon in the trigger.
+- **A `<Link>` nested inside a `<Button>` is only clickable where the text is.**
+  The Button carries the padding, the height and the full width, but the anchor
+  inside it is the only part that navigates — so the sidebar's tabs answered a
+  click on the label and ignored one anywhere in the surrounding gap. It is also
+  invalid HTML: an `<a>` cannot live inside a `<button>`.
+- **A link that looks like a button is `buttonVariants`, not `<Button render>`.**
+  The obvious repair for the nesting above is Base UI's `render` prop, and it is
+  wrong: Base UI's own docs rule it out, because Button _enforces button
+  semantics_. Left as-is it puts `type="button"` on an `<a>`; with
+  `nativeButton={false}` it stamps `role="button"`, so a navigation link is
+  announced as a button and loses every link affordance. Style the anchor
+  instead — `className={cn(buttonVariants({ variant }), …)}` — which is one
+  element, correctly announced, with the whole padded box clickable. `render` is
+  still right for a Menu item, whose `role="menuitem"` is what a menu wants.
+- **`<Button render={<Link/>}>` needs `nativeButton={false}`.** Without it Base
+  UI believes it wrapped a native `<button>`: it logs "expected a native
+  <button> because the `nativeButton` prop is true", and — the part that
+  matters — `useButton` gates its link-aware keyboard handling behind
+  `!isNativeButton`, so the anchor never gets it. The cost is a `role="button"`
+  on the anchor, which is why Base UI's docs suggest styling the `<a>` with
+  `buttonVariants` instead. Both patterns are in the tree: the sidebar and the
+  create-space Cancel are styled anchors, everything else is `Button` +
+  `render` + `nativeButton={false}`.
+- **`nativeButton` must track a _conditional_ `render`.** Several controls pass
+  `render={cond ? <Link/> : undefined}` so a dead-end page arrow is a disabled
+  button rather than a link to nowhere. A static `nativeButton={false}` is then
+  right for one branch and wrong for the other, and the wrong branch logs the
+  mirror-image error about extra attributes. Tie it to the same condition —
+  `nativeButton={!previous}`, `nativeButton={page.page <= 1}` — so it always
+  describes what was actually rendered.
+- **Chrome checks a manifest icon's real pixels against its `sizes`.** An entry
+  claiming `192x192` whose file is 276×284 is discarded, and with no valid 192
+  and 512 the install prompt never appears at all — the app simply is not
+  installable, with nothing on screen to say why. Check exports with their IHDR
+  rather than their filenames.
+- **`pnpm format` does not converge on this file.** Prettier's markdown printer
+  adds four spaces to the continuation lines of a _second_ paragraph inside a
+  `- [x]` item, every run — so two entries under Known follow-ups crept right by
+  four spaces per `pnpm format` until they were indented past twenty columns.
+  Nothing warns; it just looks like someone made a mess. `PLAN.md` is in
+  `.prettierignore` for that reason, alongside the migrations, and its
+  indentation is now hand-maintained. A single-line paragraph survives
+  untouched, if a formatted version is ever wanted back.
 - **better-auth blocks removing the only owner** before it checks role
   permissions, so that path returns a confusing "cannot leave as the only
   owner" message rather than a permission error. It still denies the action.
@@ -644,6 +753,36 @@ Not blocking, but worth doing.
       itself, since that scan predates the merge. `main` now carries the fixes,
       so the next scan should clear them. Worth a glance at the Dependabot tab
       to confirm it did.
+- [x] ~~**A submitted `categoryId` is never scoped to the space.**~~ Fixed.
+      `categoryService.assertUsable` is now the single answer to "may this space
+      file under this id", and `transactionService.create` / `update` call it.
+      Budgets and recurring templates already had the rule as a private method
+      each; both now delegate, so there is one copy rather than the three this
+      would have become. A wrong-space or deleted id is refused with
+      `NOT_FOUND`, an income category on an expense with `VALIDATION_FAILED`,
+      and `toUserMessage` passes both through — so the deleted-category race
+      reads "That category no longer exists." instead of a foreign-key error.
+
+      **A materialised occurrence is exempt.** The recurring machinery passes a
+      category the template already validated, and `deleteCategory` refuses
+      while a template still points at it, so the answer cannot have changed. A
+      catch-up run writes up to sixty entries inside one page render, and a
+      lookup each would be a query per entry for an answer already known. The
+      exemption keys off `options.recurringId`, which only that machinery sets.
+
+      Seven tests cover it, and each was checked against the unfixed code:
+      disabling the create guard fails three, disabling the update guard fails
+      one. Not verified against the database — the refusal happens above it.
+- [ ] **PWA: offline support and push notifications.** Deferred deliberately
+      from Feature 8. Push needs VAPID keys, a subscriptions table and a reason
+      to fire — budget overspend, or a recurring entry falling due — and that
+      last part is a product decision. Offline needs deciding what may be
+      cached: the shell is safe, pages are not, since they are dynamic and
+      cookie-gated and would put balances in the browser cache. Real offline
+      _entry_ means IndexedDB and a sync queue, with the same idempotency care
+      the recurring materialiser already needed. Note the Next guide recommends
+      Serwist and says it requires webpack configuration; this project builds
+      with Turbopack.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
@@ -673,12 +812,12 @@ Not blocking, but worth doing.
       column or a recovery path to maintain.
 
       The per-row updates became **one statement per table** on the way, joining
-              against an inline `VALUES` list. Each entry converts at its own date and
-              so needs its own figures; a space with years of history would otherwise
-              have been thousands of statements in one request. The remaining ceiling is
-              Postgres' 65535 parameters per statement — three per entry, so roughly
-              20k entries, far past anything a household ledger will reach and much
-              further than the old code got.
+      against an inline `VALUES` list. Each entry converts at its own date and
+      so needs its own figures; a space with years of history would otherwise
+      have been thousands of statements in one request. The remaining ceiling is
+      Postgres' 65535 parameters per statement — three per entry, so roughly
+      20k entries, far past anything a household ledger will reach and much
+      further than the old code got.
 
 - [ ] Domain tables use camelCase column names while better-auth tables use
       snake_case. Consistent within each, inconsistent across.

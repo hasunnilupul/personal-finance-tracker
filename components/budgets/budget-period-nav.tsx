@@ -27,11 +27,17 @@ const BudgetPeriodNav = ({ month, label }: BudgetPeriodNavProps) => {
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-1">
+        {/*
+          `nativeButton` has to track what `render` actually produced: an anchor
+          when there is a month to go to, a real <button> when there is not. A
+          static value is wrong for one of the two states — see Gotchas.
+        */}
         <Button
           variant="outline"
           size="icon-sm"
           aria-label="Previous month"
           disabled={!previous}
+          nativeButton={!previous}
           render={previous ? <Link href={`/budgets?month=${previous}`} /> : undefined}
         >
           <ChevronLeftIcon />
@@ -42,6 +48,7 @@ const BudgetPeriodNav = ({ month, label }: BudgetPeriodNavProps) => {
           size="icon-sm"
           aria-label="Next month"
           disabled={!next}
+          nativeButton={!next}
           render={next ? <Link href={`/budgets?month=${next}`} /> : undefined}
         >
           <ChevronRightIcon />
@@ -51,7 +58,7 @@ const BudgetPeriodNav = ({ month, label }: BudgetPeriodNavProps) => {
       </div>
 
       {!isCurrent && (
-        <Button variant="ghost" size="sm" render={<Link href="/budgets" />}>
+        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/budgets" />}>
           Back to this month
         </Button>
       )}
