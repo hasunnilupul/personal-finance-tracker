@@ -11,8 +11,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Last completed:** Made the two multi-table writes atomic — one `db.batch`
-each, instead of parallel un-transacted statements. On
-`fix/atomic-multi-statement-writes`.
+each, instead of parallel un-transacted statements. Pushed to
+`fix/atomic-multi-statement-writes`, PR #21 open into `dev`, awaiting the repo
+owner's merge.
 
 **Next up:** Nothing on the roadmap. The largest remaining follow-up is now the
 **split `DATABASE_URL` / `DATABASE_URL_UNPOOLED`** at the bottom of the list —
