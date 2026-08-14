@@ -24,7 +24,7 @@ const MembersPage = async () => {
           and invite them there.
         </p>
 
-        <Button className="mt-4" render={<Link href="/spaces/new" />}>
+        <Button className="mt-4" nativeButton={false} render={<Link href="/spaces/new" />}>
           Create a shared space
         </Button>
       </Card>
