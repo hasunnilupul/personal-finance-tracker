@@ -10,6 +10,23 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Released 2026-08-17** — `d0aff32` (PR #42), carrying #40 (Feature 11 —
+loading skeletons) and the documentation in #39 and #41. **No migrations and no
+dependency changes**, so the deploy-time migrate step was a no-op again. The
+production deployment for `d0aff32` reports success, and the live site answers:
+`/` 307 to sign-in, `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+all 200.
+
+**Nothing in this release is visible to a signed-out visitor**, which is the
+limit of what those URLs prove. Skeletons only appear on authenticated routes,
+so "the deploy is green and the app still answers" is the whole claim — whether
+a skeleton matches the page that replaces it still needs a signed-in browser.
+
+**Merged with a merge commit, and the history is convergent again.** `d0aff32`
+has two parents, `git diff main dev` is empty, and `dev` is an ancestor of
+`main` — so the next release PR will list only what is new. That is the rule
+below being followed rather than repaired.
+
 **Released 2026-08-14 (third)** — `ac4e6cc` (PR #38), bringing `main` level with
 `dev`. It carries #36 (Feature 9d — invitations notify without asking) and #37
 (Feature 10 — offline reads), and **no migrations and no dependency changes**,
@@ -109,10 +126,12 @@ missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
 **In progress:** nothing.
 
-**`dev` is ahead of `main` by Feature 11 and the two documentation commits
-around it.** A release would carry **no migrations and no dependency changes**,
-which is the lowest-risk shape one can have here. Use a **merge commit** — see
-below for what squashing #38 cost.
+**`main` and `dev` hold the same code**, and `dev` is one commit ahead — this
+record itself, written after the merge. A release record has no feature branch
+to ride along on, so it is committed straight to `dev` rather than through a
+documentation branch of its own: the repo owner asked for those to stop on
+2026-08-17, and everything else belongs in the commits of the feature it
+describes.
 
 **Still to come:** no feature is planned. The one known gap is offline *entry*,
 which Feature 10 deliberately leaves out: writes are not queued, and doing it
@@ -149,8 +168,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `ac4e6cc`. Deployed and green, and an ancestor of `dev` again since `4c0795a`. |
-| `dev`  | Integration branch. Everything through Feature 11 (#40). Ahead of `main`.      |
+| `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record.   |
 
 ---
 
