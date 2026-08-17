@@ -102,7 +102,13 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** nothing.
+**In progress:** **Feature 11 — loading skeletons** (`feat/loading-skeletons`,
+PR open). Every route answers a navigation with a skeleton of its own shape, and
+a filter, month or range change greys only the figures it changes. **Not
+exercised in a browser** — signing in needs the owner's own credentials — so
+what is proven is that all four checks pass and that the routes still answer;
+what a person still has to look at is whether the shapes line up with the
+content that replaces them.
 
 **Still to come:** no feature is planned. The one known gap is offline *entry*,
 which Feature 10 deliberately leaves out: writes are not queued, and doing it
@@ -299,6 +305,14 @@ Everything that writes one anchors it to **midday UTC**, and range filters use
 whole UTC days. Anchoring to local midnight puts an entry made in Colombo on
 the previous UTC day, which silently drops it out of ranges that should
 contain it — this was a real bug, caught by a filter returning the wrong rows.
+
+**Loading states.** Every route has a `loading.tsx` that mirrors _that page's_
+layout, built from the shared kit in `components/skeletons/`. A new route needs
+one — `app/loading-states.test.ts` fails otherwise, and a route under
+`(dashboard)` without one inherits the dashboard's skeleton rather than getting
+none. Anything driven by a search param also needs a `<Suspense>` boundary
+**keyed** on that param, with the control itself left outside the boundary; see
+Gotchas for why `loading.tsx` alone does not cover it.
 
 **Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
 `*.test.ts`.
@@ -764,6 +778,83 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
+### Feature 11 — Loading skeletons ✅ done, PR open
+
+- [x] A `Skeleton` primitive, and a kit of section shapes every fallback is
+      built from
+- [x] A `loading.tsx` for every route, each mirroring that page's own layout
+- [x] Filters, month arrows and the range picker fall back in place, behind
+      `<Suspense>` boundaries keyed on what they change
+- [x] The topbar's three queries moved below their own boundary, so the shell
+      no longer waits on a notification count
+- [x] A test that fails when a route loses its skeleton
+
+**One shape per page, not one spinner for all of them.** The old
+`(dashboard)/loading.tsx` was a centred spinner, and being the only file of its
+kind it answered every route under the group. A skeleton is worth more than a
+spinner only if it is the shape of what is arriving; a generic one that resolves
+into a different layout is a page that appears to change its mind. So each route
+has its own, and the shapes are composed from one kit in
+`components/skeletons/` rather than drawn twice.
+
+**A route's `loading.tsx` renders _inside_ its layout, which is what forced the
+topbar apart.** The layout awaited the space, the space list, the notifications
+and the unread count before returning anything — and an awaiting layout blocks
+its own children's fallback too, so the "instant" loading state could not appear
+until the slowest of those four had answered. Only the space is awaited now,
+because that call is the authorization gate and a `redirect()` cannot be issued
+once streaming has started. The other three moved into `AppTopbarControls`,
+below a `<Suspense>` of their own.
+
+**`loading.tsx` does not fire on a search-param change**, and every filter in
+this app is a search param. The segment never unmounts, so its fallback belongs
+to the first visit; changing a filter leaves the old rows on screen until the
+new ones arrive, which reads as a click that did nothing. The fix is a
+`<Suspense>` boundary **keyed** on the params — the key is what makes React
+treat it as a new boundary and show the fallback again. Three pages needed it:
+transactions (keyed on the whole filter set), budgets (on the month) and reports
+(on the range).
+
+**Which meant splitting each of those pages in two.** The control and the header
+render from the URL and stay; only the part that depends on the answer is inside
+the boundary. That is deliberate beyond the mechanics: blanking the filter bar
+while its own results reload takes away the control the reader would reach for
+next. It also removed a dependency the budgets page did not need —
+`monthWindow(month)` is pure, so the month label beside the arrows no longer
+waits for the overview query that used to supply it.
+
+**A fallback has to reproduce the container, not just the contents.** The
+topbar controls are a flex row; the first version of the fallback was a flex
+*item* where the content was a flex *container*, so the switcher sized
+differently in the two states and the header jumped as it resolved. Both sides
+now render the same wrapper. The same rule is why the skeleton rows carry the
+real `divide-y`, the real `size-8` chip and the meters' `rounded-full`, which is
+set explicitly rather than taken from `--radius`.
+
+**The pulse is behind `motion-safe`.** Reduced motion leaves a static block,
+which still says "not here yet" — the shape carries that, not the animation.
+
+**One `role="status"` per screen.** The blocks are `aria-hidden` and a single
+sr-only line says what is loading; a dozen empty divs announced one at a time is
+noise. The topbar's fallback announces nothing at all, since it is on every
+navigation and would interrupt the page actually being asked for.
+
+**Guarded structurally, not by rendering.** Components are not tested here, and
+a skeleton is a weak candidate for a render test. But this is the rare
+presentation bug that fails _silently_: a fallback is on screen for a few
+hundred milliseconds, so a route that lost its `loading.tsx` looks fine in every
+screenshot and merely feels slower — and under `(dashboard)` it does something
+worse, inheriting the dashboard's own skeleton. `app/loading-states.test.ts`
+walks the routes and fails when one has no fallback and no stated reason for
+having none. Checked against the broken state: moving `goals/loading.tsx` aside
+fails it.
+
+**Not exercised in a browser.** All four checks pass and every route still
+answers — dashboard routes 307 to sign-in, `/accept-invitation/[id]` and
+`/sign-in` answer 200 — but signing in needs the owner's own credentials, so
+nobody has watched a skeleton resolve into its page. The layout and topbar
+change is the part worth a look first, since it is on every screen.
+
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
@@ -1003,6 +1094,26 @@ Things already hit, so they are not hit twice.
   types of a `VALUES` list from its first row, so an uncast literal arrives as
   `text` and fails to compare against an `integer` id or assign to a `numeric`.
   Only the first tuple needs them; see `reconvertEntriesStatement`.
+- **A `loading.tsx` renders inside its own layout, so an awaiting layout blocks
+  it.** The fallback is nested _within_ `layout.tsx`, not around it — which
+  means every `await` at the top of a layout delays the "instant" loading state
+  as well as the page. A layout should await only what has to happen before
+  anything is sent (here: the authorization gate, because `redirect()` stops
+  being an HTTP redirect once streaming starts) and push the rest below a
+  `<Suspense>` of its own. Next's own `loading.js` reference says this in one
+  line and it is easy to read past.
+- **`loading.tsx` does not fire again on a search-param change.** The segment
+  stays mounted, so the fallback belongs to the first visit only and a filter
+  change silently leaves the previous results on screen until the new ones land.
+  A `<Suspense>` boundary with a `key` derived from the params is what shows a
+  fallback for the second and every later navigation. Everything URL-driven in
+  this app — transaction filters, the budget month, the report range — depends
+  on this.
+- **A Suspense fallback has to reproduce the container, not just the content.**
+  A fallback that is a flex _item_ where the resolved content is a flex
+  _container_ lays its children out differently, and the swap shows as a jump.
+  The topbar controls hit exactly this. Where the boundary sits at a layout
+  seam, render the same wrapper element on both sides of it.
 - **`react-hooks/set-state-in-effect` will fail lint** for resetting a
   dialog's fields when the record changes. Remount the form with a `key`
   instead of syncing state in an effect.
@@ -1180,6 +1291,14 @@ Not blocking, but worth doing.
       idempotency care the recurring materialiser needed. Still hand-written
       rather than Serwist, which the Next guide recommends and which requires
       webpack; this project builds with Turbopack.
+- [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
+      every page rendered in one blocking pass — a throw produced the framework's
+      500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
+      dashboard layout, and an error thrown after streaming has begun cannot set
+      a status code: it is handled inside the streamed HTML by the nearest
+      `error.js`, and with none the whole tree is replaced rather than the
+      section that failed. One boundary per page group would keep a failed report
+      from taking the sidebar with it.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
