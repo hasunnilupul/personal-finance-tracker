@@ -123,7 +123,7 @@ export default function AppSidebar() {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="bg-card border-border fixed inset-x-0 bottom-0 border-t md:hidden">
+      <nav className="bg-card border-border fixed inset-x-0 bottom-0 z-10 border-t md:hidden">
         <div className="flex items-stretch">
           {primaryTabs.map((tab) => (
             <Link
