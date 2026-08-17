@@ -10,10 +10,34 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **Feature 9d — invitations notify without asking** (PR #36,
-merged into `dev`). The channel choice is gone; a failed notice alerts.
+**Released 2026-08-14 (third)** — `ac4e6cc` (PR #38), bringing `main` level with
+`dev`. It carries #36 (Feature 9d — invitations notify without asking) and #37
+(Feature 10 — offline reads), and **no migrations and no dependency changes**,
+so the deploy-time migrate step was a no-op again. The deploy went green.
 
-**Before that:** **Feature 9b — web push** (PR #34). Notifications reach the
+Verified against the live site, which is where these first become checkable:
+
+- `/offline` answers **200**. It answered **307** before this release, which is
+  the proof that `publicRoutes` took effect — and therefore that the worker
+  precaches the page rather than a redirect to sign-in.
+- `/sw.js` answers 200 as JavaScript with `no-cache, no-store, must-revalidate`
+  and now carries the caching code, so installed apps are being handed the new
+  worker rather than the one that cached nothing.
+- `/manifest.webmanifest` still answers 200.
+
+**Not yet verified, and each needs a signed-in browser rather than a URL:** that
+push actually delivers, that `financeflow-private-*` really disappears from
+Cache Storage on sign-out, and that an invitation notice reaches the other
+account. The first is the one to check first — this is the first production
+build made with the VAPID keys present, so it is the first that *could* work.
+
+**Last completed:** **Feature 10 — offline reads** (PR #37). The app opens and
+reads without a connection, and the page cache ends with the session.
+
+**Before that:** **Feature 9d — invitations notify without asking** (PR #36).
+The channel choice is gone; a failed notice alerts.
+
+**And before that:** **Feature 9b — web push** (PR #34). Notifications reach the
 phone when the app is closed, which also carries the invitation notice.
 
 **Before that:** **UI polish** (`fix/ui-polish`) — eight commits of
@@ -60,24 +84,34 @@ answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
 is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
-**Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
-enabling in the Vercel dashboard before it collects anything), #32 (Feature 9a
-— notifications), #33 (Feature 9c — invitations through the app) and #34
-(Feature 9b — web push). None of the four is in `main` yet.
+**`main` and `dev` now hold identical content but divergent history.** PR #38
+was **squash-merged**, unlike the four releases before it — `ac4e6cc` has one
+parent where `89ffd52`, `d73622e`, `bb58048` and `ae12bc9` each have two. `git
+diff main dev` is empty, so nothing is wrong with what shipped; but `dev` is no
+longer an ancestor of `main`, so the *next* release PR will list #36 and #37
+again alongside the new work, with a correct diff and a misleading commit list
+that grows with every squashed release. Merge `main` back into `dev` to
+reconverge, and use a **merge commit** for releases.
 
-**The four VAPID variables are now set in Vercel** (2026-08-14). But they were
-added *after* the `89ffd52` release built, and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is
-inlined into the client bundle at build time rather than read at runtime — so
-production push stays inert until something rebuilds. The next release is that
-rebuild. **Verify by pressing the toggle, not by loading the page:** a missing
-server-side key makes the toggle say "not configured", but a missing or
-mismatched *public* key fails only at `pushManager.subscribe`.
+**The four VAPID variables were set in Vercel on 2026-08-14**, after `89ffd52`
+had already built. `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined into the client
+bundle at build time rather than read at runtime, so push stayed inert until
+this release rebuilt. **Verify by pressing the toggle, not by loading the
+page:** a missing server-side key makes the toggle say "not configured", but a
+missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** `feat/offline` — Feature 10.
+**In progress:** nothing.
 
-**Still to come:** nothing planned beyond offline. The known gaps are
-`/api/cron/materialise-recurring`, which `vercel.json` still does not schedule,
-and offline *entry*, which 10 deliberately leaves out.
+**Still to come:** no feature is planned. The one known gap is offline *entry*,
+which Feature 10 deliberately leaves out: writes are not queued, and doing it
+properly means IndexedDB and a replay queue with the same idempotency care the
+recurring materialiser needed.
+
+**Both cron routes are scheduled and both are live.** `vercel.json` lists
+`/api/cron/refresh-rates` at 03:00 and `/api/cron/materialise-recurring` at
+04:00; the second was added in #32 and reached production with it, so recurring
+entries no longer wait for somebody to open the app. Notes elsewhere in this
+file said otherwise until 2026-08-17 — they predated #32 and were stale.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -101,10 +135,10 @@ empty and its own bootstrap is unspent, so whoever creates the first account
 becomes the owner. The development account does not exist there — the two
 databases are separate.
 
-| Branch | State                                                                      |
-| ------ | -------------------------------------------------------------------------- |
-| `main` | Production. Level with `dev` as of `ae12bc9`. Deployed and green.          |
-| `dev`  | Integration branch. Features 0 through 7, plus #19, #20, #21, #22 and #24. |
+| Branch | State                                                                          |
+| ------ | ------------------------------------------------------------------------------ |
+| `main` | Production. Identical in content to `dev` as of `ac4e6cc`, but squash-merged, so not a descendant of it. Deployed and green. |
+| `dev`  | Integration branch. Everything through Feature 10 (#37).                       |
 
 ---
 
@@ -527,7 +561,7 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
-### Feature 9b — Web push ✅ done, PR open
+### Feature 9b — Web push ✅ merged (PR #34), released in ac4e6cc
 
 - [x] `push_subscriptions`, one row per device, keyed on the endpoint
 - [x] `push` and `notificationclick` in the service worker
@@ -615,7 +649,7 @@ a space owner can invite, sign-up is invite-only, and the alternative — saying
 nothing about which channel was used — is a less honest screen. Revisit if
 sign-up is ever opened up.
 
-### Feature 9d — Invitations notify without asking ✅ done, PR open
+### Feature 9d — Invitations notify without asking ✅ merged (PR #36)
 
 - [x] An invited address with an account is notified in the app as the
       invitation is created, with no channel question
@@ -653,7 +687,7 @@ that is not urgent.
 account is never emailed — so on a correctly configured install it told the
 owner "email is not configured". It now takes whether *anything* reached them.
 
-### Feature 10 — Offline reads ✅ done, PR open
+### Feature 10 — Offline reads ✅ merged (PR #37)
 
 - [x] Two caches with different lifetimes: a shell that survives sign-out, and
       pages that do not
@@ -774,7 +808,7 @@ safe circle.
 largest art the sheet contains. Re-export from the original at 512 and rerun
 the crop if it ever looks wrong on a device.
 
-### Feature 9a — Notifications, in-app ✅ done, PR open
+### Feature 9a — Notifications, in-app ✅ merged (PR #32)
 
 - [x] `notifications` table, one row per recipient, keyed against duplicates
 - [x] Budget overspend, raised at write time
@@ -878,12 +912,13 @@ cache, and recurring entries are materialised when someone loads a page. It buys
 freshness in a space nobody has opened, not correctness. **It is now set** —
 earlier notes here saying otherwise were stale.
 
-**But only one of the two routes is scheduled.** `vercel.json` lists
-`/api/cron/refresh-rates` and nothing else, so `/api/cron/materialise-recurring`
-has never been called by anything: it is a guarded endpoint that exists and
-waits. Occurrences therefore still appear only when somebody opens the app,
-which is exactly the gap the notifications work has to close — a "your rent was
-recorded" message is worth nothing if the recording waits for you to look.
+**Both routes are scheduled.** `vercel.json` lists `/api/cron/refresh-rates` at
+03:00 and `/api/cron/materialise-recurring` at 04:00, an hour apart so
+conversions have fresh rates. The second was added in #32 — before that it was
+a guarded endpoint nothing had ever called, and occurrences appeared only when
+somebody opened the app, which made "your rent was recorded" a message that
+waited for you to look. On-read catch-up is still the guarantee; the schedule is
+the accelerator for a space nobody opens.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
