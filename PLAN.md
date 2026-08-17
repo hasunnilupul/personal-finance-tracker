@@ -48,12 +48,16 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 11 — loading skeletons** (PR #40, merged into
-`dev` on 2026-08-17). Every route answers a navigation with a skeleton of its
-own shape, and a filter, month or range change greys only the figures it
-changes. **Nobody has watched one resolve** — see the caveat under the feature.
+**Last completed:** **Feature 12 — new-version notice** (PR #43). A tab that was
+open when a deployment went out says so and offers a reload. The detection is
+**verified against a real production build**; the card itself is unseen.
 
-**Before that:** **Feature 10 — offline reads** (PR #37). The app opens and
+**Before that:** **Feature 11 — loading skeletons** (PR #40, released in
+`d0aff32`). Every route answers a navigation with a skeleton of its own shape,
+and a filter, month or range change greys only the figures it changes. **Nobody
+has watched one resolve** — see the caveat under the feature.
+
+**And before that:** **Feature 10 — offline reads** (PR #37). The app opens and
 reads without a connection, and the page cache ends with the session.
 
 **And before that:** **Feature 9d — invitations notify without asking** (PR
@@ -124,13 +128,10 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** **Feature 12 — new-version notice**
-(`feat/update-notice`). A tab that was open when a deployment went out says so
-and offers a reload. Both halves of the detection are **verified against a real
-production build** — see the feature entry — but the notice itself has not been
-watched appearing in a browser.
+**Feature 12 — new-version notice** (PR #43) is the latest work, and nothing
+else is in progress.
 
-**`main` and `dev` hold the same code**, and `dev` is one commit ahead — this
+**`main` and `dev` hold the same code as of the 2026-08-17 release**, and `dev` is one commit ahead — this
 record itself, written after the merge. A release record has no feature branch
 to ride along on, so it is committed straight to `dev` rather than through a
 documentation branch of its own: the repo owner asked for those to stop on
