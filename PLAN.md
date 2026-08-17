@@ -31,13 +31,18 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 10 — offline reads** (PR #37). The app opens and
+**Last completed:** **Feature 11 — loading skeletons** (PR #40, merged into
+`dev` on 2026-08-17). Every route answers a navigation with a skeleton of its
+own shape, and a filter, month or range change greys only the figures it
+changes. **Nobody has watched one resolve** — see the caveat under the feature.
+
+**Before that:** **Feature 10 — offline reads** (PR #37). The app opens and
 reads without a connection, and the page cache ends with the session.
 
-**Before that:** **Feature 9d — invitations notify without asking** (PR #36).
-The channel choice is gone; a failed notice alerts.
+**And before that:** **Feature 9d — invitations notify without asking** (PR
+#36). The channel choice is gone; a failed notice alerts.
 
-**And before that:** **Feature 9b — web push** (PR #34). Notifications reach the
+**Before that:** **Feature 9b — web push** (PR #34). Notifications reach the
 phone when the app is closed, which also carries the invitation notice.
 
 **Before that:** **UI polish** (`fix/ui-polish`) — eight commits of
@@ -102,13 +107,12 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** **Feature 11 — loading skeletons** (`feat/loading-skeletons`,
-PR open). Every route answers a navigation with a skeleton of its own shape, and
-a filter, month or range change greys only the figures it changes. **Not
-exercised in a browser** — signing in needs the owner's own credentials — so
-what is proven is that all four checks pass and that the routes still answer;
-what a person still has to look at is whether the shapes line up with the
-content that replaces them.
+**In progress:** nothing.
+
+**`dev` is ahead of `main` by Feature 11 and the two documentation commits
+around it.** A release would carry **no migrations and no dependency changes**,
+which is the lowest-risk shape one can have here. Use a **merge commit** — see
+below for what squashing #38 cost.
 
 **Still to come:** no feature is planned. The one known gap is offline *entry*,
 which Feature 10 deliberately leaves out: writes are not queued, and doing it
@@ -146,7 +150,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `ac4e6cc`. Deployed and green, and an ancestor of `dev` again since `4c0795a`. |
-| `dev`  | Integration branch. Everything through Feature 10 (#37), plus the docs in #39. |
+| `dev`  | Integration branch. Everything through Feature 11 (#40). Ahead of `main`.      |
 
 ---
 
@@ -778,7 +782,7 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
-### Feature 11 — Loading skeletons ✅ done, PR open
+### Feature 11 — Loading skeletons ✅ merged (PR #40)
 
 - [x] A `Skeleton` primitive, and a kit of section shapes every fallback is
       built from
