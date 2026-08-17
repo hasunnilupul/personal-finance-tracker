@@ -1,5 +1,8 @@
+import { Suspense } from "react";
+
 import TransactionFilters from "@/components/transactions/transaction-filters";
-import TransactionManager from "@/components/transactions/transaction-manager";
+import TransactionResults from "@/components/transactions/transaction-results";
+import TransactionResultsSkeleton from "@/components/transactions/transaction-results-skeleton";
 import { requireActiveSpace } from "@/lib/auth/dal";
 import { categoryService } from "@/lib/services/category.service";
 import { transactionService } from "@/lib/services/transaction.service";
@@ -46,6 +49,17 @@ function toDateFilter(value: string | undefined): string | undefined {
  *
  * Both routes render this with a different `kind`; everything else — filters,
  * totals, pagination, the add/edit dialog — is identical.
+ *
+ * The filter bar and the results are split across a `<Suspense>` boundary. The
+ * bar depends only on the space, so it renders as soon as the categories and
+ * authors are known and then stays; the list and the total depend on the
+ * filters, so they stream in behind a skeleton every time one changes.
+ *
+ * **The boundary is keyed on the filters.** Without a `key` React keeps the
+ * resolved boundary mounted across a search-param navigation and shows the old
+ * rows until the new ones arrive, which reads as a page that ignored the click.
+ * `loading.tsx` does not cover this either — the segment never unmounts, so its
+ * fallback belongs to the first visit only.
  */
 const TransactionPageContent = async ({ kind, searchParams }: TransactionPageProps) => {
   const params = await searchParams;
@@ -62,9 +76,7 @@ const TransactionPageContent = async ({ kind, searchParams }: TransactionPagePro
 
   const basePath = kind === "expense" ? "/expenses" : "/income";
 
-  const [page, total, categories, authors] = await Promise.all([
-    transactionService.list(ctx, kind, filters),
-    transactionService.total(ctx, kind, filters),
+  const [categories, authors] = await Promise.all([
     categoryService.getCategoriesByType(ctx, kind === "expense" ? "expense" : "income"),
     transactionService.listAuthors(ctx, kind),
   ]);
@@ -90,17 +102,19 @@ const TransactionPageContent = async ({ kind, searchParams }: TransactionPagePro
         }}
       />
 
-      <TransactionManager
-        kind={kind}
-        page={page}
-        total={total}
-        categories={categories}
-        baseCurrency={space.baseCurrency}
-        showAuthor={!space.isPersonal}
-        basePath={basePath}
-        query={query}
-        hasFilters={hasFilters}
-      />
+      <Suspense
+        key={`${filters.from ?? ""}|${filters.to ?? ""}|${filters.categoryId ?? ""}|${filters.createdBy ?? ""}|${filters.page}`}
+        fallback={<TransactionResultsSkeleton kind={kind} />}
+      >
+        <TransactionResults
+          kind={kind}
+          filters={filters}
+          categories={categories}
+          basePath={basePath}
+          query={query}
+          hasFilters={hasFilters}
+        />
+      </Suspense>
     </div>
   );
 };
