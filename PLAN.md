@@ -84,14 +84,16 @@ answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
 is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
-**`main` and `dev` now hold identical content but divergent history.** PR #38
-was **squash-merged**, unlike the four releases before it — `ac4e6cc` has one
-parent where `89ffd52`, `d73622e`, `bb58048` and `ae12bc9` each have two. `git
-diff main dev` is empty, so nothing is wrong with what shipped; but `dev` is no
-longer an ancestor of `main`, so the *next* release PR will list #36 and #37
-again alongside the new work, with a correct diff and a misleading commit list
-that grows with every squashed release. Merge `main` back into `dev` to
-reconverge, and use a **merge commit** for releases.
+**Release PRs must be merge commits, not squashes — reconverged 2026-08-17.**
+PR #38 was squash-merged, unlike the four releases before it: `ac4e6cc` has one
+parent where `89ffd52`, `d73622e`, `bb58048` and `ae12bc9` each have two. The
+content was fine — `git diff main dev` was empty — but `dev` stopped being an
+ancestor of `main`, which would have made the *next* release PR list #36 and
+#37 again alongside the new work: a correct diff under a commit list that grows
+with every squashed release. Fixed by merging `main` back into `dev` (`4c0795a`,
+no content change; the `PLAN.md` conflict was main's squashed copy of #36 and
+#37 against `dev`'s same changes plus #39, resolved to `dev`'s superset). If a
+release is ever squashed again, do the same thing straight afterwards.
 
 **The four VAPID variables were set in Vercel on 2026-08-14**, after `89ffd52`
 had already built. `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined into the client
@@ -137,8 +139,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production. Identical in content to `dev` as of `ac4e6cc`, but squash-merged, so not a descendant of it. Deployed and green. |
-| `dev`  | Integration branch. Everything through Feature 10 (#37).                       |
+| `main` | Production, at `ac4e6cc`. Deployed and green, and an ancestor of `dev` again since `4c0795a`. |
+| `dev`  | Integration branch. Everything through Feature 10 (#37), plus the docs in #39. |
 
 ---
 
@@ -172,6 +174,14 @@ pnpm typecheck && pnpm lint && pnpm build
 feature, and do not create the next branch, until the PR is merged.
 
 **6. Next** — go back to step 1, branching from the freshly merged `origin/dev`.
+
+**Releasing is the one exception to how PRs are merged here.** A feature PR into
+`dev` may be squashed — that is what most of them have been, and it costs
+nothing. A **release PR (`dev` → `main`) must be a merge commit**: squashing one
+gives `main` a commit with a single parent, so `dev` stops being an ancestor of
+it and every later release PR re-lists the features already shipped. It happened
+once, with #38; the repair is to merge `main` back into `dev` immediately, which
+is `4c0795a`.
 
 ---
 
