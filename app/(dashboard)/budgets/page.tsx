@@ -1,9 +1,10 @@
+import { Suspense } from "react";
+
 import BudgetPeriodNav from "@/components/budgets/budget-period-nav";
-import BudgetSection from "@/components/budgets/budget-section";
+import BudgetSections from "@/components/budgets/budget-sections";
+import BudgetSectionsSkeleton from "@/components/budgets/budget-sections-skeleton";
 import { requireActiveSpace } from "@/lib/auth/dal";
-import { budgetService } from "@/lib/services/budget.service";
-import { categoryService } from "@/lib/services/category.service";
-import { currentMonthKey, resolveMonthKey } from "@/lib/budgets/period";
+import { monthWindow, resolveMonthKey } from "@/lib/budgets/period";
 
 interface BudgetsPageProps {
   searchParams: Promise<{ month?: string }>;
@@ -19,26 +20,18 @@ interface BudgetsPageProps {
  * Periods are calendar-aligned, which is what makes rollover free: nothing is
  * materialised per month, so on the first of the month both sections move on
  * their own.
+ *
+ * The month arrows are outside the `<Suspense>` boundary and the cards are
+ * inside it, keyed on the month: stepping through months leaves the control
+ * that does the stepping in place and greys only the figures. The window label
+ * beside the arrows comes from `monthWindow`, the same pure function the
+ * service uses, so it needs no query and cannot disagree with the cards.
  */
 const BudgetsPage = async ({ searchParams }: BudgetsPageProps) => {
   const params = await searchParams;
-  const { ctx, space } = await requireActiveSpace();
+  const { space } = await requireActiveSpace();
 
   const month = resolveMonthKey(params.month);
-
-  const [overview, categories] = await Promise.all([
-    budgetService.getOverview(ctx, month),
-    categoryService.getCategoriesByType(ctx, "expense"),
-  ]);
-
-  // A budget takes effect from the period it is created in, so adding one while
-  // looking at a past window would produce a limit that does not appear on the
-  // screen that created it. Each section is addable while its own period is the
-  // live one — the yearly one all through the current year, even when an earlier
-  // month of it is on screen.
-  const current = currentMonthKey();
-  const isCurrentMonth = month === current;
-  const isCurrentYear = month.slice(0, 4) === current.slice(0, 4);
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,29 +43,11 @@ const BudgetsPage = async ({ searchParams }: BudgetsPageProps) => {
         </p>
       </div>
 
-      <BudgetPeriodNav month={month} label={overview.monthly.window.label} />
+      <BudgetPeriodNav month={month} label={monthWindow(month).label} />
 
-      <BudgetSection
-        period="monthly"
-        windowLabel={overview.monthly.window.label}
-        budgets={overview.monthly.budgets}
-        summary={overview.monthly.summary}
-        categories={categories}
-        takenByPeriod={overview.takenByPeriod}
-        baseCurrency={space.baseCurrency}
-        canAdd={isCurrentMonth}
-      />
-
-      <BudgetSection
-        period="yearly"
-        windowLabel={overview.yearly.window.label}
-        budgets={overview.yearly.budgets}
-        summary={overview.yearly.summary}
-        categories={categories}
-        takenByPeriod={overview.takenByPeriod}
-        baseCurrency={space.baseCurrency}
-        canAdd={isCurrentYear}
-      />
+      <Suspense key={month} fallback={<BudgetSectionsSkeleton />}>
+        <BudgetSections month={month} />
+      </Suspense>
     </div>
   );
 };

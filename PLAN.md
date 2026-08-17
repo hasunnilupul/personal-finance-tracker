@@ -10,8 +10,37 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed:** **Feature 9d — invitations notify without asking** (PR #36,
-merged into `dev`). The channel choice is gone; a failed notice alerts.
+**Released 2026-08-14 (third)** — `ac4e6cc` (PR #38), bringing `main` level with
+`dev`. It carries #36 (Feature 9d — invitations notify without asking) and #37
+(Feature 10 — offline reads), and **no migrations and no dependency changes**,
+so the deploy-time migrate step was a no-op again. The deploy went green.
+
+Verified against the live site, which is where these first become checkable:
+
+- `/offline` answers **200**. It answered **307** before this release, which is
+  the proof that `publicRoutes` took effect — and therefore that the worker
+  precaches the page rather than a redirect to sign-in.
+- `/sw.js` answers 200 as JavaScript with `no-cache, no-store, must-revalidate`
+  and now carries the caching code, so installed apps are being handed the new
+  worker rather than the one that cached nothing.
+- `/manifest.webmanifest` still answers 200.
+
+**Not yet verified, and each needs a signed-in browser rather than a URL:** that
+push actually delivers, that `financeflow-private-*` really disappears from
+Cache Storage on sign-out, and that an invitation notice reaches the other
+account. The first is the one to check first — this is the first production
+build made with the VAPID keys present, so it is the first that *could* work.
+
+**Last completed:** **Feature 11 — loading skeletons** (PR #40, merged into
+`dev` on 2026-08-17). Every route answers a navigation with a skeleton of its
+own shape, and a filter, month or range change greys only the figures it
+changes. **Nobody has watched one resolve** — see the caveat under the feature.
+
+**Before that:** **Feature 10 — offline reads** (PR #37). The app opens and
+reads without a connection, and the page cache ends with the session.
+
+**And before that:** **Feature 9d — invitations notify without asking** (PR
+#36). The channel choice is gone; a failed notice alerts.
 
 **Before that:** **Feature 9b — web push** (PR #34). Notifications reach the
 phone when the app is closed, which also carries the invitation notice.
@@ -60,24 +89,41 @@ answers 200 as JavaScript with `no-store`, and carries the `fetch` handler that
 is the whole point) **and confirmed installed on a real iPhone** — the first
 end-to-end proof the PWA works.
 
-**Merged into `dev` since:** #31 (`@vercel/speed-insights`, which still needs
-enabling in the Vercel dashboard before it collects anything), #32 (Feature 9a
-— notifications), #33 (Feature 9c — invitations through the app) and #34
-(Feature 9b — web push). None of the four is in `main` yet.
+**Release PRs must be merge commits, not squashes — reconverged 2026-08-17.**
+PR #38 was squash-merged, unlike the four releases before it: `ac4e6cc` has one
+parent where `89ffd52`, `d73622e`, `bb58048` and `ae12bc9` each have two. The
+content was fine — `git diff main dev` was empty — but `dev` stopped being an
+ancestor of `main`, which would have made the *next* release PR list #36 and
+#37 again alongside the new work: a correct diff under a commit list that grows
+with every squashed release. Fixed by merging `main` back into `dev` (`4c0795a`,
+no content change; the `PLAN.md` conflict was main's squashed copy of #36 and
+#37 against `dev`'s same changes plus #39, resolved to `dev`'s superset). If a
+release is ever squashed again, do the same thing straight afterwards.
 
-**The four VAPID variables are now set in Vercel** (2026-08-14). But they were
-added *after* the `89ffd52` release built, and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is
-inlined into the client bundle at build time rather than read at runtime — so
-production push stays inert until something rebuilds. The next release is that
-rebuild. **Verify by pressing the toggle, not by loading the page:** a missing
-server-side key makes the toggle say "not configured", but a missing or
-mismatched *public* key fails only at `pushManager.subscribe`.
+**The four VAPID variables were set in Vercel on 2026-08-14**, after `89ffd52`
+had already built. `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is inlined into the client
+bundle at build time rather than read at runtime, so push stayed inert until
+this release rebuilt. **Verify by pressing the toggle, not by loading the
+page:** a missing server-side key makes the toggle say "not configured", but a
+missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** `feat/offline` — Feature 10.
+**In progress:** nothing.
 
-**Still to come:** nothing planned beyond offline. The known gaps are
-`/api/cron/materialise-recurring`, which `vercel.json` still does not schedule,
-and offline *entry*, which 10 deliberately leaves out.
+**`dev` is ahead of `main` by Feature 11 and the two documentation commits
+around it.** A release would carry **no migrations and no dependency changes**,
+which is the lowest-risk shape one can have here. Use a **merge commit** — see
+below for what squashing #38 cost.
+
+**Still to come:** no feature is planned. The one known gap is offline *entry*,
+which Feature 10 deliberately leaves out: writes are not queued, and doing it
+properly means IndexedDB and a replay queue with the same idempotency care the
+recurring materialiser needed.
+
+**Both cron routes are scheduled and both are live.** `vercel.json` lists
+`/api/cron/refresh-rates` at 03:00 and `/api/cron/materialise-recurring` at
+04:00; the second was added in #32 and reached production with it, so recurring
+entries no longer wait for somebody to open the app. Notes elsewhere in this
+file said otherwise until 2026-08-17 — they predated #32 and were stale.
 
 **~~Reachability~~ — settled 2026-08-14.** Kept because each of these explains a
 trap that can come back, not because any is outstanding:
@@ -101,10 +147,10 @@ empty and its own bootstrap is unspent, so whoever creates the first account
 becomes the owner. The development account does not exist there — the two
 databases are separate.
 
-| Branch | State                                                                      |
-| ------ | -------------------------------------------------------------------------- |
-| `main` | Production. Level with `dev` as of `ae12bc9`. Deployed and green.          |
-| `dev`  | Integration branch. Features 0 through 7, plus #19, #20, #21, #22 and #24. |
+| Branch | State                                                                          |
+| ------ | ------------------------------------------------------------------------------ |
+| `main` | Production, at `ac4e6cc`. Deployed and green, and an ancestor of `dev` again since `4c0795a`. |
+| `dev`  | Integration branch. Everything through Feature 11 (#40). Ahead of `main`.      |
 
 ---
 
@@ -138,6 +184,14 @@ pnpm typecheck && pnpm lint && pnpm build
 feature, and do not create the next branch, until the PR is merged.
 
 **6. Next** — go back to step 1, branching from the freshly merged `origin/dev`.
+
+**Releasing is the one exception to how PRs are merged here.** A feature PR into
+`dev` may be squashed — that is what most of them have been, and it costs
+nothing. A **release PR (`dev` → `main`) must be a merge commit**: squashing one
+gives `main` a commit with a single parent, so `dev` stops being an ancestor of
+it and every later release PR re-lists the features already shipped. It happened
+once, with #38; the repair is to merge `main` back into `dev` immediately, which
+is `4c0795a`.
 
 ---
 
@@ -255,6 +309,14 @@ Everything that writes one anchors it to **midday UTC**, and range filters use
 whole UTC days. Anchoring to local midnight puts an entry made in Colombo on
 the previous UTC day, which silently drops it out of ranges that should
 contain it — this was a real bug, caught by a filter returning the wrong rows.
+
+**Loading states.** Every route has a `loading.tsx` that mirrors _that page's_
+layout, built from the shared kit in `components/skeletons/`. A new route needs
+one — `app/loading-states.test.ts` fails otherwise, and a route under
+`(dashboard)` without one inherits the dashboard's skeleton rather than getting
+none. Anything driven by a search param also needs a `<Suspense>` boundary
+**keyed** on that param, with the control itself left outside the boundary; see
+Gotchas for why `loading.tsx` alone does not cover it.
 
 **Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
 `*.test.ts`.
@@ -527,7 +589,7 @@ block a real occurrence from ever being created. It sits in `ManagedFields`
 alongside the conversion columns, and the services pass it through their own
 options argument.
 
-### Feature 9b — Web push ✅ done, PR open
+### Feature 9b — Web push ✅ merged (PR #34), released in ac4e6cc
 
 - [x] `push_subscriptions`, one row per device, keyed on the endpoint
 - [x] `push` and `notificationclick` in the service worker
@@ -615,7 +677,7 @@ a space owner can invite, sign-up is invite-only, and the alternative — saying
 nothing about which channel was used — is a less honest screen. Revisit if
 sign-up is ever opened up.
 
-### Feature 9d — Invitations notify without asking ✅ done, PR open
+### Feature 9d — Invitations notify without asking ✅ merged (PR #36)
 
 - [x] An invited address with an account is notified in the app as the
       invitation is created, with no channel question
@@ -653,7 +715,7 @@ that is not urgent.
 account is never emailed — so on a correctly configured install it told the
 owner "email is not configured". It now takes whether *anything* reached them.
 
-### Feature 10 — Offline reads ✅ done, PR open
+### Feature 10 — Offline reads ✅ merged (PR #37)
 
 - [x] Two caches with different lifetimes: a shell that survives sign-out, and
       pages that do not
@@ -720,6 +782,83 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
+### Feature 11 — Loading skeletons ✅ merged (PR #40)
+
+- [x] A `Skeleton` primitive, and a kit of section shapes every fallback is
+      built from
+- [x] A `loading.tsx` for every route, each mirroring that page's own layout
+- [x] Filters, month arrows and the range picker fall back in place, behind
+      `<Suspense>` boundaries keyed on what they change
+- [x] The topbar's three queries moved below their own boundary, so the shell
+      no longer waits on a notification count
+- [x] A test that fails when a route loses its skeleton
+
+**One shape per page, not one spinner for all of them.** The old
+`(dashboard)/loading.tsx` was a centred spinner, and being the only file of its
+kind it answered every route under the group. A skeleton is worth more than a
+spinner only if it is the shape of what is arriving; a generic one that resolves
+into a different layout is a page that appears to change its mind. So each route
+has its own, and the shapes are composed from one kit in
+`components/skeletons/` rather than drawn twice.
+
+**A route's `loading.tsx` renders _inside_ its layout, which is what forced the
+topbar apart.** The layout awaited the space, the space list, the notifications
+and the unread count before returning anything — and an awaiting layout blocks
+its own children's fallback too, so the "instant" loading state could not appear
+until the slowest of those four had answered. Only the space is awaited now,
+because that call is the authorization gate and a `redirect()` cannot be issued
+once streaming has started. The other three moved into `AppTopbarControls`,
+below a `<Suspense>` of their own.
+
+**`loading.tsx` does not fire on a search-param change**, and every filter in
+this app is a search param. The segment never unmounts, so its fallback belongs
+to the first visit; changing a filter leaves the old rows on screen until the
+new ones arrive, which reads as a click that did nothing. The fix is a
+`<Suspense>` boundary **keyed** on the params — the key is what makes React
+treat it as a new boundary and show the fallback again. Three pages needed it:
+transactions (keyed on the whole filter set), budgets (on the month) and reports
+(on the range).
+
+**Which meant splitting each of those pages in two.** The control and the header
+render from the URL and stay; only the part that depends on the answer is inside
+the boundary. That is deliberate beyond the mechanics: blanking the filter bar
+while its own results reload takes away the control the reader would reach for
+next. It also removed a dependency the budgets page did not need —
+`monthWindow(month)` is pure, so the month label beside the arrows no longer
+waits for the overview query that used to supply it.
+
+**A fallback has to reproduce the container, not just the contents.** The
+topbar controls are a flex row; the first version of the fallback was a flex
+*item* where the content was a flex *container*, so the switcher sized
+differently in the two states and the header jumped as it resolved. Both sides
+now render the same wrapper. The same rule is why the skeleton rows carry the
+real `divide-y`, the real `size-8` chip and the meters' `rounded-full`, which is
+set explicitly rather than taken from `--radius`.
+
+**The pulse is behind `motion-safe`.** Reduced motion leaves a static block,
+which still says "not here yet" — the shape carries that, not the animation.
+
+**One `role="status"` per screen.** The blocks are `aria-hidden` and a single
+sr-only line says what is loading; a dozen empty divs announced one at a time is
+noise. The topbar's fallback announces nothing at all, since it is on every
+navigation and would interrupt the page actually being asked for.
+
+**Guarded structurally, not by rendering.** Components are not tested here, and
+a skeleton is a weak candidate for a render test. But this is the rare
+presentation bug that fails _silently_: a fallback is on screen for a few
+hundred milliseconds, so a route that lost its `loading.tsx` looks fine in every
+screenshot and merely feels slower — and under `(dashboard)` it does something
+worse, inheriting the dashboard's own skeleton. `app/loading-states.test.ts`
+walks the routes and fails when one has no fallback and no stated reason for
+having none. Checked against the broken state: moving `goals/loading.tsx` aside
+fails it.
+
+**Not exercised in a browser.** All four checks pass and every route still
+answers — dashboard routes 307 to sign-in, `/accept-invitation/[id]` and
+`/sign-in` answer 200 — but signing in needs the owner's own credentials, so
+nobody has watched a skeleton resolve into its page. The layout and topbar
+change is the part worth a look first, since it is on every screen.
+
 ### Feature 8 — Installable PWA ✅ merged (PR #27), completed by PR #29
 
 - [x] `app/manifest.ts` — name, standalone display, categories, icons
@@ -774,7 +913,7 @@ safe circle.
 largest art the sheet contains. Re-export from the original at 512 and rerun
 the crop if it ever looks wrong on a device.
 
-### Feature 9a — Notifications, in-app ✅ done, PR open
+### Feature 9a — Notifications, in-app ✅ merged (PR #32)
 
 - [x] `notifications` table, one row per recipient, keyed against duplicates
 - [x] Budget overspend, raised at write time
@@ -878,12 +1017,13 @@ cache, and recurring entries are materialised when someone loads a page. It buys
 freshness in a space nobody has opened, not correctness. **It is now set** —
 earlier notes here saying otherwise were stale.
 
-**But only one of the two routes is scheduled.** `vercel.json` lists
-`/api/cron/refresh-rates` and nothing else, so `/api/cron/materialise-recurring`
-has never been called by anything: it is a guarded endpoint that exists and
-waits. Occurrences therefore still appear only when somebody opens the app,
-which is exactly the gap the notifications work has to close — a "your rent was
-recorded" message is worth nothing if the recording waits for you to look.
+**Both routes are scheduled.** `vercel.json` lists `/api/cron/refresh-rates` at
+03:00 and `/api/cron/materialise-recurring` at 04:00, an hour apart so
+conversions have fresh rates. The second was added in #32 — before that it was
+a guarded endpoint nothing had ever called, and occurrences appeared only when
+somebody opened the app, which made "your rent was recorded" a message that
+waited for you to look. On-read catch-up is still the guarantee; the schedule is
+the accelerator for a space nobody opens.
 
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
@@ -958,6 +1098,26 @@ Things already hit, so they are not hit twice.
   types of a `VALUES` list from its first row, so an uncast literal arrives as
   `text` and fails to compare against an `integer` id or assign to a `numeric`.
   Only the first tuple needs them; see `reconvertEntriesStatement`.
+- **A `loading.tsx` renders inside its own layout, so an awaiting layout blocks
+  it.** The fallback is nested _within_ `layout.tsx`, not around it — which
+  means every `await` at the top of a layout delays the "instant" loading state
+  as well as the page. A layout should await only what has to happen before
+  anything is sent (here: the authorization gate, because `redirect()` stops
+  being an HTTP redirect once streaming starts) and push the rest below a
+  `<Suspense>` of its own. Next's own `loading.js` reference says this in one
+  line and it is easy to read past.
+- **`loading.tsx` does not fire again on a search-param change.** The segment
+  stays mounted, so the fallback belongs to the first visit only and a filter
+  change silently leaves the previous results on screen until the new ones land.
+  A `<Suspense>` boundary with a `key` derived from the params is what shows a
+  fallback for the second and every later navigation. Everything URL-driven in
+  this app — transaction filters, the budget month, the report range — depends
+  on this.
+- **A Suspense fallback has to reproduce the container, not just the content.**
+  A fallback that is a flex _item_ where the resolved content is a flex
+  _container_ lays its children out differently, and the swap shows as a jump.
+  The topbar controls hit exactly this. Where the boundary sits at a layout
+  seam, render the same wrapper element on both sides of it.
 - **`react-hooks/set-state-in-effect` will fail lint** for resetting a
   dialog's fields when the record changes. Remount the form with a `key`
   instead of syncing state in an effect.
@@ -1135,6 +1295,14 @@ Not blocking, but worth doing.
       idempotency care the recurring materialiser needed. Still hand-written
       rather than Serwist, which the Next guide recommends and which requires
       webpack; this project builds with Turbopack.
+- [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
+      every page rendered in one blocking pass — a throw produced the framework's
+      500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
+      dashboard layout, and an error thrown after streaming has begun cannot set
+      a status code: it is handled inside the streamed HTML by the nearest
+      `error.js`, and with none the whole tree is replaced rather than the
+      section that failed. One boundary per page group would keep a failed report
+      from taking the sidebar with it.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
