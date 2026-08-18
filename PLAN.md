@@ -10,6 +10,42 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Released 2026-08-18** — `45305b7` (PR #45), carrying #43 (Feature 12 —
+new-version notice) and #44 (Feature 13 — the worker sees a deployment), plus
+the plan records for both. **No migrations and no dependency changes**, so the
+deploy-time migrate step was a no-op again. Merged with a merge commit:
+`45305b7` has two parents, `git diff main dev` is empty, and `dev` is an
+ancestor of `main`, so the next release PR will list only what is new.
+
+Verified against the live site: `/` 307s to sign-in, `/sign-in`, `/offline` and
+`/manifest.webmanifest` all answer 200, and **`/sw.js?v=<id>` answers 200 as
+JavaScript with `no-cache, no-store, must-revalidate`** — the query misses
+neither the header rule nor the static file, which is what Feature 13 depends
+on. Bare `/sw.js` answers identically, so the no-deployment-id fallback is
+intact.
+
+**The id agrees on both sides, and this is the first build where that could be
+checked.** `/api/version` reports `dpl_79M3hmykYNdwoQsqpdVdeKUs2fT8` and the
+page's `data-dpl-id` is the same string. That is the exact disagreement Feature
+12 hit locally — `next.config.ts` re-read at boot against a `process.env` read
+inlined at build time — confirmed absent on a real deployment. Had they
+differed, the notice would have shown on a page that was already current, for
+ever, and no reload could have cleared it.
+
+**Feature 13 is not proven yet, and cannot be until the next deploy.** Installed
+devices are only now being handed the versioned registration, so `install` has
+not had a reason to run a second time. **The deployment after this one is the
+first that can prove the feature works** — that is when a new worker should
+install and `activate` should drop the previous build's caches for the first
+time since Feature 10 shipped. If it does not, suspect the registration URL
+before suspecting the cache code.
+
+**Still unverified, and none of it belongs to this release:** the update notice
+card itself, whether push actually delivers, whether `financeflow-private-*`
+disappears from Cache Storage on sign-out, and whether an invitation notice
+reaches the other account. Each needs a signed-in browser with the owner's own
+credentials, which is the standing gap no release has closed.
+
 **Released 2026-08-17** — `d0aff32` (PR #42), carrying #40 (Feature 11 —
 loading skeletons) and the documentation in #39 and #41. **No migrations and no
 dependency changes**, so the deploy-time migrate step was a no-op again. The
@@ -193,8 +229,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record, Feature 12 (`f39924e`) and Feature 13 (`20fcb36`) — all unreleased. |
+| `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record.   |
 
 ---
 
@@ -228,6 +264,43 @@ pnpm typecheck && pnpm lint && pnpm build
 feature, and do not create the next branch, until the PR is merged.
 
 **6. Next** — go back to step 1, branching from the freshly merged `origin/dev`.
+
+### Releasing
+
+**7. Open the release PR** (`dev` → `main`) and **write the release record into
+this file as part of it**, not afterwards. Everything except the merge SHA and
+the live-site results is known before the merge: what the release carries,
+whether it holds migrations or dependency changes, and what each feature in it
+still leaves unverified. That half goes in the release PR's own commit.
+
+**8. Merge it, then finish the record** — the merge SHA, that the merge has two
+parents, and what the live site actually answered. Committed straight to `dev`,
+which is the one place a record with no branch to ride along on belongs.
+
+**The record rides with the work that produced it. Always.** This is the same
+rule as step 2, and it is written out separately because releases are where it
+keeps getting dropped: the record has twice been an afterthought somebody had to
+be asked for, and once it was a documentation branch of its own — which is what
+the repo owner asked to stop on 2026-08-17. A release that is not written down
+while it is being made is a release nobody can reconstruct later, and the parts
+worth having are exactly the ones that fade: what was verified against the live
+site, what was merely deployed, and what is still waiting on a signed-in
+browser.
+
+**What a release record must state**, because each of these has been the thing
+that mattered later:
+
+- What it carries, by PR number, and the merge commit.
+- **Whether it holds migrations or dependency changes.** A release with neither
+  is the lowest-risk shape one can have here and is worth aiming for
+  deliberately; a release with either needs the deploy watched rather than
+  glanced at.
+- That the merge has **two parents** — see below for why.
+- What the live site answered, URL by URL.
+- **What is still unverified, and what it would take.** The most valuable line
+  in every record so far. "The deploy is green" is not the same claim as "the
+  feature works", and the gap between them is where every one of these features
+  currently sits.
 
 **Releasing is the one exception to how PRs are merged here.** A feature PR into
 `dev` may be squashed — that is what most of them have been, and it costs
