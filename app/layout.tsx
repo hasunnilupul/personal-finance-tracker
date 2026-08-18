@@ -6,6 +6,8 @@ import { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import PwaProvider from "@/components/pwa-provider";
+import AppSplash from "@/components/app-splash";
+import { splashGateScript } from "@/lib/pwa/splash";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -61,6 +63,31 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
+        {/*
+          First child of `<body>`, and deliberately not wrapped in a `<head>`
+          element. A synchronous inline script blocks the parser where it
+          stands, so this runs before the parser has even reached the splash
+          markup below — which is the guarantee the gate needs: a session that
+          has already launched never flashes the screen again. It only ever
+          *hides* the splash; the visible path runs no JavaScript at all. See
+          `lib/pwa/splash.ts` for why it fails towards showing.
+
+          A hand-written `<head>` is what the first version of this used, and
+          it cost a console error on every load: React re-created its children
+          on the client, warned that it never executes a script it rendered
+          itself, and substituted a `<div>` for this one. Next owns `<head>`
+          in the App Router. Rendering one here fights it for no gain, since
+          the top of `<body>` is just as far ahead of the paint.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: splashGateScript() }} />
+
+        {/*
+          Outside ThemeProvider and before everything, because it is painted
+          from the server response rather than mounted. It dismisses itself in
+          CSS — nothing here needs to run for the app to be reachable.
+        */}
+        <AppSplash />
+
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
