@@ -194,7 +194,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record and Feature 12 (`f39924e`); Feature 13 is the open PR. |
+| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record, Feature 12 (`f39924e`) and Feature 13 (`20fcb36`) — all unreleased. |
 
 ---
 
@@ -884,7 +884,7 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 13 — The worker sees a deployment ✅ done, PR open
+### Feature 13 — The worker sees a deployment ✅ merged (PR #44)
 
 - [x] The page registers `/sw.js?v=<deployment id>`, so a deploy is a script
       change the browser can find
