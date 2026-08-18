@@ -84,7 +84,15 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 13 — the worker sees a deployment**. The page
+**Last completed:** **Feature 14 — error boundaries**, on `feat/error-boundaries`
+and not yet merged. Three boundaries rather than one per route: a dashboard page
+that throws keeps the sidebar and topbar, anything with no shell to preserve
+falls to `app/error.tsx`, and the root layout failing falls to a
+`global-error.tsx` built out of nothing. The retry button takes Next 16.2's
+`unstable_retry` rather than `reset`, which is the difference between a button
+that re-fetches and one that only looks like it does.
+
+**Before that:** **Feature 13 — the worker sees a deployment**. The page
 registers `/sw.js?v=<deployment id>`, so a deploy is finally a script change the
 browser can find: `install` runs again, and the `activate` cleanup that has been
 sitting there since Feature 10 drops the previous build's caches for the first
@@ -171,10 +179,16 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Feature 13 — the worker sees a deployment** is the latest work, and nothing
-else is in progress.
+**Feature 14 — error boundaries** is the latest work, on
+`feat/error-boundaries`, branched cleanly from `dev` this time. **Feature 15 —
+a cold-start splash** is agreed and not started: a branded launch screen for the
+installed app, with an SVG mark drawn in the language of the existing icon so
+its parts can animate separately. It deliberately does **not** touch the route
+skeletons — Feature 11 settled that a shape-matched fallback beats a generic
+one, and a logo animation on every navigation would be exactly the generic one.
+It waits for this PR to merge.
 
-**It was built stacked on `feat/update-notice` rather than branched from
+**Feature 13 was built stacked on `feat/update-notice` rather than branched from
 `dev`**, because it reuses the `loadedDeploymentId()` that Feature 12
 introduced. That is a departure from the one-feature-one-branch rule above, and
 it is recorded because the way out is not obvious: opening the PR against `dev`
@@ -230,7 +244,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record.   |
+| `dev`  | Integration branch. Level with `main` in code; ahead by the release record. `feat/error-boundaries` (Feature 14) is open against it. |
 
 ---
 
@@ -434,6 +448,17 @@ one — `app/loading-states.test.ts` fails otherwise, and a route under
 none. Anything driven by a search param also needs a `<Suspense>` boundary
 **keyed** on that param, with the control itself left outside the boundary; see
 Gotchas for why `loading.tsx` alone does not cover it.
+
+**Error boundaries.** **A segment that owns a `layout.tsx` owns an `error.tsx`**
+— `app/error-states.test.ts` fails otherwise. That is the rule rather than a
+list of files: a layout is UI worth keeping on screen when something below it
+fails, and it is exactly what a boundary further up would throw away. The root
+is the exception, because `error.tsx` never wraps the layout in its own segment;
+`app/global-error.tsx` covers that one.
+
+Every boundary renders `components/error-state.tsx` and takes **`unstable_retry`,
+never `reset`** — see Gotchas. No boundary formats the error itself: what may be
+shown is decided once, in `lib/errors/error-presentation.ts`.
 
 **Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
 `*.test.ts`.
@@ -957,6 +982,72 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
+### Feature 14 — Error boundaries ✅ done, PR open
+
+- [x] `app/(dashboard)/error.tsx` — a failed page keeps the sidebar, the topbar
+      and the mobile navigation
+- [x] `app/error.tsx` — the net under everything with no shell to preserve,
+      including the dashboard layout's own failure
+- [x] `app/global-error.tsx` — the root layout failing, built out of nothing
+- [x] One disclosure rule, in `lib/errors/error-presentation.ts`, with tests
+- [x] `app/error-states.test.ts` — a segment with a layout has a boundary
+
+**The gap this closes was opened by Feature 11.** While every page rendered in
+one blocking pass a throw produced the framework's 500 page, which is ugly but
+honest. Feature 11 put `<Suspense>` inside three pages and the dashboard layout,
+and an error thrown *after* streaming has begun cannot set a status code — it is
+handled inside the streamed HTML by the nearest `error.js`, and with none the
+whole tree is replaced rather than the section that failed.
+
+**`unstable_retry`, not `reset`, and the difference is the whole feature.** Next
+16.2 added `unstable_retry` and the old `reset` still exists beside it, so the
+wrong one compiles and renders a perfectly good "Try again" button — one that
+clears the boundary and re-renders **without re-fetching**. Every page here
+fails by way of a query, so `reset` would have recovered nothing, ever, while
+looking exactly like a working button. Verified by clicking the real one against
+a production build: the server logged a *new* render, which is the only
+observable difference between the two.
+
+**A group's boundary cannot catch its own layout, and that turned out to be the
+right shape.** `error.tsx` wraps `page.tsx`, `loading.tsx` and nested layouts
+but not the `layout.tsx` beside it — so `requireActiveSpace()` failing in
+`app/(dashboard)/layout.tsx` bypasses the dashboard boundary entirely and lands
+in `app/error.tsx`. That is correct rather than a hole: the authorization gate is
+what failed, so there is no resolved space, and a sidebar drawn around the
+message would be furniture the app has no right to show.
+
+**One rule about what an error may say, and no boundary can opt out of it.**
+Next redacts a Server Component's `message` before it reaches the client, but
+**not a Client Component's** — that arrives intact, and here it can carry a space
+id or an amount. So `visibleErrorDetail` returns the message only in
+development, `errorDigest` returns the quotable hash, and `ErrorState` is handed
+the error object rather than a formatted string. Tested in the production
+direction on purpose: a boundary that leaks looks entirely normal, and only the
+person who triggered it would ever see.
+
+**`global-error.tsx` is built out of nothing** — no `Card`, no `Button`, no
+icons, no design tokens, colours inline. Every import is another thing that can
+be broken by whatever broke the root layout, and a global boundary that throws
+while rendering leaves Next's own default and no way back. It also loses the
+theme with the layout that sets the `.dark` class, so it is deliberately near-
+black on near-white rather than re-deriving the theme from `localStorage` with a
+blocking script.
+
+**One boundary per group, not per route** — the opposite of Feature 11's rule,
+for the reason that made that rule right. A skeleton is a promise about the page
+that is arriving, so its shape carries information; an error is the absence of
+that page, and shaping it like the thing that failed tells the reader nothing
+they can act on.
+
+**Verified in a browser, which is new for this project.** A production build
+with a throw injected into `/accept-invitation/[id]`: the card renders with the
+heading, both buttons and `Reference: 2684280875` matching the digest in the
+server log, and the message — seeded with a fake amount and space id — appears
+nowhere in the response. **Still unseen: the dashboard boundary specifically**,
+because reaching it needs a signed-in session. That it renders inside the shell
+rather than replacing it is the one claim still resting on the file's position
+rather than on having been watched.
+
 ### Feature 13 — The worker sees a deployment ✅ merged (PR #44)
 
 - [x] The page registers `/sw.js?v=<deployment id>`, so a deploy is a script
@@ -1296,6 +1387,18 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **`error.tsx` takes `unstable_retry`, not `reset`** — Next 16.2 added it, and
+  it is not the signature most references still show. Both props exist, which is
+  what makes it quiet: `reset` compiles, renders, and gives a "Try again" button
+  that only clears the boundary and re-renders **without re-fetching**. Every
+  page in this app fails by way of a query, so a `reset` button would have
+  looked correct and never once recovered. Verified the right way round —
+  clicking the real button produces a fresh render on the server.
+- **An `error.tsx` never wraps the `layout.tsx` in its own segment.** It wraps
+  `page.tsx`, `loading.tsx` and nested layouts, so `app/(dashboard)/error.tsx`
+  cannot catch `app/(dashboard)/layout.tsx` throwing. That is where
+  `requireActiveSpace()` runs, so the app's most likely layout failure lands one
+  level up, in `app/error.tsx`.
 - **drizzle-kit 1.0-rc needs `--hints`** for ambiguous column changes, and
   exits 2 without them.
 - **Postgres will not cast integer to boolean** with `::boolean`. Use
@@ -1564,14 +1667,14 @@ Not blocking, but worth doing.
       finally runs. The route handler this note proposed was the more expensive
       half of the same idea — see the feature for why the query wins, and for
       the reason the version must not go in the *path*.
-- [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
-      every page rendered in one blocking pass — a throw produced the framework's
-      500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
-      dashboard layout, and an error thrown after streaming has begun cannot set
-      a status code: it is handled inside the streamed HTML by the nearest
-      `error.js`, and with none the whole tree is replaced rather than the
-      section that failed. One boundary per page group would keep a failed report
-      from taking the sidebar with it.
+- [x] ~~**There is no `error.tsx` anywhere in `app/`.**~~ Fixed by Feature 14.
+      Three boundaries — `(dashboard)`, root, and `global-error` — with the
+      dashboard's being the one this note was asking for: a failed page keeps
+      the sidebar, the topbar and the mobile navigation. What the note did not
+      anticipate is that the group's boundary cannot catch its own
+      `layout.tsx`, so `requireActiveSpace()` failing goes to the root
+      boundary instead; see the feature for why that is right rather than a
+      gap.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.
