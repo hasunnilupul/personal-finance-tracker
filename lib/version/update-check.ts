@@ -11,6 +11,25 @@
 export const VERSION_ENDPOINT = "/api/version";
 
 /**
+ * The id of the build that served this document, straight from the markup.
+ *
+ * Next writes `data-dpl-id` onto `<html>` when `deploymentId` is configured, so
+ * it is exact and available from the first paint — no window in which a tab
+ * loaded on the old build could mistake the new id for its own.
+ *
+ * Two callers, and they want it for different reasons: the update notice
+ * compares it against the live one, and the service worker registration keys
+ * its URL on it. One read, so they can never disagree about which build the
+ * page belongs to.
+ *
+ * Browser-only — it touches `document`, so it must not be called during a
+ * server render.
+ */
+export function loadedDeploymentId(): string | null {
+  return document.documentElement.dataset.dplId || null;
+}
+
+/**
  * The id from a `/api/version` body, or `null` for anything unexpected.
  *
  * Defensive because this response is not always the one it asked for: a captive

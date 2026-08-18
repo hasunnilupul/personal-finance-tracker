@@ -48,7 +48,14 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 12 — new-version notice** (PR #43). A tab that was
+**Last completed:** **Feature 13 — the worker sees a deployment**. The page
+registers `/sw.js?v=<deployment id>`, so a deploy is finally a script change the
+browser can find: `install` runs again, and the `activate` cleanup that has been
+sitting there since Feature 10 drops the previous build's caches for the first
+time. The version rides in the **query, never the path** — a changed path is a
+second registration, and it would take every device's push subscription with it.
+
+**Before that:** **Feature 12 — new-version notice** (PR #43). A tab that was
 open when a deployment went out says so and offers a reload. The detection is
 **verified against a real production build**; the card itself is unseen.
 
@@ -128,8 +135,21 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Feature 12 — new-version notice** (PR #43) is the latest work, and nothing
+**Feature 13 — the worker sees a deployment** is the latest work, and nothing
 else is in progress.
+
+**It was built stacked on `feat/update-notice` rather than branched from
+`dev`**, because it reuses the `loadedDeploymentId()` that Feature 12
+introduced. That is a departure from the one-feature-one-branch rule above, and
+it is recorded because the way out is not obvious: opening the PR against `dev`
+while #43 was still open would have listed Feature 12's three commits as part of
+it. Resolved by merging #43 first (squashed to `f39924e`), then
+`git rebase --onto origin/dev <old tip> feat/versioned-worker` — which replays
+only the commits *after* the old branch tip, so the three that were already in
+`dev` are dropped rather than replayed against their own squashed copy. It
+rebased clean, because a squash preserves the tree. **If a branch is ever
+stacked again, that is the command**; a plain `git rebase dev` would have tried
+to reapply all four.
 
 **`main` and `dev` hold the same code as of the 2026-08-17 release**, and `dev` is one commit ahead — this
 record itself, written after the merge. A release record has no feature branch
@@ -174,7 +194,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record.   |
+| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record and Feature 12 (`f39924e`); Feature 13 is the open PR. |
 
 ---
 
@@ -806,7 +826,7 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
-### Feature 12 — New-version notice ✅ done, PR open
+### Feature 12 — New-version notice ✅ merged (PR #43)
 
 - [x] `deploymentId` set from the deployment's own environment, which also
       turns on Next's version-skew protection
@@ -863,6 +883,68 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Feature 13 — The worker sees a deployment ✅ done, PR open
+
+- [x] The page registers `/sw.js?v=<deployment id>`, so a deploy is a script
+      change the browser can find
+- [x] The worker reads its own version back out of that URL
+- [x] `activate` therefore drops the previous build's caches, which is what it
+      was always written to do and had never once done
+- [x] The **path** is unchanged, so the registration — and the push
+      subscription hanging off it — is updated rather than replaced
+- [x] Bare `/sw.js` and `v1` wherever there is no deployment id
+
+**This is the open item Feature 12 left behind, and it is the same fact seen
+from the other side.** #12 could not use the worker's update flow to detect a
+deployment because `public/sw.js` is byte-identical from one build to the next,
+so the browser's comparison never finds a change. That is not only a missed
+signal: it means `install` has run exactly once, on the day the app was first
+opened. The shell cache still holds that build's `/offline`, and because Next
+appends `?dpl=` to static assets, every deployment has been *adding* a copy of
+every asset it touched rather than replacing one. The `activate` cleanup that
+was supposed to prevent that has never fired.
+
+**Versioning the registration URL, not the file.** The note in this plan
+proposed serving the worker from a route handler with the id substituted into
+its body. That works, and it is more machinery than the job needs: it moves the
+file out of `public/`, and the existing header rule and static serving with it.
+A script URL that differs by a query is already a different script to the
+browser, so `/sw.js?v=<id>` is enough to make a deploy visible. The worker still
+cannot import anything — it is served as-is — so it reads its version out of
+`self.location` rather than having it baked in, which is the one thing the route
+handler would have bought.
+
+**Changing the path would have unsubscribed every installed device from push.**
+This is the trap worth remembering, and it is why the version rides in the query
+rather than in the filename. Scope comes from the path: `/sw.js?v=…` is still
+`/sw.js`, so `getRegistration()` finds the same registration and updates it.
+`/sw-<id>.js` would have been a *second* registration, orphaning the first along
+with the `PushSubscription` that belongs to it — and nothing on screen would
+have said so. A test asserts the pathname for that reason alone.
+
+**One read of the deployment id, so the two callers cannot disagree.**
+`loadedDeploymentId()` moved out of `components/update-notice.tsx` into
+`lib/version/update-check.ts`. The notice compares it against the live one and
+the registration keys its URL on it; both now mean the same "which build served
+this document", taken from the same `data-dpl-id` attribute.
+
+**The reload button's `registration.update()` is close to a no-op now**, and is
+kept for the build that has no id. Where the URL is versioned, what swaps the
+worker is the reloaded page registering the new build's URL. Where it is not,
+that call is the only thing the browser has to go on.
+
+**The cost is that a deploy now empties the caches**, which is the point but is
+worth stating plainly: the first load after a deployment re-fetches the shell,
+and an old-build tab left open *and* offline loses the chunks it had cached.
+Online that tab is fine — `?dpl=` keeps serving it the deployment it was built
+against — and Next's skew protection hard-navigates its next navigation anyway.
+
+**Not watched in a browser.** All four checks pass, and `/sw.js?v=…` is
+confirmed against `next start` to answer 200 as JavaScript with
+`no-cache, no-store, must-revalidate` — the query does not miss the header rule
+or the static file. What nobody has seen is the second worker installing on a
+real device, which is the only place the whole claim is checkable.
 
 ### Feature 11 — Loading skeletons ✅ merged (PR #40)
 
@@ -1402,17 +1484,13 @@ Not blocking, but worth doing.
       idempotency care the recurring materialiser needed. Still hand-written
       rather than Serwist, which the Next guide recommends and which requires
       webpack; this project builds with Turbopack.
-- [ ] **The service worker never changes, so nothing it cached is ever
-      reconsidered.** `public/sw.js` is static, and its `install` — which
-      precaches `/offline` and the icons — runs only when its own bytes change.
-      A deployment therefore leaves the previous build's `/offline` in the shell
-      cache, and `?dpl=` means each deployment adds another copy of every static
-      asset it touches rather than replacing one. Neither is serious: the stale
-      `/offline` is an explanation rather than data, and browsers evict. The fix
-      is to serve the worker from a route handler with the deployment id
-      substituted in, so a deploy changes its bytes and the existing `activate`
-      cleanup does the rest. That is a change to how the worker is served, so it
-      is a feature rather than a corner of Feature 12.
+- [x] ~~**The service worker never changes, so nothing it cached is ever
+      reconsidered.**~~ Fixed by Feature 13. The registration is versioned
+      (`/sw.js?v=<deployment id>`) rather than the file being made dynamic, so a
+      deploy is a script change the browser can find and the `activate` cleanup
+      finally runs. The route handler this note proposed was the more expensive
+      half of the same idea — see the feature for why the query wins, and for
+      the reason the version must not go in the *path*.
 - [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
       every page rendered in one blocking pass — a throw produced the framework's
       500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
