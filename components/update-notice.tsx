@@ -6,6 +6,7 @@ import { RefreshCwIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   hasNewDeployment,
+  loadedDeploymentId,
   parseVersionResponse,
   VERSION_ENDPOINT,
 } from "@/lib/version/update-check";
@@ -20,17 +21,6 @@ import {
  * front for an afternoon.
  */
 const POLL_INTERVAL_MS = 5 * 60_000;
-
-/**
- * The id of the build that served this document, straight from the markup.
- *
- * Next writes `data-dpl-id` onto `<html>` when `deploymentId` is configured, so
- * this is exact and available from the first paint — no window in which a tab
- * loaded on the old build could mistake the new id for its own.
- */
-function loadedDeploymentId(): string | null {
-  return document.documentElement.dataset.dplId || null;
-}
 
 /**
  * Watches for the app being redeployed underneath an open tab, and offers a
@@ -107,9 +97,12 @@ const UpdateNotice = () => {
   }, []);
 
   const reload = useCallback(async () => {
-    // Give the worker a chance to notice a changed script before the document
-    // is replaced, so the new page is served by the new worker rather than by
-    // the one the old build registered.
+    // Ask the worker to re-check its own script before the document is
+    // replaced. Where the registration is versioned this is close to a no-op —
+    // the reloaded page registers the new build's URL, which is what actually
+    // swaps the worker — but it is the only path on a build with no deployment
+    // id, where `/sw.js` is registered bare and its bytes are all the browser
+    // has to compare.
     try {
       const registration = await navigator.serviceWorker?.getRegistration();
 

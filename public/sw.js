@@ -21,7 +21,26 @@
  * needs webpack configuration; this project builds with Turbopack.
  */
 
-const VERSION = "v1";
+/**
+ * Which build this worker belongs to, read out of its own script URL.
+ *
+ * The page registers `/sw.js?v=<deployment id>`, and a script URL that differs
+ * by a query is a different script to the browser — which is the only way this
+ * file ever changes. Its bytes are identical from one deployment to the next,
+ * so without the query there is no update to find: `install` never runs again,
+ * the shell cache keeps the previous build's `/offline`, and every deployment
+ * adds another copy of the static assets it touches rather than replacing one.
+ *
+ * With it, a deploy installs a new worker, `install` precaches the new build's
+ * assets, and the `activate` cleanup below drops every cache belonging to a
+ * version that is no longer current — which is the whole point.
+ *
+ * `v1` when there is no id: local development, and any deployment that sets
+ * none of the variables behind `deploymentId()`. The behaviour there is exactly
+ * what it was before, which is the right thing for a build that has no identity
+ * to key on.
+ */
+const VERSION = new URL(self.location.href).searchParams.get("v") || "v1";
 
 const SHELL_CACHE = `financeflow-shell-${VERSION}`;
 

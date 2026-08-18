@@ -52,12 +52,19 @@ describe("purgePrivateCaches", () => {
 
   it("clears private caches left behind by an older worker version", async () => {
     // A device that has not run the new worker's `activate` yet still holds the
-    // old cache, and it is exactly as readable as the current one.
-    const deleted = stubCaches(["financeflow-private-v1", "financeflow-private-v2"]);
+    // old cache, and it is exactly as readable as the current one. Since the
+    // worker takes its version from its own URL, the suffix is now a deployment
+    // id rather than a hand-bumped `v1` — a device that has been through
+    // several deployments can be holding several of these at once.
+    const deleted = stubCaches([
+      "financeflow-private-v1",
+      "financeflow-private-dpl_9fa2c1",
+      "financeflow-shell-dpl_9fa2c1",
+    ]);
 
     await purgePrivateCaches();
 
-    expect(deleted).toEqual(["financeflow-private-v1", "financeflow-private-v2"]);
+    expect(deleted).toEqual(["financeflow-private-v1", "financeflow-private-dpl_9fa2c1"]);
   });
 
   it("resolves when the Cache API refuses, rather than blocking the sign-out", async () => {

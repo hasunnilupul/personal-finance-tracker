@@ -5,6 +5,8 @@ import { ShareIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import UpdateNotice from "@/components/update-notice";
+import { serviceWorkerUrl } from "@/lib/pwa/service-worker";
+import { loadedDeploymentId } from "@/lib/version/update-check";
 import { logger } from "@/lib/logger/logger";
 
 const DISMISSED_KEY = "financeflow:install-hint-dismissed";
@@ -84,7 +86,12 @@ const PwaProvider = () => {
     }
 
     navigator.serviceWorker
-      .register("/sw.js", {
+      // Versioned by the build that served this page. The file's own bytes
+      // never change, so without the query the browser's update check finds
+      // nothing and the worker installed on the first visit is the one it
+      // keeps — see `serviceWorkerUrl`. The path, and therefore the scope and
+      // the registration the push subscription belongs to, is unchanged.
+      .register(serviceWorkerUrl(loadedDeploymentId()), {
         // Never satisfy the worker's own update check from the HTTP cache.
         // `next.config.ts` already sends `no-store` for `/sw.js`; this is the
         // half that does not depend on a host or a CDN honouring it, and a
