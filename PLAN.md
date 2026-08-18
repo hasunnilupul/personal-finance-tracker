@@ -10,6 +10,23 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Released 2026-08-17** — `d0aff32` (PR #42), carrying #40 (Feature 11 —
+loading skeletons) and the documentation in #39 and #41. **No migrations and no
+dependency changes**, so the deploy-time migrate step was a no-op again. The
+production deployment for `d0aff32` reports success, and the live site answers:
+`/` 307 to sign-in, `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+all 200.
+
+**Nothing in this release is visible to a signed-out visitor**, which is the
+limit of what those URLs prove. Skeletons only appear on authenticated routes,
+so "the deploy is green and the app still answers" is the whole claim — whether
+a skeleton matches the page that replaces it still needs a signed-in browser.
+
+**Merged with a merge commit, and the history is convergent again.** `d0aff32`
+has two parents, `git diff main dev` is empty, and `dev` is an ancestor of
+`main` — so the next release PR will list only what is new. That is the rule
+below being followed rather than repaired.
+
 **Released 2026-08-14 (third)** — `ac4e6cc` (PR #38), bringing `main` level with
 `dev`. It carries #36 (Feature 9d — invitations notify without asking) and #37
 (Feature 10 — offline reads), and **no migrations and no dependency changes**,
@@ -31,12 +48,23 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 11 — loading skeletons** (PR #40, merged into
-`dev` on 2026-08-17). Every route answers a navigation with a skeleton of its
-own shape, and a filter, month or range change greys only the figures it
-changes. **Nobody has watched one resolve** — see the caveat under the feature.
+**Last completed:** **Feature 13 — the worker sees a deployment**. The page
+registers `/sw.js?v=<deployment id>`, so a deploy is finally a script change the
+browser can find: `install` runs again, and the `activate` cleanup that has been
+sitting there since Feature 10 drops the previous build's caches for the first
+time. The version rides in the **query, never the path** — a changed path is a
+second registration, and it would take every device's push subscription with it.
 
-**Before that:** **Feature 10 — offline reads** (PR #37). The app opens and
+**Before that:** **Feature 12 — new-version notice** (PR #43). A tab that was
+open when a deployment went out says so and offers a reload. The detection is
+**verified against a real production build**; the card itself is unseen.
+
+**Before that:** **Feature 11 — loading skeletons** (PR #40, released in
+`d0aff32`). Every route answers a navigation with a skeleton of its own shape,
+and a filter, month or range change greys only the figures it changes. **Nobody
+has watched one resolve** — see the caveat under the feature.
+
+**And before that:** **Feature 10 — offline reads** (PR #37). The app opens and
 reads without a connection, and the page cache ends with the session.
 
 **And before that:** **Feature 9d — invitations notify without asking** (PR
@@ -107,12 +135,28 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** nothing.
+**Feature 13 — the worker sees a deployment** is the latest work, and nothing
+else is in progress.
 
-**`dev` is ahead of `main` by Feature 11 and the two documentation commits
-around it.** A release would carry **no migrations and no dependency changes**,
-which is the lowest-risk shape one can have here. Use a **merge commit** — see
-below for what squashing #38 cost.
+**It was built stacked on `feat/update-notice` rather than branched from
+`dev`**, because it reuses the `loadedDeploymentId()` that Feature 12
+introduced. That is a departure from the one-feature-one-branch rule above, and
+it is recorded because the way out is not obvious: opening the PR against `dev`
+while #43 was still open would have listed Feature 12's three commits as part of
+it. Resolved by merging #43 first (squashed to `f39924e`), then
+`git rebase --onto origin/dev <old tip> feat/versioned-worker` — which replays
+only the commits *after* the old branch tip, so the three that were already in
+`dev` are dropped rather than replayed against their own squashed copy. It
+rebased clean, because a squash preserves the tree. **If a branch is ever
+stacked again, that is the command**; a plain `git rebase dev` would have tried
+to reapply all four.
+
+**`main` and `dev` hold the same code as of the 2026-08-17 release**, and `dev` is one commit ahead — this
+record itself, written after the merge. A release record has no feature branch
+to ride along on, so it is committed straight to `dev` rather than through a
+documentation branch of its own: the repo owner asked for those to stop on
+2026-08-17, and everything else belongs in the commits of the feature it
+describes.
 
 **Still to come:** no feature is planned. The one known gap is offline *entry*,
 which Feature 10 deliberately leaves out: writes are not queued, and doing it
@@ -149,8 +193,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `ac4e6cc`. Deployed and green, and an ancestor of `dev` again since `4c0795a`. |
-| `dev`  | Integration branch. Everything through Feature 11 (#40). Ahead of `main`.      |
+| `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
+| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record, Feature 12 (`f39924e`) and Feature 13 (`20fcb36`) — all unreleased. |
 
 ---
 
@@ -782,6 +826,126 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
+### Feature 12 — New-version notice ✅ merged (PR #43)
+
+- [x] `deploymentId` set from the deployment's own environment, which also
+      turns on Next's version-skew protection
+- [x] `/api/version` — public, uncached, reports the running build
+- [x] A tab compares the id it was served with against that, on focus and on a
+      slow interval, and offers a reload when they differ
+- [x] Never reloads by itself, and never nags twice for the same version
+- [x] Silent wherever there is no id to compare
+
+**The service worker could not answer this.** The obvious mechanism for "a new
+version is out" in a PWA is the worker's own update flow — `updatefound`, a
+waiting worker, `skipWaiting`. It does not work here: `public/sw.js` is a static
+file whose bytes are identical from one deployment to the next, so the browser's
+byte comparison finds no change and no update event ever fires. A deployment is
+invisible to it. What *does* change every deployment is the deployment id, so
+that is what is compared.
+
+**Both sides must read the id at the same moment, and finding out why cost a
+real bug.** `data-dpl-id` comes from `next.config.ts`, which the server re-reads
+when it boots; the endpoint reads `process.env`, which the bundler **inlines at
+build time**. Built under one id and started under another, the page said one
+thing and the endpoint another — and since a reload cannot change either, the
+notice would have shown on a page that was already current, for ever. Both now
+go through `deploymentId()`, which indexes `process.env` with a variable so it
+cannot be inlined. Verified by building under `build-a` and starting under
+`build-b`: page and endpoint both answer `build-b`, and no notice is raised.
+
+**Verified the other direction too**, which is the point of the feature: a page
+served under `build-b`, then the server restarted as `build-c`, and the poll
+comes back different. That is the exact shape of a redeploy under an open tab.
+
+**It asks rather than acts.** A page that reloaded itself would throw away a
+half-typed expense to fix a problem the reader had not noticed. Next's own
+skew protection already hard-navigates the *next* navigation, so the only person
+this notice is for is the one sitting still — and they can finish first.
+
+**A poll that fails is not news.** Offline, a 500, a captive portal answering
+with HTML: each returns "no answer", never "changed". `hasNewDeployment` refuses
+to compare unless both ids are present, and `parseVersionResponse` refuses
+anything that is not a non-empty string. The tests weight this direction
+deliberately — a false alarm is produced by ordinary conditions, and it is the
+failure that costs somebody their unsaved input.
+
+**Dismissing is per version, not per notice.** The id that was dismissed is
+remembered, so the next deployment says so again rather than staying quiet
+because somebody waved this one away.
+
+**Five minutes, and on focus.** Deployments here happen a few times a week, and
+each check is a request from every open tab. The case that matters — coming back
+to a tab left open overnight — is the focus listener; the interval only covers a
+tab left in front all afternoon. The same shape as the notification bell, which
+had the same choice to make.
+
+**Not watched in a browser.** The detection is proven end to end with curl
+against `next start`; what nobody has seen is the card appearing, the Reload
+button, or the two bottom notices stacking on a phone.
+
+### Feature 13 — The worker sees a deployment ✅ merged (PR #44)
+
+- [x] The page registers `/sw.js?v=<deployment id>`, so a deploy is a script
+      change the browser can find
+- [x] The worker reads its own version back out of that URL
+- [x] `activate` therefore drops the previous build's caches, which is what it
+      was always written to do and had never once done
+- [x] The **path** is unchanged, so the registration — and the push
+      subscription hanging off it — is updated rather than replaced
+- [x] Bare `/sw.js` and `v1` wherever there is no deployment id
+
+**This is the open item Feature 12 left behind, and it is the same fact seen
+from the other side.** #12 could not use the worker's update flow to detect a
+deployment because `public/sw.js` is byte-identical from one build to the next,
+so the browser's comparison never finds a change. That is not only a missed
+signal: it means `install` has run exactly once, on the day the app was first
+opened. The shell cache still holds that build's `/offline`, and because Next
+appends `?dpl=` to static assets, every deployment has been *adding* a copy of
+every asset it touched rather than replacing one. The `activate` cleanup that
+was supposed to prevent that has never fired.
+
+**Versioning the registration URL, not the file.** The note in this plan
+proposed serving the worker from a route handler with the id substituted into
+its body. That works, and it is more machinery than the job needs: it moves the
+file out of `public/`, and the existing header rule and static serving with it.
+A script URL that differs by a query is already a different script to the
+browser, so `/sw.js?v=<id>` is enough to make a deploy visible. The worker still
+cannot import anything — it is served as-is — so it reads its version out of
+`self.location` rather than having it baked in, which is the one thing the route
+handler would have bought.
+
+**Changing the path would have unsubscribed every installed device from push.**
+This is the trap worth remembering, and it is why the version rides in the query
+rather than in the filename. Scope comes from the path: `/sw.js?v=…` is still
+`/sw.js`, so `getRegistration()` finds the same registration and updates it.
+`/sw-<id>.js` would have been a *second* registration, orphaning the first along
+with the `PushSubscription` that belongs to it — and nothing on screen would
+have said so. A test asserts the pathname for that reason alone.
+
+**One read of the deployment id, so the two callers cannot disagree.**
+`loadedDeploymentId()` moved out of `components/update-notice.tsx` into
+`lib/version/update-check.ts`. The notice compares it against the live one and
+the registration keys its URL on it; both now mean the same "which build served
+this document", taken from the same `data-dpl-id` attribute.
+
+**The reload button's `registration.update()` is close to a no-op now**, and is
+kept for the build that has no id. Where the URL is versioned, what swaps the
+worker is the reloaded page registering the new build's URL. Where it is not,
+that call is the only thing the browser has to go on.
+
+**The cost is that a deploy now empties the caches**, which is the point but is
+worth stating plainly: the first load after a deployment re-fetches the shell,
+and an old-build tab left open *and* offline loses the chunks it had cached.
+Online that tab is fine — `?dpl=` keeps serving it the deployment it was built
+against — and Next's skew protection hard-navigates its next navigation anyway.
+
+**Not watched in a browser.** All four checks pass, and `/sw.js?v=…` is
+confirmed against `next start` to answer 200 as JavaScript with
+`no-cache, no-store, must-revalidate` — the query does not miss the header rule
+or the static file. What nobody has seen is the second worker installing on a
+real device, which is the only place the whole claim is checkable.
+
 ### Feature 11 — Loading skeletons ✅ merged (PR #40)
 
 - [x] A `Skeleton` primitive, and a kit of section shapes every fallback is
@@ -984,6 +1148,14 @@ nothing if the recording waits for you to look.
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push  | The browser needs it to subscribe              |
 | `VAPID_PRIVATE_KEY`     | Web push         | Server-side only; signs every push             |
 | `VAPID_SUBJECT`         | Web push         | `mailto:` contact for the push services        |
+| `NEXT_DEPLOYMENT_ID`    | Update notice    | Unset. Vercel's own id is used; see below      |
+
+**On `NEXT_DEPLOYMENT_ID`:** nothing needs to set it. `deploymentId()` falls
+through to `VERCEL_DEPLOYMENT_ID`, then the commit sha, then `VERCEL_URL`, each
+of which changes on every deployment — which is the only property the update
+notice needs. Set it by hand to exercise the notice locally, since `next build`
+belongs to no deployment: build under one value, `pnpm start` under another, and
+the page and the endpoint disagree exactly as they would after a deploy.
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
@@ -1098,6 +1270,23 @@ Things already hit, so they are not hit twice.
   types of a `VALUES` list from its first row, so an uncast literal arrives as
   `text` and fails to compare against an `integer` id or assign to a `numeric`.
   Only the first tuple needs them; see `reconvertEntriesStatement`.
+- **`process.env.FOO` is inlined into the server bundle at build time.** Not
+  only the `NEXT_PUBLIC_` ones, and not only in client code — a literal
+  `process.env.NEXT_DEPLOYMENT_ID` inside a route handler answers with whatever
+  was set during `next build`, while `next.config.ts` is re-read when the server
+  boots and answers with what is set *then*. Two reads of one variable
+  disagreeing is a bug that only appears where the build environment and the run
+  environment differ, which is nowhere on Vercel and everywhere in a
+  build-once-run-anywhere setup. Index with a variable —
+  `process.env[key]` — when the value has to be a runtime fact. See
+  `lib/version/deployment.ts`.
+- **The service worker cannot see a deployment.** `public/sw.js` is served
+  as-is, so its bytes are identical from one deployment to the next and the
+  browser's update check finds nothing — no `updatefound`, no waiting worker.
+  Anything that needs to react to a deploy has to compare something that
+  actually changes, which is what `deploymentId` is for. It also means the shell
+  cache keeps the assets of every build it has seen, since `deploymentId` adds
+  `?dpl=` to their URLs and a new query is a new cache key.
 - **A `loading.tsx` renders inside its own layout, so an awaiting layout blocks
   it.** The fallback is nested _within_ `layout.tsx`, not around it — which
   means every `await` at the top of a layout delays the "instant" loading state
@@ -1295,6 +1484,13 @@ Not blocking, but worth doing.
       idempotency care the recurring materialiser needed. Still hand-written
       rather than Serwist, which the Next guide recommends and which requires
       webpack; this project builds with Turbopack.
+- [x] ~~**The service worker never changes, so nothing it cached is ever
+      reconsidered.**~~ Fixed by Feature 13. The registration is versioned
+      (`/sw.js?v=<deployment id>`) rather than the file being made dynamic, so a
+      deploy is a script change the browser can find and the `activate` cleanup
+      finally runs. The route handler this note proposed was the more expensive
+      half of the same idea — see the feature for why the query wins, and for
+      the reason the version must not go in the *path*.
 - [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
       every page rendered in one blocking pass — a throw produced the framework's
       500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the

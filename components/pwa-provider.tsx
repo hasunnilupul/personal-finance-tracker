@@ -4,6 +4,9 @@ import { useEffect, useSyncExternalStore } from "react";
 import { ShareIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import UpdateNotice from "@/components/update-notice";
+import { serviceWorkerUrl } from "@/lib/pwa/service-worker";
+import { loadedDeploymentId } from "@/lib/version/update-check";
 import { logger } from "@/lib/logger/logger";
 
 const DISMISSED_KEY = "financeflow:install-hint-dismissed";
@@ -58,15 +61,21 @@ function dismissHint(): void {
 }
 
 /**
- * Registers the service worker, and tells iOS users how to install.
+ * Registers the service worker, and owns the two notices that hang off the
+ * bottom of the app: how to install it, and that it has been redeployed.
  *
- * Two halves of the same problem. Chrome needs a worker with a `fetch` handler
- * before it will offer to install at all; Safari has never offered, on any
- * version, and never will — on iOS the only route is Share ▸ Add to Home
- * Screen, so the app has to say so itself or nobody finds it.
+ * The install hint is two halves of one problem. Chrome needs a worker with a
+ * `fetch` handler before it will offer to install at all; Safari has never
+ * offered, on any version, and never will — on iOS the only route is Share ▸
+ * Add to Home Screen, so the app has to say so itself or nobody finds it.
  *
  * The worker now also serves offline reads and shows pushes, which raises the
  * cost of a stale one: it would keep answering navigations from an old cache.
+ *
+ * Both notices share one fixed stack rather than each pinning itself to the
+ * bottom of the screen, because on an iPhone that has not installed the app
+ * yet they can be on screen at the same time and two `fixed` cards at the same
+ * offset would sit on top of each other.
  */
 const PwaProvider = () => {
   const showHint = useSyncExternalStore(subscribe, shouldShowHint, () => false);
@@ -77,7 +86,12 @@ const PwaProvider = () => {
     }
 
     navigator.serviceWorker
-      .register("/sw.js", {
+      // Versioned by the build that served this page. The file's own bytes
+      // never change, so without the query the browser's update check finds
+      // nothing and the worker installed on the first visit is the one it
+      // keeps — see `serviceWorkerUrl`. The path, and therefore the scope and
+      // the registration the push subscription belongs to, is unchanged.
+      .register(serviceWorkerUrl(loadedDeploymentId()), {
         // Never satisfy the worker's own update check from the HTTP cache.
         // `next.config.ts` already sends `no-store` for `/sw.js`; this is the
         // half that does not depend on a host or a CDN honouring it, and a
@@ -91,32 +105,36 @@ const PwaProvider = () => {
       });
   }, []);
 
-  if (!showHint) {
-    return null;
-  }
-
   return (
     // Sits above the mobile bottom navigation, which is 4rem tall and fixed.
-    <div className="fixed inset-x-3 bottom-20 z-50 md:bottom-4">
-      <div className="bg-card border-border mx-auto flex max-w-md items-start gap-3 rounded-2xl border p-3 shadow-2xl">
-        <div className="min-w-0 flex-1">
-          <p className="text-foreground text-sm font-medium">Add FinanceFlow to your home screen</p>
-          <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-xs">
-            Tap
-            <ShareIcon className="inline size-3.5" aria-label="the Share button" />
-            in the browser bar, then <span className="text-foreground">Add to Home Screen</span>.
-          </p>
-        </div>
+    // The stack itself never takes a click — it is full-width and mostly empty,
+    // so only the cards inside it are given pointer events back.
+    <div className="pointer-events-none fixed inset-x-3 bottom-20 z-50 flex flex-col items-center gap-2 md:bottom-4">
+      <UpdateNotice />
 
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={dismissHint}
-          aria-label="Dismiss the install hint"
-        >
-          <XIcon />
-        </Button>
-      </div>
+      {showHint && (
+        <div className="bg-card border-border pointer-events-auto flex w-full max-w-md items-start gap-3 border p-3 shadow-2xl">
+          <div className="min-w-0 flex-1">
+            <p className="text-foreground text-sm font-medium">
+              Add FinanceFlow to your home screen
+            </p>
+            <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-xs">
+              Tap
+              <ShareIcon className="inline size-3.5" aria-label="the Share button" />
+              in the browser bar, then <span className="text-foreground">Add to Home Screen</span>.
+            </p>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={dismissHint}
+            aria-label="Dismiss the install hint"
+          >
+            <XIcon />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
