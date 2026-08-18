@@ -48,12 +48,16 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 11 — loading skeletons** (PR #40, merged into
-`dev` on 2026-08-17). Every route answers a navigation with a skeleton of its
-own shape, and a filter, month or range change greys only the figures it
-changes. **Nobody has watched one resolve** — see the caveat under the feature.
+**Last completed:** **Feature 12 — new-version notice** (PR #43). A tab that was
+open when a deployment went out says so and offers a reload. The detection is
+**verified against a real production build**; the card itself is unseen.
 
-**Before that:** **Feature 10 — offline reads** (PR #37). The app opens and
+**Before that:** **Feature 11 — loading skeletons** (PR #40, released in
+`d0aff32`). Every route answers a navigation with a skeleton of its own shape,
+and a filter, month or range change greys only the figures it changes. **Nobody
+has watched one resolve** — see the caveat under the feature.
+
+**And before that:** **Feature 10 — offline reads** (PR #37). The app opens and
 reads without a connection, and the page cache ends with the session.
 
 **And before that:** **Feature 9d — invitations notify without asking** (PR
@@ -124,9 +128,10 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**In progress:** nothing.
+**Feature 12 — new-version notice** (PR #43) is the latest work, and nothing
+else is in progress.
 
-**`main` and `dev` hold the same code**, and `dev` is one commit ahead — this
+**`main` and `dev` hold the same code as of the 2026-08-17 release**, and `dev` is one commit ahead — this
 record itself, written after the merge. A release record has no feature branch
 to ride along on, so it is committed straight to `dev` rather than through a
 documentation branch of its own: the repo owner asked for those to stop on
@@ -801,6 +806,64 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
+### Feature 12 — New-version notice ✅ done, PR open
+
+- [x] `deploymentId` set from the deployment's own environment, which also
+      turns on Next's version-skew protection
+- [x] `/api/version` — public, uncached, reports the running build
+- [x] A tab compares the id it was served with against that, on focus and on a
+      slow interval, and offers a reload when they differ
+- [x] Never reloads by itself, and never nags twice for the same version
+- [x] Silent wherever there is no id to compare
+
+**The service worker could not answer this.** The obvious mechanism for "a new
+version is out" in a PWA is the worker's own update flow — `updatefound`, a
+waiting worker, `skipWaiting`. It does not work here: `public/sw.js` is a static
+file whose bytes are identical from one deployment to the next, so the browser's
+byte comparison finds no change and no update event ever fires. A deployment is
+invisible to it. What *does* change every deployment is the deployment id, so
+that is what is compared.
+
+**Both sides must read the id at the same moment, and finding out why cost a
+real bug.** `data-dpl-id` comes from `next.config.ts`, which the server re-reads
+when it boots; the endpoint reads `process.env`, which the bundler **inlines at
+build time**. Built under one id and started under another, the page said one
+thing and the endpoint another — and since a reload cannot change either, the
+notice would have shown on a page that was already current, for ever. Both now
+go through `deploymentId()`, which indexes `process.env` with a variable so it
+cannot be inlined. Verified by building under `build-a` and starting under
+`build-b`: page and endpoint both answer `build-b`, and no notice is raised.
+
+**Verified the other direction too**, which is the point of the feature: a page
+served under `build-b`, then the server restarted as `build-c`, and the poll
+comes back different. That is the exact shape of a redeploy under an open tab.
+
+**It asks rather than acts.** A page that reloaded itself would throw away a
+half-typed expense to fix a problem the reader had not noticed. Next's own
+skew protection already hard-navigates the *next* navigation, so the only person
+this notice is for is the one sitting still — and they can finish first.
+
+**A poll that fails is not news.** Offline, a 500, a captive portal answering
+with HTML: each returns "no answer", never "changed". `hasNewDeployment` refuses
+to compare unless both ids are present, and `parseVersionResponse` refuses
+anything that is not a non-empty string. The tests weight this direction
+deliberately — a false alarm is produced by ordinary conditions, and it is the
+failure that costs somebody their unsaved input.
+
+**Dismissing is per version, not per notice.** The id that was dismissed is
+remembered, so the next deployment says so again rather than staying quiet
+because somebody waved this one away.
+
+**Five minutes, and on focus.** Deployments here happen a few times a week, and
+each check is a request from every open tab. The case that matters — coming back
+to a tab left open overnight — is the focus listener; the interval only covers a
+tab left in front all afternoon. The same shape as the notification bell, which
+had the same choice to make.
+
+**Not watched in a browser.** The detection is proven end to end with curl
+against `next start`; what nobody has seen is the card appearing, the Reload
+button, or the two bottom notices stacking on a phone.
+
 ### Feature 11 — Loading skeletons ✅ merged (PR #40)
 
 - [x] A `Skeleton` primitive, and a kit of section shapes every fallback is
@@ -1003,6 +1066,14 @@ nothing if the recording waits for you to look.
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push  | The browser needs it to subscribe              |
 | `VAPID_PRIVATE_KEY`     | Web push         | Server-side only; signs every push             |
 | `VAPID_SUBJECT`         | Web push         | `mailto:` contact for the push services        |
+| `NEXT_DEPLOYMENT_ID`    | Update notice    | Unset. Vercel's own id is used; see below      |
+
+**On `NEXT_DEPLOYMENT_ID`:** nothing needs to set it. `deploymentId()` falls
+through to `VERCEL_DEPLOYMENT_ID`, then the commit sha, then `VERCEL_URL`, each
+of which changes on every deployment — which is the only property the update
+notice needs. Set it by hand to exercise the notice locally, since `next build`
+belongs to no deployment: build under one value, `pnpm start` under another, and
+the page and the endpoint disagree exactly as they would after a deploy.
 
 **On the two database URLs:** they are the pooled and direct connections of one
 Neon endpoint, and `drizzle.config.ts` refuses to migrate if they are not — see
@@ -1117,6 +1188,23 @@ Things already hit, so they are not hit twice.
   types of a `VALUES` list from its first row, so an uncast literal arrives as
   `text` and fails to compare against an `integer` id or assign to a `numeric`.
   Only the first tuple needs them; see `reconvertEntriesStatement`.
+- **`process.env.FOO` is inlined into the server bundle at build time.** Not
+  only the `NEXT_PUBLIC_` ones, and not only in client code — a literal
+  `process.env.NEXT_DEPLOYMENT_ID` inside a route handler answers with whatever
+  was set during `next build`, while `next.config.ts` is re-read when the server
+  boots and answers with what is set *then*. Two reads of one variable
+  disagreeing is a bug that only appears where the build environment and the run
+  environment differ, which is nowhere on Vercel and everywhere in a
+  build-once-run-anywhere setup. Index with a variable —
+  `process.env[key]` — when the value has to be a runtime fact. See
+  `lib/version/deployment.ts`.
+- **The service worker cannot see a deployment.** `public/sw.js` is served
+  as-is, so its bytes are identical from one deployment to the next and the
+  browser's update check finds nothing — no `updatefound`, no waiting worker.
+  Anything that needs to react to a deploy has to compare something that
+  actually changes, which is what `deploymentId` is for. It also means the shell
+  cache keeps the assets of every build it has seen, since `deploymentId` adds
+  `?dpl=` to their URLs and a new query is a new cache key.
 - **A `loading.tsx` renders inside its own layout, so an awaiting layout blocks
   it.** The fallback is nested _within_ `layout.tsx`, not around it — which
   means every `await` at the top of a layout delays the "instant" loading state
@@ -1314,6 +1402,17 @@ Not blocking, but worth doing.
       idempotency care the recurring materialiser needed. Still hand-written
       rather than Serwist, which the Next guide recommends and which requires
       webpack; this project builds with Turbopack.
+- [ ] **The service worker never changes, so nothing it cached is ever
+      reconsidered.** `public/sw.js` is static, and its `install` — which
+      precaches `/offline` and the icons — runs only when its own bytes change.
+      A deployment therefore leaves the previous build's `/offline` in the shell
+      cache, and `?dpl=` means each deployment adds another copy of every static
+      asset it touches rather than replacing one. Neither is serious: the stale
+      `/offline` is an explanation rather than data, and browsers evict. The fix
+      is to serve the worker from a route handler with the deployment id
+      substituted in, so a deploy changes its bytes and the existing `activate`
+      cleanup does the rest. That is a change to how the worker is served, so it
+      is a feature rather than a corner of Feature 12.
 - [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
       every page rendered in one blocking pass — a throw produced the framework's
       500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
