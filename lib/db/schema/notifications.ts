@@ -43,7 +43,7 @@ export const notifications = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** `budget_overspend` | `recurring_created` — see `NotificationType`. */
+    /** `budget_warning` | `budget_overspend` | `recurring_created` — see `NotificationType`. */
     type: varchar("type", { length: 40 }).notNull(),
     title: varchar("title", { length: 160 }).notNull(),
     body: varchar("body", { length: 400 }).notNull(),

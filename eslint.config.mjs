@@ -67,6 +67,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src/components/ui/**",
+
+    // Playwright's own output. `playwright-report` is 2.3MB of bundled
+    // JavaScript, and linting it turned `pnpm lint` from seconds into a hang
+    // for anybody who had run the suite even once.
+    "playwright-report/**",
+    "test-results/**",
+    "blob-report/**",
   ]),
 ]);
 

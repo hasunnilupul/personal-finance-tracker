@@ -10,32 +10,121 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-19** — PR open, `dev` → `main`, carrying **#46 (Feature 14
-— error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
-plan records for the 2026-08-18 release and for #47. **No migrations and no
-dependency changes:** `git diff main dev -- lib/db/` is empty, the lockfile is
-untouched, and the only `package.json` change is the `dev` script moving to port
-3001 — which never runs in production. So the deploy-time migrate step is a
-no-op again. **This one must be merged as a merge commit, not squashed.**
+**Releasing 2026-08-19 (second)** — PR open, `dev` → `main`, and the largest
+release this project has had. It carries **#49** (the update notice removed),
+**#50** (the mark on the auth card, the sidebar and a phone), **#51** (the
+browser smoke suite), **#52** (CSV export) and **#53** (budget warnings at 80%),
+plus the plan records for each. **This one must be merged as a merge commit,
+not squashed.**
 
-**What this release leaves unverified, before it is merged.** #46's dashboard
-boundary has never been seen — reaching it needs a signed-in session, so that it
-renders *inside* the shell rather than replacing it still rests on the file's
-position rather than on having been watched. #47's splash has been seen in a
-browser tab but **never in the installed app on a real device**, which is the
-one moment a launch screen exists for. Neither gap is new and neither blocks the
-release; both need the owner's own credentials on a real device, which is the
-standing gap no release has closed.
+**No migrations. One dependency change, and it is the first in several
+releases.** `git diff main dev -- lib/db/migrations/**` is empty; the only
+`lib/db/` change is a doc comment and a `NotificationType` union gaining
+`budget_warning`, which is a type-level guard over an existing `varchar` and
+costs the database nothing. So the deploy-time migrate step is a no-op again.
+The dependency is **`@playwright/test`, a devDependency** — nothing imports it
+at runtime and nothing in `app/` or `lib/` references it. **Installing it does
+not download browsers**: that was observed directly, when the suite's first run
+failed asking for `playwright install`. It adds install time to the build and
+nothing else.
 
-**This is the deployment that can finally prove Feature 13.** The 2026-08-18
-release was the first to hand installed devices the versioned registration, so
-`install` has had no reason to run a second time until now. This deploy is when
-a new worker should install and `activate` should drop the previous build's
-caches for the first time since Feature 10 shipped. **If it does not, suspect
-the registration URL before suspecting the cache code.**
+**What is different about this release: some of it is now self-verifying.** The
+suite in #51 asserts the sign-in page, the splash gate, the gate script's
+position, the dashboard shell at two widths, `/offline`, the manifest, and the
+export's guard and headers — 17 tests against a production build. That is a
+smaller set than the standing gap, but it is the first part of this app that
+does not depend on somebody remembering to look.
+
+**Still unverified, and none of it new:** whether push actually delivers,
+whether `financeflow-private-*` disappears from Cache Storage on sign-out,
+whether an invitation notice reaches the other account, and **whether Feature 13
+ever worked** — the id changed at the last release, which is the precondition,
+but nothing has confirmed a new worker installed and dropped the previous
+build's caches. **This deploy is another chance to see it.**
+
+**Two things in this release have never been seen by a person**, as opposed to
+by a test: the budget *warning* notification actually arriving in the bell, and
+the CSV opening in a spreadsheet. The suite asserts the endpoint's headers and
+the file's header row; it does not assert that Excel is happy with it.
 
 **Still to fill in after the merge:** the merge SHA, that it has two parents,
 and what the live site actually answered. — pending.
+
+**Released 2026-08-19** — `4cc30b8` (PR #48), carrying **#46 (Feature 14 —
+error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
+plan records for the 2026-08-18 release and for #47. **No migrations and no
+dependency changes** — `git diff main dev -- lib/db/` was empty and the lockfile
+untouched, the only `package.json` change being the `dev` script moving to port
+3001, which never runs in production — so the deploy-time migrate step was a
+no-op again.
+
+**Merged with a merge commit, and the history is convergent.** `4cc30b8` has two
+parents (`45305b7` and `7fc66ba`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`, so the next release PR will list only what is new. That is
+the rule being followed rather than repaired.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; and **`/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`**, identically with and without
+`?v=<id>` — so the query misses neither the header rule nor the static file.
+
+**The id agrees on both sides again, and it is a new one.** `/api/version`
+reports `dpl_F9hiY77kzSpivpTxQe9TfCuRNCt8` and the page's `data-dpl-id` is the
+same string; the previous release reported `dpl_79M3hmykYNdwoQsqpdVdeKUs2fT8`.
+A changed id is the precondition for everything Feature 13 does.
+
+**The splash reached production in the right shape** — checked in the response
+body, not inferred from the build: the gate script is present, it is inside
+`<body>` rather than a `<head>` of the layout's own, it precedes the splash
+markup so the parser runs it first, and the brand mark's SVG is there. This is
+the half that can be proved from outside.
+
+**Feature 13 is still not proven, and this deploy was the chance.** The id
+changed, which is the precondition, but whether a new worker actually installed
+and whether `activate` dropped the previous build's caches cannot be seen from
+`curl` — it needs a browser that already had the previous version installed.
+**If it turns out not to have happened, suspect the registration URL before
+suspecting the cache code.**
+
+**Seen on a real installed device, 2026-08-19: the splash plays on a cold
+start.** That closes the gap this release opened with — a launch screen had only
+ever been watched in a browser tab, and the installed app is the moment it
+exists for. **It does not prove Feature 13.** Navigations are network-first, so
+an online device would have been served the new document whether or not a new
+worker installed; the splash playing says the document was fresh, nothing more.
+
+**Feature 12 — the new-version notice — was removed on 2026-08-19** (PR #49,
+`35fe5b7`), and the real-device test is what settled it. Opening the installed app after the deploy
+showed no banner, which was *correct*: the document that just arrived is the new
+deployment, so the loaded id and `/api/version` agree, and the effect
+deliberately does not check on mount either. But that is the point — the only
+session it can ever fire for is one that was **already open when a deploy
+landed**, and on a phone, where the app is cold-started and deploys land while
+it is closed, that combination essentially never happens. A feature that is
+correct and unreachable is still not doing its job.
+
+Nobody is left stranded by its going. Next's own `deploymentId` support adds
+`x-nextjs-deployment-id` to navigation responses and **triggers a hard
+navigation on a mismatch** — confirmed in
+`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/deploymentId.md`,
+not inferred from our own comment. So a stale tab that navigates reloads itself
+anyway. What was removed is the *telling*, not the recovery.
+
+**What stayed, and why it had to.** `loadedDeploymentId()` is Feature 13's, not
+Feature 12's: `serviceWorkerUrl()` keys the worker's registration URL on it, and
+without a changing query the browser's update check finds nothing. It moved to
+`lib/version/loaded-deployment.ts` rather than being deleted with the notice.
+`/api/version` also stayed, with nothing in the app calling it — it is the
+release check every record here has used since 2026-08-18.
+
+**What this release did not prove.** The deploy is green and the app answers,
+which is a weaker claim than the features working. Still unseen: **#46's dashboard boundary**, so that it renders inside the shell
+rather than replacing it still rests on the file's position; whether push
+actually delivers; whether `financeflow-private-*`
+disappears from Cache Storage on sign-out; and whether an invitation notice
+reaches the other account. Each needs a signed-in browser with the owner's own
+credentials — the standing gap no release has closed.
 
 **Released 2026-08-18** — `45305b7` (PR #45), carrying #43 (Feature 12 —
 new-version notice) and #44 (Feature 13 — the worker sees a deployment), plus
@@ -244,10 +333,55 @@ documentation branch of its own: the repo owner asked for those to stop on
 2026-08-17, and everything else belongs in the commits of the feature it
 describes.
 
-**Still to come:** no feature is planned. The one known gap is offline *entry*,
-which Feature 10 deliberately leaves out: writes are not queued, and doing it
-properly means IndexedDB and a replay queue with the same idempotency care the
-recurring materialiser needed.
+**Feature 16 — the mark where people actually look** merged as #50
+(`e9396da`). Feature 15 drew a logo and then showed it in the one place nobody
+stays: a splash that leaves after 1.45s. This puts it on the sign-in and sign-up
+card — which had no branding at all, and is the first thing anybody sees of this
+app — in the sidebar header, and in a `md:hidden` topbar row, because the
+sidebar is desktop-only and a phone is where this app is opened.
+
+**One thing in it is still unwatched: the desktop sidebar.** The browser window
+refused to resize past a phone-width viewport, reporting success each time while
+the viewport stayed at ~400px, and the extension disconnected before another
+attempt was possible. It is three lines in the same shape as the two that were
+verified, and it merged on that basis. **Worth a glance at a desktop width.**
+
+**It made `BrandMark` safe to draw twice, which it was not.** The gradient's DOM
+id was hard-coded, and the splash is in the root layout, so every page now
+carries two marks. `url(#…)` resolves to the *first* matching id in the
+document: duplicates do not break the picture today, they silently hand every
+later mark the first one's gradient. The day somebody adds a muted or monochrome
+variant it renders in the wrong colours with nothing in the markup to explain
+why. `gradientId` is now a prop, and every caller passes an explicit one so the
+default can never collide with the splash.
+
+**The mark is `decorative` wherever a visible "FinanceFlow" sits beside it**,
+or a screen reader announces the name twice for one piece of branding.
+
+**All three are merged as of 2026-08-19** — #51, #52 and #53 — and **none is
+released**. The list below is kept because the ordering argument is the useful
+part of it, not the status.
+
+**Still to come — three features, agreed 2026-08-19, in this order:**
+
+1. **Feature 17 — a browser smoke suite.** The reason it is first: every real
+   defect of the past week was invisible to all four checks. It also retires the
+   "needs a signed-in browser with the owner's own credentials" gap that six
+   release records have now repeated.
+2. **Feature 18 — data export.** There is none. Years of hand-entered figures
+   in one database with no user-facing way to get them out.
+3. **Feature 19 — warn before a budget is blown.** `findExceeded` already runs
+   after every expense, but only ever says *you went over*, by which point the
+   money is spent.
+
+**Offline *entry* is deliberately not among them.** It is the largest item on
+the list — IndexedDB and a replay queue with the same idempotency care the
+recurring materialiser needed — and offline *reads* have never been proved on a
+device. Feature 17 is what would make that provable, so it goes first.
+
+**Merging `expenses` and `income` is still not worth doing**, for the reason
+already recorded under follow-ups: the shared service layer absorbs most of the
+cost, and the migration would buy tidiness rather than capability.
 
 **Both cron routes are scheduled and both are live.** `vercel.json` lists
 `/api/cron/refresh-rates` at 03:00 and `/api/cron/materialise-recurring` at
@@ -279,8 +413,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by #46, #47 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
+| `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
+| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
 
 ---
 
@@ -964,7 +1098,15 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
-### Feature 12 — New-version notice ✅ merged (PR #43)
+### Feature 12 — New-version notice ❌ removed (built #43, removed #49)
+
+> **The banner is gone.** It shipped in #43, was released on 2026-08-18, and was
+> removed on 2026-08-19 after its first test on a real device. It was never
+> broken — it was unreachable. The only session it could fire for was one
+> already open when a deploy landed, which on a cold-started phone app
+> essentially never happens. `loadedDeploymentId()` and `/api/version` survive
+> it; see Current position. The checklist below records what was built.
+
 
 - [x] `deploymentId` set from the deployment's own environment, which also
       turns on Next's version-skew protection
@@ -1021,6 +1163,199 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Feature 17 — A browser smoke suite ✅ merged (PR #51)
+
+- [x] Playwright, driving a real browser against a real production build
+- [x] Sign-in renders, and a wrong password is refused
+- [x] The splash gate: shown once, `data-splash="done"` on the second load
+- [x] The gate script itself — one executable copy, in `<body>`, ahead of the
+      splash markup
+- [x] The dashboard shell paints for a signed-in session, sidebar and mark
+      included, at desktop **and** phone widths
+- [x] `/offline` answers, and `/manifest.webmanifest` is served as a manifest
+- [x] 13 tests, green
+
+**Why this is first.** Four green checks — `typecheck`, `lint`, 319 tests,
+`build` — passed against every defect found in the week of 2026-08-19: a
+hand-written `<head>` that made React substitute a `<div>` for the splash gate
+script, a mark that rendered at 1905px when the stylesheet did not land, a
+notice that was correct and unreachable, and a sidebar that merged unwatched.
+The unit suite is good at the layer it covers and structurally blind to
+anything that only exists in a rendered page.
+
+**The second payoff is the larger one.** "Needs a signed-in browser with the
+owner's own credentials" has been recorded as a standing gap in six consecutive
+release records — push delivery, invitation notices, the sign-out cache purge,
+the dashboard error boundary, Feature 13's cache eviction. A suite that can sign
+itself in retires that list instead of re-recording it every release.
+
+**It should not download a browser if it can be helped.** Playwright's own
+Chromium is a large binary and there is no CI here to need it; the machine
+already has Chrome. Prefer the installed channel and record what was chosen.
+
+**It downloads no browser at all.** `channel: "chrome"` uses the machine's own
+Chrome. The channel is set in the top-level `use` rather than on the browser
+project, because **a Playwright project does not inherit `use` from a sibling**
+— the `setup` project fell back to the bundled headless shell, which is not
+installed, and the suite died before a single test ran.
+
+**Three real findings, none of which any other check could have produced:**
+
+1. **`BETTER_AUTH_URL` must match the port being served.** better-auth refused
+   every sign-in from port 3100 with `INVALID_ORIGIN`, and said so *only in the
+   server log* — the browser simply waited. The same trap the gotchas record
+   for `next dev` on the wrong port, met from the other direction. The config
+   sets it for the test server.
+2. **Counting inline scripts that mention a string gives 2, not 1, in any App
+   Router page.** Next's RSC flight payload serialises the layout's markup back
+   into the document, gate source and all. One is a script that runs; the other
+   is data being replayed into `self.__next_f`. The test excludes it explicitly.
+3. **`pnpm lint` hung** once the suite had run, because `playwright-report/` is
+   2.3MB of bundled JavaScript and nothing ignored it. Added to
+   `globalIgnores`. It would have hit the repo owner, not just the suite.
+
+**The setup fixture signs in before it signs up, and the order is not
+arbitrary.** The account exists on every run but the first, so signing up first
+meant waiting out a doomed navigation before falling back — 15s of a 30s
+budget, which made the fixture fail 2.4s *after* successfully signing in. The
+rare path pays the wait now.
+
+**It cost one row in the development database**, deliberately:
+`e2e@financeflow.test` on a reserved TLD that can never be a real mailbox,
+signed up once and signed in forever after. A fresh address per run would leave
+a trail of dead users and personal spaces that nothing cleans up.
+
+**The sidebar from PR #50 is now verified.** It merged unwatched because the
+browser window would not resize; the suite asserts it at a 1280px viewport on
+every run, which is the better answer than looking once.
+
+### Feature 18 — Data export ✅ merged (PR #52)
+
+- [x] CSV of a space's entries, scoped and permission-checked like every other read
+- [x] Honest about currency: the entered amount, the rate, and the base amount
+- [x] Streamed and keyset-paged rather than built in memory
+- [x] `lib/export/csv.ts`, with tests for every value that breaks a CSV
+- [x] A download in Space settings, and four e2e tests behind it
+
+**Why.** There is no export of any kind. This is years of hand-entered
+financial data in a single database, and the only answer to "can I get my
+figures out" is a database client. It is also the honest answer to "can I
+leave", which matters for something a family is being asked to put its spending
+into.
+
+**Keyset, not `OFFSET`, and the reason is correctness rather than speed.** An
+export walks the whole table over several round trips, and an `OFFSET` walk is
+defined against a result set being rewritten underneath it — one entry added
+mid-export shifts every later page by one, so a row is silently skipped, and
+one deleted makes a row appear twice. A cursor on the same `(date, id)` the
+ordering uses asks for what comes *after a row* rather than for a position, and
+cannot do either. `findTransactionPage` was the wrong tool twice over: it caps
+`pageSize` at 100 and runs a `count()` on every call.
+
+**Two amounts, because they are different numbers.** What was spent, in the
+currency it was spent in, and what that came to in the base currency at that
+day's rate. Only the base amount loses what actually happened; only the entered
+amount gives a column that cannot be summed. Both plus the rate is what makes
+the file reconcilable against a statement.
+
+**The CSV writer is small, and wrong in three ways if written from memory.** A
+comma adds a column and shifts every field after it; an unescaped quote or
+newline ends the record early and the file parses short with no error anywhere;
+and a cell beginning `=`, `+`, `-` or `@` is *evaluated* when the file is
+opened. That last one is a security property rather than a formatting one — in
+a shared space the descriptions are written by other people, so a row could
+carry `=IMPORTXML(...)` that runs when the owner opens the file. Numbers are
+exempted from the guard deliberately: a negative amount begins `-` and is not
+an attack.
+
+**The browser suite earned its keep on its first outing.** A signed-out request
+returning 200 looked like a pass because `page.goto` *follows the redirect* and
+the sign-in page answers 200 — the assertion had to be `maxRedirects: 0`. And
+it found a real bug in the route: when a reader goes away mid-chunk, the `pull`
+already awaiting a row resolves after the stream is torn down and calls
+`close()` on a dead controller, throwing `Invalid state: Controller is already
+closed` and logging a cancelled download as a server error. Nothing else could
+have produced either.
+
+### Feature 19 — Warn before a budget is blown ✅ merged (PR #53)
+
+- [x] A threshold crossing notifies, not only the breach — 80%, in one constant
+- [x] One pass, one figure: `findExceeded` became `findCrossings` and classifies
+- [x] One warning per budget per window, on **its own** dedupe key
+- [x] `budget_warning` is its own notification type, with its own icon
+- [x] Six tests, both boundary sides, each checked against the broken code
+
+**Why.** The machinery is built and tested. `budgetService.findExceeded` runs
+after every expense write and notifies the space, but only ever says *you went
+over* — after the money is spent. The same two functions answer "85% with nine
+days left", which is the version that can change what somebody does.
+
+**The warning needed its own dedupe key, and that is the whole feature's
+sharpest edge.** `dedupeKey` is a unique constraint written with
+`onConflictDoNothing`, so a key used once never fires again. Had the warning
+reused `budget:<id>:<window>`, it would have claimed that key at 80% and the
+overspend notice that followed would have been silently dropped — **passing
+the limit would then say nothing at all**, which is strictly worse than never
+warning. The breach keeps the original key unsuffixed, deliberately: adding a
+suffix there would miss every key already written and re-announce overspends
+people were told about days ago.
+
+**One pass, not two.** `findExceeded` became `findCrossings` and classifies the
+single figure it already computed. A warning derived separately would
+eventually disagree with the breach, and being told "you are near your limit"
+by an app that has already decided you are over it is worse than silence.
+
+**80% is a judgement, not a derivation**, and it is one constant so it is
+arguable in one place. Lower fires in the first week of every month and gets
+learned as noise; higher and the money is gone before anything is said.
+
+**Two existing tests asserted the old silence** — "says nothing while under the
+limit" at 99.99%, and "says nothing when the spend exactly equals the limit".
+Both were correct and both are now wrong on purpose, so they were rewritten to
+assert a *warning* rather than deleted. Every new test was checked against the
+broken code: sharing the dedupe key fails one, moving the threshold fails two.
+
+### Feature 16 — The mark where people look ✅ merged (PR #50)
+
+- [x] `BrandMark` takes a `gradientId`, so two marks on a page cannot share one
+- [x] … and a `decorative` flag, for wherever the wordmark carries the name
+- [x] The sign-in and sign-up card, which had no branding at all
+- [x] The sidebar header, beside the existing wordmark
+- [x] A `md:hidden` brand row in the topbar, since the sidebar is desktop-only
+- [x] Every caller passes an explicit `gradientId`, including the splash
+
+**The duplicate-id bug was the whole reason this was not a five-minute change.**
+The splash lives in the root layout, so the moment the mark appears anywhere
+else, every page has two of them. SVG `url(#…)` references resolve to the first
+matching id in the document, which means duplicates render *correctly* — and go
+on rendering correctly right up until the two marks are meant to differ. That is
+the failure with no symptom: nothing to see, nothing logged, and the eventual
+bug reads as "the colours are wrong" in a file that never mentions colour.
+
+**Set like the splash's wordmark, not like a heading.** The auth card already
+has one real heading directly beneath the brand row, and a bold `text-lg`
+wordmark competed with it — two things at heading weight, neither winning. The
+same uppercase, tracking and muted colour the splash uses reads as branding
+instead, and ties the launch screen to the first page it hands over to.
+
+**The sidebar is `md:hidden`, so on a phone the app said its own name
+nowhere** — which is what the desktop-only placement missed. The bottom bar is
+not the answer: it is tab navigation, and a logo there would cost one of five
+tab slots. The brand row lives in `AppTopbar` instead, `md:hidden`, inside the
+header's existing padding, so a desktop viewport gains nothing at all.
+
+**Verified in a browser: sign-in, sign-up, and the mobile topbar** — the mark
+renders beside the wordmark on all three, with the heading clearly dominant on
+the auth card. **The desktop sidebar is still not visually verified**: the
+browser window would not resize past a phone-width viewport, reporting success
+each time while the viewport stayed at ~400px. The change there is three lines
+in the same shape as the others, but it has not been watched.
+
+**The stale service worker cost time again**, exactly as the gotcha describes:
+the new Tailwind classes were missing from the served CSS, so the mark rendered
+at full viewport size in the auth card. Unregistering the worker and deleting
+the caches fixed it. **The gotcha is right; it just needs believing sooner.**
 
 ### Feature 15 — Cold-start splash ✅ merged (PR #47)
 
@@ -1470,6 +1805,14 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **A notice that only fires for an already-open session is close to dead on a
+  phone.** The update notice compared the document's deployment id against
+  `/api/version` and never checked on mount, so it could only appear for a tab
+  that was open when a deploy landed. That is right for a desktop tab left up
+  all afternoon and useless for an installed app that is cold-started, which is
+  how this one is actually used. It was removed on 2026-08-19. **Weigh a
+  notification against how the app is opened, not against whether the logic is
+  correct** — this one's logic was never wrong.
 - **Never hand-write a `<head>` in the root layout.** Next owns it in the App
   Router. A `<head>` of your own renders, and the page looks right, but React
   re-creates its children on the client: it logs "Encountered a script tag while

@@ -273,6 +273,72 @@ export async function listTransactionAuthors(
   return rows;
 }
 
+/** Where an export left off: the last row it emitted. */
+export interface TransactionCursor {
+  date: Date;
+  id: number;
+}
+
+/**
+ * One chunk of an export, newest first.
+ *
+ * **Keyset, not `OFFSET`, and the reason is correctness rather than speed.** An
+ * export walks the whole table over several round trips, and an `OFFSET` walk
+ * is defined against a result set that is being rewritten underneath it — one
+ * entry added while the export runs shifts every later page by one, so a row is
+ * silently skipped, and one deleted makes a row appear twice. A cursor on the
+ * same `(date, id)` the ordering uses cannot do either: it asks for what comes
+ * after a specific row, not for a position.
+ *
+ * The row-wise comparison is Postgres's, and it is the whole point —
+ * `(date, id) < (:date, :id)` is one tuple comparison, so it matches the
+ * `ORDER BY` exactly. Written as `date < :date OR (date = :date AND id < :id)`
+ * it would mean the same thing and read like it might not.
+ *
+ * No `count()` here, unlike `findTransactionPage`: an export does not need a
+ * total, and paying for one on every chunk is a second full scan per round
+ * trip.
+ */
+export async function findTransactionChunk(
+  table: TransactionTable,
+  organizationId: string,
+  filters: TransactionFilters,
+  cursor: TransactionCursor | null,
+  limit: number,
+): Promise<TransactionListItem[]> {
+  const conditions: (SQL | undefined)[] = [buildConditions(table, organizationId, filters)];
+
+  if (cursor) {
+    conditions.push(sql`(${table.date}, ${table.id}) < (${cursor.date}, ${cursor.id})`);
+  }
+
+  const rows = await db
+    .select({
+      id: table.id,
+      amount: table.amount,
+      currency: table.currency,
+      baseAmount: table.baseAmount,
+      exchangeRate: table.exchangeRate,
+      description: table.description,
+      date: table.date,
+      categoryId: table.categoryId,
+      categoryName: categories.name,
+      categoryIcon: categories.icon,
+      categoryColor: categories.color,
+      createdBy: table.createdBy,
+      createdByName: user.name,
+      updatedAt: table.updatedAt,
+    })
+    .from(table)
+    .leftJoin(categories, eq(table.categoryId, categories.id))
+    .leftJoin(user, eq(table.createdBy, user.id))
+    .where(and(...conditions))
+    .orderBy(desc(table.date), desc(table.id))
+    .limit(limit);
+
+  return rows as TransactionListItem[];
+}
+
 /** One entry's recomputed base-currency figures. */
 export interface Reconversion {
   id: number;
