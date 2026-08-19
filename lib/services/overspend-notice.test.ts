@@ -129,21 +129,63 @@ describe("an expense that crosses a budget says so", () => {
     expect(input.dedupeKey).toBe("budget:7:2026-08-01");
   });
 
-  it("says nothing while the spend is still under the limit", async () => {
-    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "9999.99"]]));
+  it("says nothing while the spend is well under the limit", async () => {
+    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "5000.00"]]));
 
     await transactionService.create(ctx, "expense", entry);
 
     expect(notifySpace).not.toHaveBeenCalled();
   });
 
-  it("says nothing when the spend exactly equals the limit", async () => {
-    // Spending your whole budget is not overspending it.
+  it("warns rather than accuses when the spend is near but under the limit", async () => {
+    // 9,999.99 of 10,000 is not an overspend, and until Feature 19 it was also
+    // not worth mentioning. It is now: this is the last moment saying something
+    // can still change what somebody does.
+    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "9999.99"]]));
+
+    await transactionService.create(ctx, "expense", entry);
+
+    const [, input] = notifySpace.mock.calls[0] as [string, { type: string; body: string }];
+    expect(input.type).toBe("budget_warning");
+    expect(input.body).toContain("left");
+  });
+
+  it("warns when the spend exactly equals the limit", async () => {
+    // Spending your whole budget is not overspending it, so this must not be
+    // the overspend notice — but there is nothing left, so it is not silence
+    // either.
     sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "10000.00"]]));
 
     await transactionService.create(ctx, "expense", entry);
 
+    const [, input] = notifySpace.mock.calls[0] as [string, { type: string }];
+    expect(input.type).toBe("budget_warning");
+  });
+
+  it("does not warn a penny below the threshold, and does at it", async () => {
+    // The boundary itself, asserted from both sides. A threshold that is out by
+    // one comparison fires a month early or never, and neither shows up in a
+    // test that only checks a value in the middle of the range.
+    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "7999.99"]]));
+    await transactionService.create(ctx, "expense", entry);
     expect(notifySpace).not.toHaveBeenCalled();
+
+    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "8000.00"]]));
+    await transactionService.create(ctx, "expense", entry);
+    expect(notifySpace).toHaveBeenCalledTimes(1);
+  });
+
+  it("keys a warning apart from the breach, or the breach is never announced", async () => {
+    // The failure this prevents is silent and total. `dedupeKey` is a unique
+    // constraint with `onConflictDoNothing`, so if the warning claimed
+    // `budget:7:2026-08-01` first, the overspend notice that followed would be
+    // dropped -- and passing the limit would say nothing at all.
+    sumBaseAmountByCategory.mockResolvedValue(new Map([[5, "9000.00"]]));
+
+    await transactionService.create(ctx, "expense", entry);
+
+    const [, input] = notifySpace.mock.calls[0] as [string, { dedupeKey: string }];
+    expect(input.dedupeKey).toBe("budget:7:2026-08-01:warning");
   });
 
   it("ignores a limit that took effect after the window", async () => {

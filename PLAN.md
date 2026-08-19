@@ -370,7 +370,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50, #51 and #52 — all unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50, #51 and #52 — all unreleased. `feat/budget-warning` (Feature 19) is open against it. |
 
 ---
 
@@ -1234,17 +1234,43 @@ already awaiting a row resolves after the stream is torn down and calls
 closed` and logging a cancelled download as a server error. Nothing else could
 have produced either.
 
-### Feature 19 — Warn before a budget is blown ⏳ not started
+### Feature 19 — Warn before a budget is blown ✅ done, PR open
 
-- [ ] A threshold crossing notifies, not only the breach
-- [ ] It uses `findExceeded`'s arithmetic rather than a second opinion — a
-      warning that disagreed with the bar on screen would be worse than none
-- [ ] It does not nag: one warning per budget per window
+- [x] A threshold crossing notifies, not only the breach — 80%, in one constant
+- [x] One pass, one figure: `findExceeded` became `findCrossings` and classifies
+- [x] One warning per budget per window, on **its own** dedupe key
+- [x] `budget_warning` is its own notification type, with its own icon
+- [x] Six tests, both boundary sides, each checked against the broken code
 
 **Why.** The machinery is built and tested. `budgetService.findExceeded` runs
 after every expense write and notifies the space, but only ever says *you went
 over* — after the money is spent. The same two functions answer "85% with nine
 days left", which is the version that can change what somebody does.
+
+**The warning needed its own dedupe key, and that is the whole feature's
+sharpest edge.** `dedupeKey` is a unique constraint written with
+`onConflictDoNothing`, so a key used once never fires again. Had the warning
+reused `budget:<id>:<window>`, it would have claimed that key at 80% and the
+overspend notice that followed would have been silently dropped — **passing
+the limit would then say nothing at all**, which is strictly worse than never
+warning. The breach keeps the original key unsuffixed, deliberately: adding a
+suffix there would miss every key already written and re-announce overspends
+people were told about days ago.
+
+**One pass, not two.** `findExceeded` became `findCrossings` and classifies the
+single figure it already computed. A warning derived separately would
+eventually disagree with the breach, and being told "you are near your limit"
+by an app that has already decided you are over it is worse than silence.
+
+**80% is a judgement, not a derivation**, and it is one constant so it is
+arguable in one place. Lower fires in the first week of every month and gets
+learned as noise; higher and the money is gone before anything is said.
+
+**Two existing tests asserted the old silence** — "says nothing while under the
+limit" at 99.99%, and "says nothing when the spend exactly equals the limit".
+Both were correct and both are now wrong on purpose, so they were rewritten to
+assert a *warning* rather than deleted. Every new test was checked against the
+broken code: sharing the dedupe key fails one, moving the threshold fails two.
 
 ### Feature 16 — The mark where people look ✅ merged (PR #50)
 
