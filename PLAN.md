@@ -54,8 +54,8 @@ exists for. **It does not prove Feature 13.** Navigations are network-first, so
 an online device would have been served the new document whether or not a new
 worker installed; the splash playing says the document was fresh, nothing more.
 
-**Feature 12 — the new-version notice — was removed on 2026-08-19**, and the
-real-device test is what settled it. Opening the installed app after the deploy
+**Feature 12 — the new-version notice — was removed on 2026-08-19** (PR #49,
+`35fe5b7`), and the real-device test is what settled it. Opening the installed app after the deploy
 showed no banner, which was *correct*: the document that just arrived is the new
 deployment, so the loaded id and `/api/version` agree, and the effect
 deliberately does not check on mount either. But that is the point — the only
@@ -329,7 +329,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record and #49 (the notice removed), which is unreleased. No branch open against it. |
 
 ---
 
@@ -1013,7 +1013,7 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
-### Feature 12 — New-version notice ❌ removed (PR #43, removed 2026-08-19)
+### Feature 12 — New-version notice ❌ removed (built #43, removed #49)
 
 > **The banner is gone.** It shipped in #43, was released on 2026-08-18, and was
 > removed on 2026-08-19 after its first test on a real device. It was never
