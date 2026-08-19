@@ -370,7 +370,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50 and #51 — all unreleased. `feat/data-export` (Feature 18) is open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50, #51 and #52 — all unreleased. No branch open against it. |
 
 ---
 
@@ -1186,7 +1186,7 @@ a trail of dead users and personal spaces that nothing cleans up.
 browser window would not resize; the suite asserts it at a 1280px viewport on
 every run, which is the better answer than looking once.
 
-### Feature 18 — Data export ✅ done, PR open
+### Feature 18 — Data export ✅ merged (PR #52)
 
 - [x] CSV of a space's entries, scoped and permission-checked like every other read
 - [x] Honest about currency: the entered amount, the rate, and the base amount
