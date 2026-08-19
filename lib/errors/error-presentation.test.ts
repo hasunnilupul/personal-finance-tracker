@@ -8,7 +8,7 @@ import { errorDigest, visibleErrorDetail } from "@/lib/errors/error-presentation
  * A boundary that shows too little is a worse debugging experience; a boundary
  * that shows too much hands a reader the internals of a failed query, and does
  * it silently. Only one of those is worth weighting a suite towards, and it is
- * the same reasoning the update-check tests were written with: assert the
+ * the same reasoning the splash-gate tests are written with: assert the
  * refusal, not just the happy path.
  */
 

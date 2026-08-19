@@ -54,21 +54,34 @@ exists for. **It does not prove Feature 13.** Navigations are network-first, so
 an online device would have been served the new document whether or not a new
 worker installed; the splash playing says the document was fresh, nothing more.
 
-**The update notice deliberately does not appear on a cold start, and that
-confused its first real test.** Opening the installed app after this deploy
-showed no banner, which is correct: the document that just arrived *is* the new
-deployment, so `loadedDeploymentId()` and `/api/version` agree and
-`hasNewDeployment` is false. `components/update-notice.tsx` also does not check
-on mount, on purpose — the first useful moment is the first time a tab is
-*returned to*. **The banner needs a deploy that lands while the app is already
-open**, then a focus or visibility change (or five minutes). A cold start is
-precisely the case it must stay silent for, so "I opened the app and saw no
-banner" is evidence the feature works, not evidence it is broken.
+**Feature 12 — the new-version notice — was removed on 2026-08-19**, and the
+real-device test is what settled it. Opening the installed app after the deploy
+showed no banner, which was *correct*: the document that just arrived is the new
+deployment, so the loaded id and `/api/version` agree, and the effect
+deliberately does not check on mount either. But that is the point — the only
+session it can ever fire for is one that was **already open when a deploy
+landed**, and on a phone, where the app is cold-started and deploys land while
+it is closed, that combination essentially never happens. A feature that is
+correct and unreachable is still not doing its job.
+
+Nobody is left stranded by its going. Next's own `deploymentId` support adds
+`x-nextjs-deployment-id` to navigation responses and **triggers a hard
+navigation on a mismatch** — confirmed in
+`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/deploymentId.md`,
+not inferred from our own comment. So a stale tab that navigates reloads itself
+anyway. What was removed is the *telling*, not the recovery.
+
+**What stayed, and why it had to.** `loadedDeploymentId()` is Feature 13's, not
+Feature 12's: `serviceWorkerUrl()` keys the worker's registration URL on it, and
+without a changing query the browser's update check finds nothing. It moved to
+`lib/version/loaded-deployment.ts` rather than being deleted with the notice.
+`/api/version` also stayed, with nothing in the app calling it — it is the
+release check every record here has used since 2026-08-18.
 
 **What this release did not prove.** The deploy is green and the app answers,
 which is a weaker claim than the features working. Still unseen: **#46's dashboard boundary**, so that it renders inside the shell
-rather than replacing it still rests on the file's position; the update-notice
-card itself; whether push actually delivers; whether `financeflow-private-*`
+rather than replacing it still rests on the file's position; whether push
+actually delivers; whether `financeflow-private-*`
 disappears from Cache Storage on sign-out; and whether an invitation notice
 reaches the other account. Each needs a signed-in browser with the owner's own
 credentials — the standing gap no release has closed.
@@ -1000,7 +1013,15 @@ corner of this one.
 **Still hand-written, still not Serwist.** The Next.js PWA guide recommends it
 and notes it requires webpack configuration; this project builds with Turbopack.
 
-### Feature 12 — New-version notice ✅ merged (PR #43)
+### Feature 12 — New-version notice ❌ removed (PR #43, removed 2026-08-19)
+
+> **The banner is gone.** It shipped in #43, was released on 2026-08-18, and was
+> removed on 2026-08-19 after its first test on a real device. It was never
+> broken — it was unreachable. The only session it could fire for was one
+> already open when a deploy landed, which on a cold-started phone app
+> essentially never happens. `loadedDeploymentId()` and `/api/version` survive
+> it; see Current position. The checklist below records what was built.
+
 
 - [x] `deploymentId` set from the deployment's own environment, which also
       turns on Next's version-skew protection
@@ -1506,15 +1527,14 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
-- **The update notice is silent on a cold start, by design.** It compares the
-  id the *document* loaded against `/api/version`, and a freshly opened app is
-  already running the new build — so they agree and nothing shows. It also does
-  not check on mount; the listeners are `focus`, `visibilitychange` and a
-  five-minute interval, because the first useful moment is the first time a tab
-  is returned to. **To see the banner, the deploy has to land while the app is
-  already open**, then background and foreground it. Opening the app after a
-  deploy and seeing no banner is the feature working. This was read as a fault
-  the first time it was tested on a real device.
+- **A notice that only fires for an already-open session is close to dead on a
+  phone.** The update notice compared the document's deployment id against
+  `/api/version` and never checked on mount, so it could only appear for a tab
+  that was open when a deploy landed. That is right for a desktop tab left up
+  all afternoon and useless for an installed app that is cold-started, which is
+  how this one is actually used. It was removed on 2026-08-19. **Weigh a
+  notification against how the app is opened, not against whether the logic is
+  correct** — this one's logic was never wrong.
 - **Never hand-write a `<head>` in the root layout.** Next owns it in the App
   Router. A `<head>` of your own renders, and the page looks right, but React
   re-creates its children on the client: it logs "Encountered a script tag while
