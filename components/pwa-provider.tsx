@@ -4,9 +4,8 @@ import { useEffect, useSyncExternalStore } from "react";
 import { ShareIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import UpdateNotice from "@/components/update-notice";
 import { serviceWorkerUrl } from "@/lib/pwa/service-worker";
-import { loadedDeploymentId } from "@/lib/version/update-check";
+import { loadedDeploymentId } from "@/lib/version/loaded-deployment";
 import { logger } from "@/lib/logger/logger";
 
 const DISMISSED_KEY = "financeflow:install-hint-dismissed";
@@ -61,21 +60,22 @@ function dismissHint(): void {
 }
 
 /**
- * Registers the service worker, and owns the two notices that hang off the
- * bottom of the app: how to install it, and that it has been redeployed.
+ * Registers the service worker, and owns the install hint.
  *
- * The install hint is two halves of one problem. Chrome needs a worker with a
- * `fetch` handler before it will offer to install at all; Safari has never
- * offered, on any version, and never will — on iOS the only route is Share ▸
- * Add to Home Screen, so the app has to say so itself or nobody finds it.
+ * The hint is two halves of one problem. Chrome needs a worker with a `fetch`
+ * handler before it will offer to install at all; Safari has never offered, on
+ * any version, and never will — on iOS the only route is Share ▸ Add to Home
+ * Screen, so the app has to say so itself or nobody finds it.
  *
  * The worker now also serves offline reads and shows pushes, which raises the
  * cost of a stale one: it would keep answering navigations from an old cache.
  *
- * Both notices share one fixed stack rather than each pinning itself to the
- * bottom of the screen, because on an iPhone that has not installed the app
- * yet they can be on screen at the same time and two `fixed` cards at the same
- * offset would sit on top of each other.
+ * **There is no redeploy notice any more.** It was removed on 2026-08-19 — it
+ * only ever fired for a session that was already open when a deploy landed,
+ * which is rare on a phone, and Next's own `deploymentId` support already turns
+ * the next navigation into a hard one, so nobody is left stranded on a stale
+ * build. The hint keeps the fixed stack it used to share, because it costs
+ * nothing and a second card may well want it again.
  */
 const PwaProvider = () => {
   const showHint = useSyncExternalStore(subscribe, shouldShowHint, () => false);
@@ -110,8 +110,6 @@ const PwaProvider = () => {
     // The stack itself never takes a click — it is full-width and mostly empty,
     // so only the cards inside it are given pointer events back.
     <div className="pointer-events-none fixed inset-x-3 bottom-20 z-50 flex flex-col items-center gap-2 md:bottom-4">
-      <UpdateNotice />
-
       {showHint && (
         <div className="bg-card border-border pointer-events-auto flex w-full max-w-md items-start gap-3 border p-3 shadow-2xl">
           <div className="min-w-0 flex-1">
