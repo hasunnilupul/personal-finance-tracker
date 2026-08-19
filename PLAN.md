@@ -318,6 +318,10 @@ default can never collide with the splash.
 **The mark is `decorative` wherever a visible "FinanceFlow" sits beside it**,
 or a screen reader announces the name twice for one piece of branding.
 
+**All three are merged as of 2026-08-19** — #51, #52 and #53 — and **none is
+released**. The list below is kept because the ordering argument is the useful
+part of it, not the status.
+
 **Still to come — three features, agreed 2026-08-19, in this order:**
 
 1. **Feature 17 — a browser smoke suite.** The reason it is first: every real
@@ -370,7 +374,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50, #51 and #52 — all unreleased. `feat/budget-warning` (Feature 19) is open against it. |
+| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records — all unreleased. No branch open against it. |
 
 ---
 
@@ -1234,7 +1238,7 @@ already awaiting a row resolves after the stream is torn down and calls
 closed` and logging a cancelled download as a server error. Nothing else could
 have produced either.
 
-### Feature 19 — Warn before a budget is blown ✅ done, PR open
+### Feature 19 — Warn before a budget is blown ✅ merged (PR #53)
 
 - [x] A threshold crossing notifies, not only the breach — 80%, in one constant
 - [x] One pass, one figure: `findExceeded` became `findCrossings` and classifies
