@@ -10,32 +10,52 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-19** — PR open, `dev` → `main`, carrying **#46 (Feature 14
-— error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
+**Released 2026-08-19** — `4cc30b8` (PR #48), carrying **#46 (Feature 14 —
+error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
 plan records for the 2026-08-18 release and for #47. **No migrations and no
-dependency changes:** `git diff main dev -- lib/db/` is empty, the lockfile is
-untouched, and the only `package.json` change is the `dev` script moving to port
-3001 — which never runs in production. So the deploy-time migrate step is a
-no-op again. **This one must be merged as a merge commit, not squashed.**
+dependency changes** — `git diff main dev -- lib/db/` was empty and the lockfile
+untouched, the only `package.json` change being the `dev` script moving to port
+3001, which never runs in production — so the deploy-time migrate step was a
+no-op again.
 
-**What this release leaves unverified, before it is merged.** #46's dashboard
-boundary has never been seen — reaching it needs a signed-in session, so that it
-renders *inside* the shell rather than replacing it still rests on the file's
-position rather than on having been watched. #47's splash has been seen in a
-browser tab but **never in the installed app on a real device**, which is the
-one moment a launch screen exists for. Neither gap is new and neither blocks the
-release; both need the owner's own credentials on a real device, which is the
-standing gap no release has closed.
+**Merged with a merge commit, and the history is convergent.** `4cc30b8` has two
+parents (`45305b7` and `7fc66ba`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`, so the next release PR will list only what is new. That is
+the rule being followed rather than repaired.
 
-**This is the deployment that can finally prove Feature 13.** The 2026-08-18
-release was the first to hand installed devices the versioned registration, so
-`install` has had no reason to run a second time until now. This deploy is when
-a new worker should install and `activate` should drop the previous build's
-caches for the first time since Feature 10 shipped. **If it does not, suspect
-the registration URL before suspecting the cache code.**
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; and **`/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`**, identically with and without
+`?v=<id>` — so the query misses neither the header rule nor the static file.
 
-**Still to fill in after the merge:** the merge SHA, that it has two parents,
-and what the live site actually answered. — pending.
+**The id agrees on both sides again, and it is a new one.** `/api/version`
+reports `dpl_F9hiY77kzSpivpTxQe9TfCuRNCt8` and the page's `data-dpl-id` is the
+same string; the previous release reported `dpl_79M3hmykYNdwoQsqpdVdeKUs2fT8`.
+A changed id is the precondition for everything Feature 13 does.
+
+**The splash reached production in the right shape** — checked in the response
+body, not inferred from the build: the gate script is present, it is inside
+`<body>` rather than a `<head>` of the layout's own, it precedes the splash
+markup so the parser runs it first, and the brand mark's SVG is there. This is
+the half that can be proved from outside.
+
+**Feature 13 is still not proven, and this deploy was the chance.** The id
+changed, which is the precondition, but whether a new worker actually installed
+and whether `activate` dropped the previous build's caches cannot be seen from
+`curl` — it needs a browser that already had the previous version installed.
+**If it turns out not to have happened, suspect the registration URL before
+suspecting the cache code.**
+
+**What this release did not prove.** The deploy is green and the app answers,
+which is a weaker claim than the features working. Still unseen: **the splash in
+the installed app on a real device**, which is the one moment a launch screen
+exists for; **#46's dashboard boundary**, so that it renders inside the shell
+rather than replacing it still rests on the file's position; the update-notice
+card itself; whether push actually delivers; whether `financeflow-private-*`
+disappears from Cache Storage on sign-out; and whether an invitation notice
+reaches the other account. Each needs a signed-in browser with the owner's own
+credentials — the standing gap no release has closed.
 
 **Released 2026-08-18** — `45305b7` (PR #45), carrying #43 (Feature 12 —
 new-version notice) and #44 (Feature 13 — the worker sees a deployment), plus
@@ -279,8 +299,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by #46, #47 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
+| `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
 
 ---
 
