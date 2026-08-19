@@ -10,6 +10,69 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Releasing 2026-08-19** — PR open, `dev` → `main`, carrying **#46 (Feature 14
+— error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
+plan records for the 2026-08-18 release and for #47. **No migrations and no
+dependency changes:** `git diff main dev -- lib/db/` is empty, the lockfile is
+untouched, and the only `package.json` change is the `dev` script moving to port
+3001 — which never runs in production. So the deploy-time migrate step is a
+no-op again. **This one must be merged as a merge commit, not squashed.**
+
+**What this release leaves unverified, before it is merged.** #46's dashboard
+boundary has never been seen — reaching it needs a signed-in session, so that it
+renders *inside* the shell rather than replacing it still rests on the file's
+position rather than on having been watched. #47's splash has been seen in a
+browser tab but **never in the installed app on a real device**, which is the
+one moment a launch screen exists for. Neither gap is new and neither blocks the
+release; both need the owner's own credentials on a real device, which is the
+standing gap no release has closed.
+
+**This is the deployment that can finally prove Feature 13.** The 2026-08-18
+release was the first to hand installed devices the versioned registration, so
+`install` has had no reason to run a second time until now. This deploy is when
+a new worker should install and `activate` should drop the previous build's
+caches for the first time since Feature 10 shipped. **If it does not, suspect
+the registration URL before suspecting the cache code.**
+
+**Still to fill in after the merge:** the merge SHA, that it has two parents,
+and what the live site actually answered. — pending.
+
+**Released 2026-08-18** — `45305b7` (PR #45), carrying #43 (Feature 12 —
+new-version notice) and #44 (Feature 13 — the worker sees a deployment), plus
+the plan records for both. **No migrations and no dependency changes**, so the
+deploy-time migrate step was a no-op again. Merged with a merge commit:
+`45305b7` has two parents, `git diff main dev` is empty, and `dev` is an
+ancestor of `main`, so the next release PR will list only what is new.
+
+Verified against the live site: `/` 307s to sign-in, `/sign-in`, `/offline` and
+`/manifest.webmanifest` all answer 200, and **`/sw.js?v=<id>` answers 200 as
+JavaScript with `no-cache, no-store, must-revalidate`** — the query misses
+neither the header rule nor the static file, which is what Feature 13 depends
+on. Bare `/sw.js` answers identically, so the no-deployment-id fallback is
+intact.
+
+**The id agrees on both sides, and this is the first build where that could be
+checked.** `/api/version` reports `dpl_79M3hmykYNdwoQsqpdVdeKUs2fT8` and the
+page's `data-dpl-id` is the same string. That is the exact disagreement Feature
+12 hit locally — `next.config.ts` re-read at boot against a `process.env` read
+inlined at build time — confirmed absent on a real deployment. Had they
+differed, the notice would have shown on a page that was already current, for
+ever, and no reload could have cleared it.
+
+**Feature 13 is not proven yet, and cannot be until the next deploy.** Installed
+devices are only now being handed the versioned registration, so `install` has
+not had a reason to run a second time. **The deployment after this one is the
+first that can prove the feature works** — that is when a new worker should
+install and `activate` should drop the previous build's caches for the first
+time since Feature 10 shipped. If it does not, suspect the registration URL
+before suspecting the cache code.
+
+**Still unverified, and none of it belongs to this release:** the update notice
+card itself, whether push actually delivers, whether `financeflow-private-*`
+disappears from Cache Storage on sign-out, and whether an invitation notice
+reaches the other account. Each needs a signed-in browser with the owner's own
+credentials, which is the standing gap no release has closed.
+
 **Released 2026-08-17** — `d0aff32` (PR #42), carrying #40 (Feature 11 —
 loading skeletons) and the documentation in #39 and #41. **No migrations and no
 dependency changes**, so the deploy-time migrate step was a no-op again. The
@@ -48,7 +111,15 @@ Cache Storage on sign-out, and that an invitation notice reaches the other
 account. The first is the one to check first — this is the first production
 build made with the VAPID keys present, so it is the first that *could* work.
 
-**Last completed:** **Feature 13 — the worker sees a deployment**. The page
+**Last completed:** **Feature 14 — error boundaries**, on `feat/error-boundaries`
+and not yet merged. Three boundaries rather than one per route: a dashboard page
+that throws keeps the sidebar and topbar, anything with no shell to preserve
+falls to `app/error.tsx`, and the root layout failing falls to a
+`global-error.tsx` built out of nothing. The retry button takes Next 16.2's
+`unstable_retry` rather than `reset`, which is the difference between a button
+that re-fetches and one that only looks like it does.
+
+**Before that:** **Feature 13 — the worker sees a deployment**. The page
 registers `/sw.js?v=<deployment id>`, so a deploy is finally a script change the
 browser can find: `install` runs again, and the `activate` cleanup that has been
 sitting there since Feature 10 drops the previous build's caches for the first
@@ -135,10 +206,25 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Feature 13 — the worker sees a deployment** is the latest work, and nothing
-else is in progress.
+**Feature 14 — error boundaries** merged as #46, and **Feature 15 — the
+cold-start splash** as #47 (`48c112c`, squash-merged, 2026-08-19): a branded
+launch screen for the installed app, with an SVG mark drawn in the language of
+the existing icon so its parts animate separately. It deliberately does **not**
+touch the route skeletons — Feature 11 settled that a shape-matched fallback
+beats a generic one, and a logo animation on every navigation would be exactly
+the generic one.
 
-**It was built stacked on `feat/update-notice` rather than branched from
+**Both are merged into `dev` and neither has been released.** `main` is still at
+`45305b7`, so nothing in #46 or #47 has been near production; the next release
+PR carries both.
+
+**It is the first feature verified in a browser before its PR was opened**, and
+that is the only reason it is correct: the splash renders, the mark sizes to
+`5rem`, the gate suppresses it on the second load of a session, and the console
+is clean. Two separate faults were invisible to `typecheck`, `lint`, `test` and
+`build`, which all passed against both of them — see the two gotchas below.
+
+**Feature 13 was built stacked on `feat/update-notice` rather than branched from
 `dev`**, because it reuses the `loadedDeploymentId()` that Feature 12
 introduced. That is a departure from the one-feature-one-branch rule above, and
 it is recorded because the way out is not obvious: opening the PR against `dev`
@@ -193,8 +279,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `d0aff32` (PR #42, 2026-08-17). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the 2026-08-17 release record, Feature 12 (`f39924e`) and Feature 13 (`20fcb36`) — all unreleased. |
+| `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
+| `dev`  | Integration branch. Ahead of `main` by #46, #47 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
 
 ---
 
@@ -228,6 +314,43 @@ pnpm typecheck && pnpm lint && pnpm build
 feature, and do not create the next branch, until the PR is merged.
 
 **6. Next** — go back to step 1, branching from the freshly merged `origin/dev`.
+
+### Releasing
+
+**7. Open the release PR** (`dev` → `main`) and **write the release record into
+this file as part of it**, not afterwards. Everything except the merge SHA and
+the live-site results is known before the merge: what the release carries,
+whether it holds migrations or dependency changes, and what each feature in it
+still leaves unverified. That half goes in the release PR's own commit.
+
+**8. Merge it, then finish the record** — the merge SHA, that the merge has two
+parents, and what the live site actually answered. Committed straight to `dev`,
+which is the one place a record with no branch to ride along on belongs.
+
+**The record rides with the work that produced it. Always.** This is the same
+rule as step 2, and it is written out separately because releases are where it
+keeps getting dropped: the record has twice been an afterthought somebody had to
+be asked for, and once it was a documentation branch of its own — which is what
+the repo owner asked to stop on 2026-08-17. A release that is not written down
+while it is being made is a release nobody can reconstruct later, and the parts
+worth having are exactly the ones that fade: what was verified against the live
+site, what was merely deployed, and what is still waiting on a signed-in
+browser.
+
+**What a release record must state**, because each of these has been the thing
+that mattered later:
+
+- What it carries, by PR number, and the merge commit.
+- **Whether it holds migrations or dependency changes.** A release with neither
+  is the lowest-risk shape one can have here and is worth aiming for
+  deliberately; a release with either needs the deploy watched rather than
+  glanced at.
+- That the merge has **two parents** — see below for why.
+- What the live site answered, URL by URL.
+- **What is still unverified, and what it would take.** The most valuable line
+  in every record so far. "The deploy is green" is not the same claim as "the
+  feature works", and the gap between them is where every one of these features
+  currently sits.
 
 **Releasing is the one exception to how PRs are merged here.** A feature PR into
 `dev` may be squashed — that is what most of them have been, and it costs
@@ -288,6 +411,10 @@ Locked in. Revisit only with a reason — and note the reason here.
 ---
 
 ## Conventions
+
+**The dev server runs on port 3001.** `pnpm dev` is `next dev -p 3001`, pinned
+rather than left to default, so the URL is the same every time and a second
+Next instance cannot quietly claim 3000 and leave you testing the wrong tree.
 
 **Layering.** Pages and Server Actions call services. Services call
 repositories. Only repositories touch `db`. No exceptions — it is what keeps
@@ -361,6 +488,17 @@ one — `app/loading-states.test.ts` fails otherwise, and a route under
 none. Anything driven by a search param also needs a `<Suspense>` boundary
 **keyed** on that param, with the control itself left outside the boundary; see
 Gotchas for why `loading.tsx` alone does not cover it.
+
+**Error boundaries.** **A segment that owns a `layout.tsx` owns an `error.tsx`**
+— `app/error-states.test.ts` fails otherwise. That is the rule rather than a
+list of files: a layout is UI worth keeping on screen when something below it
+fails, and it is exactly what a boundary further up would throw away. The root
+is the exception, because `error.tsx` never wraps the layout in its own segment;
+`app/global-error.tsx` covers that one.
+
+Every boundary renders `components/error-state.tsx` and takes **`unstable_retry`,
+never `reset`** — see Gotchas. No boundary formats the error itself: what may be
+shown is decided once, in `lib/errors/error-presentation.ts`.
 
 **Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
 `*.test.ts`.
@@ -884,6 +1022,115 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
+### Feature 15 — Cold-start splash ✅ merged (PR #47)
+
+- [x] `components/brand-mark.tsx` — the icon redrawn as inline SVG, its bars,
+      arrow and head separately addressable so they can animate apart
+- [x] `components/app-splash.tsx` — the overlay, server-rendered, no client
+      component and no hydration on the path that shows it
+- [x] `lib/pwa/splash.ts` — the session gate, as source for an inline script
+- [x] The whole lifecycle in `app/globals.css`, dismissal included
+- [x] `lib/pwa/splash.test.ts` — the gate executed, not pattern-matched
+- [x] `app/splash-dismissal.test.ts` — the dismissal cannot become conditional
+
+**Nothing has to run for the splash to leave.** It is a fixed overlay across the
+whole viewport, so every mechanism that could fail to remove it is a way to lose
+the application completely — not degrade it, lose it. So the dismissal is a CSS
+animation with `forwards`, defined outside every guard: it plays under reduced
+motion, and it plays with JavaScript blocked or broken.
+`app/splash-dismissal.test.ts` asserts that shape rather than the appearance,
+because the realistic way it breaks is somebody tidying the fade-out in with the
+decorative animations under `prefers-reduced-motion`, where they are switched off
+together. That reads perfectly in review and would be caught by nobody who did
+not have the preference set.
+
+**The gate fails towards showing.** `sessionStorage` does not merely come back
+empty in Safari's private mode and under blocked cookies — it *throws*, in
+`<body>`'s first script, before anything else. So it is wrapped in
+`try`/`catch`, and the catch leaves the splash playing: the cost of that
+direction is a repeated animation, where marking it done by mistake would mean
+nobody ever saw the launch screen and nothing would ever say so.
+
+**`sessionStorage`, not `localStorage`, and the scope is the feature.** A splash
+is for a cold start. `sessionStorage` ends when the tab or the installed app is
+closed, which is exactly when the next open is a real launch; `localStorage`
+would show it once ever, and a timestamp in `localStorage` would be a guess at
+what "a new launch" means.
+
+**Verified in a browser on `localhost:3001`, both halves.** Cold start: the
+overlay renders, the mark computes to `80px`, `ff-splash-dismiss` is the running
+animation, and it clears to the sign-in card. Second load in the same tab:
+`<html data-splash="done">`, the overlay computes `display: none`, and the app
+is there immediately with no flash. **Still unseen: the installed app on a real
+device**, which is the moment the feature exists for — a browser tab is the
+nearest thing reachable from here.
+
+### Feature 14 — Error boundaries ✅ merged (PR #46)
+
+- [x] `app/(dashboard)/error.tsx` — a failed page keeps the sidebar, the topbar
+      and the mobile navigation
+- [x] `app/error.tsx` — the net under everything with no shell to preserve,
+      including the dashboard layout's own failure
+- [x] `app/global-error.tsx` — the root layout failing, built out of nothing
+- [x] One disclosure rule, in `lib/errors/error-presentation.ts`, with tests
+- [x] `app/error-states.test.ts` — a segment with a layout has a boundary
+
+**The gap this closes was opened by Feature 11.** While every page rendered in
+one blocking pass a throw produced the framework's 500 page, which is ugly but
+honest. Feature 11 put `<Suspense>` inside three pages and the dashboard layout,
+and an error thrown *after* streaming has begun cannot set a status code — it is
+handled inside the streamed HTML by the nearest `error.js`, and with none the
+whole tree is replaced rather than the section that failed.
+
+**`unstable_retry`, not `reset`, and the difference is the whole feature.** Next
+16.2 added `unstable_retry` and the old `reset` still exists beside it, so the
+wrong one compiles and renders a perfectly good "Try again" button — one that
+clears the boundary and re-renders **without re-fetching**. Every page here
+fails by way of a query, so `reset` would have recovered nothing, ever, while
+looking exactly like a working button. Verified by clicking the real one against
+a production build: the server logged a *new* render, which is the only
+observable difference between the two.
+
+**A group's boundary cannot catch its own layout, and that turned out to be the
+right shape.** `error.tsx` wraps `page.tsx`, `loading.tsx` and nested layouts
+but not the `layout.tsx` beside it — so `requireActiveSpace()` failing in
+`app/(dashboard)/layout.tsx` bypasses the dashboard boundary entirely and lands
+in `app/error.tsx`. That is correct rather than a hole: the authorization gate is
+what failed, so there is no resolved space, and a sidebar drawn around the
+message would be furniture the app has no right to show.
+
+**One rule about what an error may say, and no boundary can opt out of it.**
+Next redacts a Server Component's `message` before it reaches the client, but
+**not a Client Component's** — that arrives intact, and here it can carry a space
+id or an amount. So `visibleErrorDetail` returns the message only in
+development, `errorDigest` returns the quotable hash, and `ErrorState` is handed
+the error object rather than a formatted string. Tested in the production
+direction on purpose: a boundary that leaks looks entirely normal, and only the
+person who triggered it would ever see.
+
+**`global-error.tsx` is built out of nothing** — no `Card`, no `Button`, no
+icons, no design tokens, colours inline. Every import is another thing that can
+be broken by whatever broke the root layout, and a global boundary that throws
+while rendering leaves Next's own default and no way back. It also loses the
+theme with the layout that sets the `.dark` class, so it is deliberately near-
+black on near-white rather than re-deriving the theme from `localStorage` with a
+blocking script.
+
+**One boundary per group, not per route** — the opposite of Feature 11's rule,
+for the reason that made that rule right. A skeleton is a promise about the page
+that is arriving, so its shape carries information; an error is the absence of
+that page, and shaping it like the thing that failed tells the reader nothing
+they can act on.
+
+**Verified in a browser, which is new for this project.** A production build
+with a throw injected into `/accept-invitation/[id]`: the card renders with the
+heading, both buttons and `Reference: 2684280875` matching the digest in the
+server log, and the message — seeded with a fake amount and space id — appears
+nowhere in the response. **Still unseen: the dashboard boundary specifically**,
+because reaching it needs a signed-in session. That it renders inside the shell
+rather than replacing it is the one claim still resting on the file's position
+rather than on having been watched.
+
 ### Feature 13 — The worker sees a deployment ✅ merged (PR #44)
 
 - [x] The page registers `/sw.js?v=<deployment id>`, so a deploy is a script
@@ -1223,6 +1470,44 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Never hand-write a `<head>` in the root layout.** Next owns it in the App
+  Router. A `<head>` of your own renders, and the page looks right, but React
+  re-creates its children on the client: it logs "Encountered a script tag while
+  rendering React component" on every load and substitutes a `<div>` for the
+  script. That warning is **dev-only** — it exists solely in React's
+  `.development.js` builds — so `build` cannot see it and neither can the tests.
+  An inline script that must beat the first paint goes at the **top of `<body>`**
+  instead: a synchronous script blocks the parser where it stands, so it still
+  runs before the markup below it is parsed. `lib/pwa/splash.ts` is the example.
+- **`next/script` cannot run anything before the first paint**, whatever the
+  strategy says. `strategy="beforeInteractive"` does not put the source in the
+  document head; it compiles to a `self.__next_s.push([...])` in the body, which
+  Next's runtime drains at hydration. For a theme gate or a splash gate —
+  anything whose whole job is to be finished before the browser paints — that is
+  far too late, and the failure is a visible flash rather than an error. Use a
+  raw inline `<script>`; `next-themes` does exactly that for the same reason.
+- **The service worker will serve stale JS and CSS to `localhost` across branch
+  switches.** Turbopack's dev chunk URLs are stable rather than content-hashed,
+  so `financeflow-shell-v1` keeps answering for a chunk name whose contents have
+  since changed — and it survives restarting the dev server *and* deleting
+  `.next`. This cost real time once: new CSS appeared not to apply at all, the
+  splash mark rendered at 1905px instead of `5rem`, and `curl` and the browser
+  disagreed about the bytes at one URL. **If styles or scripts look impossibly
+  stale, suspect the worker before the code**: unregister it and delete the
+  caches in the console, or the symptom outlives every other thing you try.
+
+- **`error.tsx` takes `unstable_retry`, not `reset`** — Next 16.2 added it, and
+  it is not the signature most references still show. Both props exist, which is
+  what makes it quiet: `reset` compiles, renders, and gives a "Try again" button
+  that only clears the boundary and re-renders **without re-fetching**. Every
+  page in this app fails by way of a query, so a `reset` button would have
+  looked correct and never once recovered. Verified the right way round —
+  clicking the real button produces a fresh render on the server.
+- **An `error.tsx` never wraps the `layout.tsx` in its own segment.** It wraps
+  `page.tsx`, `loading.tsx` and nested layouts, so `app/(dashboard)/error.tsx`
+  cannot catch `app/(dashboard)/layout.tsx` throwing. That is where
+  `requireActiveSpace()` runs, so the app's most likely layout failure lands one
+  level up, in `app/error.tsx`.
 - **drizzle-kit 1.0-rc needs `--hints`** for ambiguous column changes, and
   exits 2 without them.
 - **Postgres will not cast integer to boolean** with `::boolean`. Use
@@ -1491,14 +1776,14 @@ Not blocking, but worth doing.
       finally runs. The route handler this note proposed was the more expensive
       half of the same idea — see the feature for why the query wins, and for
       the reason the version must not go in the *path*.
-- [ ] **There is no `error.tsx` anywhere in `app/`.** It was survivable while
-      every page rendered in one blocking pass — a throw produced the framework's
-      500 page. Feature 11 put `<Suspense>` boundaries inside three pages and the
-      dashboard layout, and an error thrown after streaming has begun cannot set
-      a status code: it is handled inside the streamed HTML by the nearest
-      `error.js`, and with none the whole tree is replaced rather than the
-      section that failed. One boundary per page group would keep a failed report
-      from taking the sidebar with it.
+- [x] ~~**There is no `error.tsx` anywhere in `app/`.**~~ Fixed by Feature 14.
+      Three boundaries — `(dashboard)`, root, and `global-error` — with the
+      dashboard's being the one this note was asking for: a failed page keeps
+      the sidebar, the topbar and the mobile navigation. What the note did not
+      anticipate is that the group's boundary cannot catch its own
+      `layout.tsx`, so `requireActiveSpace()` failing goes to the root
+      boundary instead; see the feature for why that is right rather than a
+      gap.
 - [ ] `@better-auth/drizzle-adapter` declares a peer of `drizzle-orm@^0.45.2`
       against the installed `1.0.0-rc.4`. Works today; suspect it first if auth
       behaves oddly.

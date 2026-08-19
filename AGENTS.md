@@ -11,8 +11,11 @@ Read [PLAN.md](./PLAN.md) before starting anything. It holds the current
 position, the decisions already made, the conventions to follow, and a list of
 gotchas already hit in this codebase.
 
-Update PLAN.md as part of the feature's own commit — tick the boxes, move the
-"Current position" marker, and record anything newly learned.
+Update PLAN.md as part of the commit that does the work — tick the boxes, move
+the "Current position" marker, and record anything newly learned. That applies
+to a **release** exactly as it does to a feature: the release record is written
+as part of the release, never as a separate chore afterwards and never on a
+documentation branch of its own.
 
 # Branch workflow
 
@@ -25,3 +28,14 @@ PLAN.md for the full steps. In short:
 4. Open a PR into `dev` **before** switching away from the branch.
 5. **Stop and ask the repo owner to merge.** Do not begin the next feature or
    create the next branch until that PR is merged.
+
+Releasing (`dev` → `main`) adds two steps, and both are easy to drop:
+
+6. Open the release PR **with the release record written into PLAN.md as part of
+   it**. A release PR **must be merged as a merge commit, never squashed** —
+   squashing costs `main` the ancestry and makes every later release PR re-list
+   what already shipped.
+7. After the merge, finish the record with the merge SHA and what the live site
+   actually answered, committed straight to `dev`. State plainly what is still
+   unverified — "the deploy is green" is not the same claim as "the feature
+   works".

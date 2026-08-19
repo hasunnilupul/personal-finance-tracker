@@ -158,3 +158,147 @@
     @apply font-mono;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Cold-start splash
+   ---------------------------------------------------------------------------
+   The launch screen in `components/app-splash.tsx`. Written as plain CSS rather
+   than utilities because the sequencing below is the feature, and a stagger
+   expressed as a dozen arbitrary-value classes is unreadable and unreviewable.
+
+   THE RULE THIS FILE MUST NOT BREAK: the overlay covers the whole application,
+   so its dismissal can never be conditional. `ff-splash-dismiss` is therefore
+   defined outside every guard — it plays under reduced motion, it plays with
+   JavaScript disabled, and `forwards` holds the element hidden afterwards.
+   Anything that makes the fade-out optional makes losing the app optional too,
+   which is what `app/splash-dismissal.test.ts` exists to prevent.
+--------------------------------------------------------------------------- */
+
+@keyframes ff-splash-dismiss {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes ff-bar-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ff-arrow-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ff-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ff-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ff-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background-color: var(--background);
+  animation: ff-splash-dismiss 300ms ease 1150ms forwards;
+}
+
+/* Already launched this session — see `lib/pwa/splash.ts`. */
+html[data-splash="done"] .ff-splash {
+  display: none;
+}
+
+.ff-splash-mark {
+  width: 5rem;
+  height: 5rem;
+}
+
+.ff-splash-word {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* The sequence. Each part starts where the one before it is recognisable,
+   rather than all at once — the bars build the chart, the arrow climbs over
+   what they built, and the name arrives last. */
+.ff-splash [data-splash-animate][data-splash-bar] {
+  /* Bars grow from their own foot. `transform-box: fill-box` is what makes
+     `transform-origin` mean the rect's own box rather than the SVG viewport;
+     without it every bar scales about the canvas centre and they slide. */
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: ff-bar-rise 380ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.ff-splash [data-splash-bar="2"] {
+  animation-delay: 90ms;
+}
+
+.ff-splash [data-splash-bar="3"] {
+  animation-delay: 180ms;
+}
+
+.ff-splash [data-splash-animate][data-splash-arrow] {
+  /* `pathLength="100"` on the element normalises the curve, so 100 is its
+     whole length whatever the path data says. */
+  stroke-dasharray: 100;
+  animation: ff-arrow-draw 460ms ease-out 240ms both;
+}
+
+.ff-splash [data-splash-animate][data-splash-head] {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ff-pop-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1) 660ms both;
+}
+
+.ff-splash-word {
+  animation: ff-rise-in 320ms ease-out 720ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The mark holds still and the screen simply passes. The dismissal is kept —
+     shortened, never removed — because it is the only thing that uncovers the
+     application. */
+  .ff-splash {
+    animation: ff-splash-dismiss 120ms linear 260ms forwards;
+  }
+
+  .ff-splash [data-splash-animate],
+  .ff-splash-word {
+    animation: none;
+  }
+}
