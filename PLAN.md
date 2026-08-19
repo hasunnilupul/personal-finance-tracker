@@ -370,7 +370,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49 and #50 — all unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49 and #50 — all unreleased. `feat/e2e-smoke` (Feature 17) is open against it. |
 
 ---
 
@@ -1120,13 +1120,17 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 17 — A browser smoke suite ⏳ not started
+### Feature 17 — A browser smoke suite ✅ done, PR open
 
-- [ ] Playwright, driving a real browser against a real build
-- [ ] Sign-in renders, and a wrong password is refused
-- [ ] The splash gate: shown once, `data-splash="done"` on the second load
-- [ ] The dashboard shell paints for a signed-in session
-- [ ] `/offline` answers
+- [x] Playwright, driving a real browser against a real production build
+- [x] Sign-in renders, and a wrong password is refused
+- [x] The splash gate: shown once, `data-splash="done"` on the second load
+- [x] The gate script itself — one executable copy, in `<body>`, ahead of the
+      splash markup
+- [x] The dashboard shell paints for a signed-in session, sidebar and mark
+      included, at desktop **and** phone widths
+- [x] `/offline` answers, and `/manifest.webmanifest` is served as a manifest
+- [x] 13 tests, green
 
 **Why this is first.** Four green checks — `typecheck`, `lint`, 319 tests,
 `build` — passed against every defect found in the week of 2026-08-19: a
@@ -1145,6 +1149,42 @@ itself in retires that list instead of re-recording it every release.
 **It should not download a browser if it can be helped.** Playwright's own
 Chromium is a large binary and there is no CI here to need it; the machine
 already has Chrome. Prefer the installed channel and record what was chosen.
+
+**It downloads no browser at all.** `channel: "chrome"` uses the machine's own
+Chrome. The channel is set in the top-level `use` rather than on the browser
+project, because **a Playwright project does not inherit `use` from a sibling**
+— the `setup` project fell back to the bundled headless shell, which is not
+installed, and the suite died before a single test ran.
+
+**Three real findings, none of which any other check could have produced:**
+
+1. **`BETTER_AUTH_URL` must match the port being served.** better-auth refused
+   every sign-in from port 3100 with `INVALID_ORIGIN`, and said so *only in the
+   server log* — the browser simply waited. The same trap the gotchas record
+   for `next dev` on the wrong port, met from the other direction. The config
+   sets it for the test server.
+2. **Counting inline scripts that mention a string gives 2, not 1, in any App
+   Router page.** Next's RSC flight payload serialises the layout's markup back
+   into the document, gate source and all. One is a script that runs; the other
+   is data being replayed into `self.__next_f`. The test excludes it explicitly.
+3. **`pnpm lint` hung** once the suite had run, because `playwright-report/` is
+   2.3MB of bundled JavaScript and nothing ignored it. Added to
+   `globalIgnores`. It would have hit the repo owner, not just the suite.
+
+**The setup fixture signs in before it signs up, and the order is not
+arbitrary.** The account exists on every run but the first, so signing up first
+meant waiting out a doomed navigation before falling back — 15s of a 30s
+budget, which made the fixture fail 2.4s *after* successfully signing in. The
+rare path pays the wait now.
+
+**It cost one row in the development database**, deliberately:
+`e2e@financeflow.test` on a reserved TLD that can never be a real mailbox,
+signed up once and signed in forever after. A fresh address per run would leave
+a trail of dead users and personal spaces that nothing cleans up.
+
+**The sidebar from PR #50 is now verified.** It merged unwatched because the
+browser window would not resize; the suite asserts it at a 1280px viewport on
+every run, which is the better answer than looking once.
 
 ### Feature 18 — Data export ⏳ not started
 
