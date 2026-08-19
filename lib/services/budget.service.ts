@@ -37,12 +37,31 @@ export interface BudgetFields {
   period: BudgetPeriod;
 }
 
-/** A limit the current period's spending has passed, and by how much. */
-export interface ExceededBudget {
+/**
+ * How close this period's spending has come to a limit.
+ *
+ * `exceeded` is past it; `warning` is near enough that saying so can still
+ * change what somebody does, which is the whole difference between the two.
+ */
+export type BudgetCrossingLevel = "warning" | "exceeded";
+
+/** A limit the current period's spending has reached or passed. */
+export interface BudgetCrossing {
   budget: Budget;
   window: PeriodWindow;
   spent: string;
+  level: BudgetCrossingLevel;
 }
+
+/**
+ * The share of a limit that is near enough to be worth a word.
+ *
+ * 80% is a judgement, not a derivation. Lower and it fires in the first week of
+ * every month and is learned to be ignored; higher and the money is gone before
+ * anything is said. It is a single constant so the number is arguable in one
+ * place rather than embedded in a comparison.
+ */
+export const BUDGET_WARNING_RATIO = 0.8;
 
 /**
  * One period type's budgets in one window, with the totals above them.
@@ -186,16 +205,21 @@ export class BudgetService {
   /**
    * Which of a category's limits the given date's period has now exceeded.
    *
-   * Runs after an expense is written, to answer "did that put us over?". The
-   * category usually has no budget at all, which costs one query and stops
+   * Runs after an expense is written, to answer "how close did that put us?".
+   * The category usually has no budget at all, which costs one query and stops
    * there; only when a limit exists is the spend for its window summed.
+   *
+   * **Both answers come out of one pass**, deliberately. A warning computed
+   * separately from the breach would eventually disagree with it — and being
+   * told "you are near your limit" by an app that has already decided you are
+   * over it is worse than being told nothing.
    *
    * The arithmetic is `sumBaseAmountByCategory` and `windowFor` — the same two
    * the budgets page reads through `getOverview`. A second way to decide what
    * "over" means would eventually disagree with the bar on screen, which for a
    * notification saying you overspent would be worse than saying nothing.
    */
-  async findExceeded(ctx: SpaceContext, categoryId: number, on: Date): Promise<ExceededBudget[]> {
+  async findCrossings(ctx: SpaceContext, categoryId: number, on: Date): Promise<BudgetCrossing[]> {
     const standing = await budgetRepository.findByCategory(ctx.organizationId, categoryId);
 
     if (standing.length === 0) {
@@ -203,7 +227,7 @@ export class BudgetService {
     }
 
     const month = currentMonthKey(on);
-    const exceeded: ExceededBudget[] = [];
+    const crossings: BudgetCrossing[] = [];
 
     for (const budget of standing) {
       const window = windowFor(budget.period as BudgetPeriod, month);
@@ -222,12 +246,21 @@ export class BudgetService {
       );
       const spent = spendByCategory.get(categoryId) ?? "0";
 
-      if (Number(spent) > Number(budget.amount)) {
-        exceeded.push({ budget, window, spent: Number(spent).toFixed(2) });
+      const limit = Number(budget.amount);
+      const total = Number(spent);
+
+      // One comparison chain over one figure, so a warning can never disagree
+      // with the breach it precedes — which is the failure that would make the
+      // whole thing worse than silence.
+      const level: BudgetCrossingLevel | null =
+        total > limit ? "exceeded" : total >= limit * BUDGET_WARNING_RATIO ? "warning" : null;
+
+      if (level) {
+        crossings.push({ budget, window, spent: total.toFixed(2), level });
       }
     }
 
-    return exceeded;
+    return crossings;
   }
 
   /**

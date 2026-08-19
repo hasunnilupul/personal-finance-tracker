@@ -12,7 +12,8 @@ export type NewNotification = InferInsertModel<typeof notifications>;
  * `BudgetPeriod`. Every value is produced by the services here — none arrives
  * from a client — so there is no zod enum to pair it with.
  */
-export type NotificationType = "budget_overspend" | "recurring_created" | "space_invitation";
+export type NotificationType =
+  "budget_warning" | "budget_overspend" | "recurring_created" | "space_invitation";
 
 /**
  * A notification as a service raises it.

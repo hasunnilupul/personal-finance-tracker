@@ -18,6 +18,7 @@ import {
   TransactionKind,
   TransactionPage,
 } from "@/lib/db/models/transaction.model";
+import type { NotificationInput } from "@/lib/db/models/notification.model";
 
 /**
  * What a caller may set on a transaction. Conversion fields are derived.
@@ -144,17 +145,38 @@ export class TransactionService {
       return;
     }
 
-    const exceeded = await budgetService.findExceeded(ctx, categoryId, date);
+    const crossings = await budgetService.findCrossings(ctx, categoryId, date);
 
-    for (const { budget, window, spent } of exceeded) {
-      const over = (Number(spent) - Number(budget.amount)).toFixed(2);
+    for (const { budget, window, spent, level } of crossings) {
+      const windowKey = window.start.toISOString().slice(0, 10);
+      const limit = formatMoney(budget.amount, ctx.baseCurrency);
+
+      const notice: Pick<NotificationInput, "type" | "title" | "body" | "dedupeKey"> =
+        level === "exceeded"
+          ? {
+              type: "budget_overspend",
+              title: `Over budget: ${window.label}`,
+              body: `${formatMoney(spent, ctx.baseCurrency)} spent against a ${limit} limit — ${formatMoney((Number(spent) - Number(budget.amount)).toFixed(2), ctx.baseCurrency)} over.`,
+              // **Unchanged on purpose.** Adding a suffix here would miss every
+              // key already written this window and re-announce an overspend
+              // people were told about days ago.
+              dedupeKey: `budget:${budget.id}:${windowKey}`,
+            }
+          : {
+              type: "budget_warning",
+              title: `Nearing budget: ${window.label}`,
+              body: `${formatMoney(spent, ctx.baseCurrency)} of a ${limit} limit — ${formatMoney((Number(budget.amount) - Number(spent)).toFixed(2), ctx.baseCurrency)} left.`,
+              // **Its own key, and this is the load-bearing part.** Sharing the
+              // breach's key would mean the warning claims it first and the
+              // overspend notice is silently swallowed by the unique
+              // constraint — so passing the limit would say nothing at all,
+              // which is the one outcome worse than not warning.
+              dedupeKey: `budget:${budget.id}:${windowKey}:warning`,
+            };
 
       await notificationService.notifySpace(ctx.organizationId, {
-        type: "budget_overspend",
-        title: `Over budget: ${window.label}`,
-        body: `${formatMoney(spent, ctx.baseCurrency)} spent against a ${formatMoney(budget.amount, ctx.baseCurrency)} limit — ${formatMoney(over, ctx.baseCurrency)} over.`,
+        ...notice,
         href: "/budgets",
-        dedupeKey: `budget:${budget.id}:${window.start.toISOString().slice(0, 10)}`,
       });
     }
   }

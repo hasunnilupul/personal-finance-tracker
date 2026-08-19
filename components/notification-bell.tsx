@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useTransition } from "react";
-import { BellIcon, PiggyBankIcon, RepeatIcon, UsersIcon } from "lucide-react";
+import { BellIcon, PiggyBankIcon, RepeatIcon, TriangleAlertIcon, UsersIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,9 @@ interface NotificationBellProps {
 }
 
 const ICONS: Record<NotificationType, typeof BellIcon> = {
+  // A warning is not the same event as a breach and should not look like one:
+  // the triangle is the difference between "you have time" and "too late".
+  budget_warning: TriangleAlertIcon,
   budget_overspend: PiggyBankIcon,
   recurring_created: RepeatIcon,
   space_invitation: UsersIcon,
