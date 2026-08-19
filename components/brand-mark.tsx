@@ -16,15 +16,39 @@
  * A plain Server Component with no client JavaScript: it has to be in the first
  * paint, which is the whole point of a launch screen. Everything that moves is
  * CSS, keyed off the `data-splash-animate` attributes below.
+ *
+ * It is drawn in more than one place now — the splash, the sign-in card and
+ * the sidebar — and the splash is in the root layout, so two marks share every
+ * page. That is what `gradientId` is for: `url(#…)` resolves to the *first*
+ * matching id in the document, so duplicates do not break the picture today but
+ * silently hand every later mark the first one's gradient. The day somebody
+ * adds a muted or monochrome variant, it would render in the wrong colours with
+ * nothing in the markup to explain why.
  */
 
 interface BrandMarkProps {
   className?: string;
   /** Marks the parts CSS animates. Off for any static use of the mark. */
   animated?: boolean;
+  /**
+   * The gradient's DOM id. Must be unique per instance on a page — see above.
+   */
+  gradientId?: string;
+  /**
+   * Hides the mark from assistive technology.
+   *
+   * Set it wherever the mark sits beside a visible "FinanceFlow", or a screen
+   * reader announces the name twice in a row for one piece of branding.
+   */
+  decorative?: boolean;
 }
 
-const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
+const BrandMark = ({
+  className,
+  animated = false,
+  gradientId = "ff-mark-gradient",
+  decorative = false,
+}: BrandMarkProps) => {
   // `undefined` rather than `false` — React omits the attribute entirely, so
   // the CSS selectors simply do not match and nothing needs a second rule.
   const animate = animated ? "" : undefined;
@@ -33,8 +57,9 @@ const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
     <svg
       viewBox="0 0 64 64"
       className={className}
-      role="img"
-      aria-label="FinanceFlow"
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : "FinanceFlow"}
+      aria-hidden={decorative || undefined}
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
@@ -48,7 +73,7 @@ const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
           at the top of it — the icon's actual reading.
         */}
         <linearGradient
-          id="ff-mark-gradient"
+          id={gradientId}
           gradientUnits="userSpaceOnUse"
           x1="8"
           y1="54"
@@ -63,7 +88,7 @@ const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
         </linearGradient>
       </defs>
 
-      <g fill="url(#ff-mark-gradient)">
+      <g fill={`url(#${gradientId})`}>
         {/* Ascending bars. Each rises from its own foot, which is why every one
             carries `transform-origin` at the bottom in the stylesheet — the
             default is the centre, and they would grow in both directions. */}
@@ -106,7 +131,7 @@ const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
         d="M 8 52 Q 22 46 41 20"
         pathLength="100"
         fill="none"
-        stroke="url(#ff-mark-gradient)"
+        stroke={`url(#${gradientId})`}
         strokeWidth="5"
         strokeLinecap="round"
         data-splash-arrow=""
@@ -115,7 +140,7 @@ const BrandMark = ({ className, animated = false }: BrandMarkProps) => {
 
       <polygon
         points="52,10 47.3,22.6 39.1,13.8"
-        fill="url(#ff-mark-gradient)"
+        fill={`url(#${gradientId})`}
         data-splash-head=""
         data-splash-animate={animate}
       />

@@ -27,7 +27,7 @@ import BrandMark from "@/components/brand-mark";
 const AppSplash = () => {
   return (
     <div className="ff-splash" aria-hidden data-splash-root>
-      <BrandMark className="ff-splash-mark" animated />
+      <BrandMark className="ff-splash-mark" animated gradientId="ff-splash-mark-gradient" />
 
       <p className="ff-splash-word">FinanceFlow</p>
     </div>

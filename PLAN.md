@@ -293,7 +293,25 @@ documentation branch of its own: the repo owner asked for those to stop on
 2026-08-17, and everything else belongs in the commits of the feature it
 describes.
 
-**Still to come:** no feature is planned. The one known gap is offline *entry*,
+**Feature 16 — the mark where people actually look** is the latest work, on
+`feat/brand-mark-placement`. Feature 15 drew a logo and then showed it in the
+one place nobody stays: a splash that leaves after 1.45s. This puts it on the
+sign-in and sign-up card — which had no branding at all, and is the first thing
+anybody sees of this app — and in the sidebar header beside the wordmark.
+
+**It made `BrandMark` safe to draw twice, which it was not.** The gradient's DOM
+id was hard-coded, and the splash is in the root layout, so every page now
+carries two marks. `url(#…)` resolves to the *first* matching id in the
+document: duplicates do not break the picture today, they silently hand every
+later mark the first one's gradient. The day somebody adds a muted or monochrome
+variant it renders in the wrong colours with nothing in the markup to explain
+why. `gradientId` is now a prop, and every caller passes an explicit one so the
+default can never collide with the splash.
+
+**The mark is `decorative` wherever a visible "FinanceFlow" sits beside it**,
+or a screen reader announces the name twice for one piece of branding.
+
+**Still to come:** no other feature is planned. The one known gap is offline *entry*,
 which Feature 10 deliberately leaves out: writes are not queued, and doing it
 properly means IndexedDB and a replay queue with the same idempotency care the
 recurring materialiser needed.
@@ -329,7 +347,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record and #49 (the notice removed), which is unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record and #49 (the notice removed), which is unreleased. `feat/brand-mark-placement` (Feature 16) is open against it. |
 
 ---
 
@@ -1078,6 +1096,47 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Feature 16 — The mark where people look ✅ done, PR open
+
+- [x] `BrandMark` takes a `gradientId`, so two marks on a page cannot share one
+- [x] … and a `decorative` flag, for wherever the wordmark carries the name
+- [x] The sign-in and sign-up card, which had no branding at all
+- [x] The sidebar header, beside the existing wordmark
+- [x] A `md:hidden` brand row in the topbar, since the sidebar is desktop-only
+- [x] Every caller passes an explicit `gradientId`, including the splash
+
+**The duplicate-id bug was the whole reason this was not a five-minute change.**
+The splash lives in the root layout, so the moment the mark appears anywhere
+else, every page has two of them. SVG `url(#…)` references resolve to the first
+matching id in the document, which means duplicates render *correctly* — and go
+on rendering correctly right up until the two marks are meant to differ. That is
+the failure with no symptom: nothing to see, nothing logged, and the eventual
+bug reads as "the colours are wrong" in a file that never mentions colour.
+
+**Set like the splash's wordmark, not like a heading.** The auth card already
+has one real heading directly beneath the brand row, and a bold `text-lg`
+wordmark competed with it — two things at heading weight, neither winning. The
+same uppercase, tracking and muted colour the splash uses reads as branding
+instead, and ties the launch screen to the first page it hands over to.
+
+**The sidebar is `md:hidden`, so on a phone the app said its own name
+nowhere** — which is what the desktop-only placement missed. The bottom bar is
+not the answer: it is tab navigation, and a logo there would cost one of five
+tab slots. The brand row lives in `AppTopbar` instead, `md:hidden`, inside the
+header's existing padding, so a desktop viewport gains nothing at all.
+
+**Verified in a browser: sign-in, sign-up, and the mobile topbar** — the mark
+renders beside the wordmark on all three, with the heading clearly dominant on
+the auth card. **The desktop sidebar is still not visually verified**: the
+browser window would not resize past a phone-width viewport, reporting success
+each time while the viewport stayed at ~400px. The change there is three lines
+in the same shape as the others, but it has not been watched.
+
+**The stale service worker cost time again**, exactly as the gotcha describes:
+the new Tailwind classes were missing from the served CSS, so the mark rendered
+at full viewport size in the auth card. Unregistering the worker and deleting
+the caches fixed it. **The gotcha is right; it just needs believing sooner.**
 
 ### Feature 15 — Cold-start splash ✅ merged (PR #47)
 
