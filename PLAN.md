@@ -370,7 +370,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50 and #51 — all unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50 and #51 — all unreleased. `feat/data-export` (Feature 18) is open against it. |
 
 ---
 
@@ -1186,18 +1186,53 @@ a trail of dead users and personal spaces that nothing cleans up.
 browser window would not resize; the suite asserts it at a 1280px viewport on
 every run, which is the better answer than looking once.
 
-### Feature 18 — Data export ⏳ not started
+### Feature 18 — Data export ✅ done, PR open
 
-- [ ] CSV of a space's entries, scoped and permission-checked like every other read
-- [ ] Honest about currency: the entered amount and the base amount are different
-      numbers and both matter
-- [ ] Streamed or chunked rather than built in memory
+- [x] CSV of a space's entries, scoped and permission-checked like every other read
+- [x] Honest about currency: the entered amount, the rate, and the base amount
+- [x] Streamed and keyset-paged rather than built in memory
+- [x] `lib/export/csv.ts`, with tests for every value that breaks a CSV
+- [x] A download in Space settings, and four e2e tests behind it
 
 **Why.** There is no export of any kind. This is years of hand-entered
 financial data in a single database, and the only answer to "can I get my
 figures out" is a database client. It is also the honest answer to "can I
 leave", which matters for something a family is being asked to put its spending
 into.
+
+**Keyset, not `OFFSET`, and the reason is correctness rather than speed.** An
+export walks the whole table over several round trips, and an `OFFSET` walk is
+defined against a result set being rewritten underneath it — one entry added
+mid-export shifts every later page by one, so a row is silently skipped, and
+one deleted makes a row appear twice. A cursor on the same `(date, id)` the
+ordering uses asks for what comes *after a row* rather than for a position, and
+cannot do either. `findTransactionPage` was the wrong tool twice over: it caps
+`pageSize` at 100 and runs a `count()` on every call.
+
+**Two amounts, because they are different numbers.** What was spent, in the
+currency it was spent in, and what that came to in the base currency at that
+day's rate. Only the base amount loses what actually happened; only the entered
+amount gives a column that cannot be summed. Both plus the rate is what makes
+the file reconcilable against a statement.
+
+**The CSV writer is small, and wrong in three ways if written from memory.** A
+comma adds a column and shifts every field after it; an unescaped quote or
+newline ends the record early and the file parses short with no error anywhere;
+and a cell beginning `=`, `+`, `-` or `@` is *evaluated* when the file is
+opened. That last one is a security property rather than a formatting one — in
+a shared space the descriptions are written by other people, so a row could
+carry `=IMPORTXML(...)` that runs when the owner opens the file. Numbers are
+exempted from the guard deliberately: a negative amount begins `-` and is not
+an attack.
+
+**The browser suite earned its keep on its first outing.** A signed-out request
+returning 200 looked like a pass because `page.goto` *follows the redirect* and
+the sign-in page answers 200 — the assertion had to be `maxRedirects: 0`. And
+it found a real bug in the route: when a reader goes away mid-chunk, the `pull`
+already awaiting a row resolves after the stream is torn down and calls
+`close()` on a dead controller, throwing `Invalid state: Controller is already
+closed` and logging a cancelled download as a server error. Nothing else could
+have produced either.
 
 ### Feature 19 — Warn before a budget is blown ⏳ not started
 
