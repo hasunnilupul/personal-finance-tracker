@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import BrandMark from "@/components/brand-mark";
 
 /**
  * Every destination, in sidebar order.
@@ -93,7 +94,15 @@ export default function AppSidebar() {
     <>
       {/* Desktop Sidebar */}
       <aside className="bg-card border-border hidden w-64 flex-col border-r md:flex">
-        <div className="p-6">
+        {/*
+          `decorative`, because the wordmark beside it is the accessible name.
+          Two marks share this page — the splash is in the root layout — so the
+          gradient id has to differ from the splash's or the second one silently
+          borrows the first's. See `components/brand-mark.tsx`.
+        */}
+        <div className="flex items-center gap-2.5 p-6">
+          <BrandMark className="size-7 shrink-0" gradientId="ff-sidebar-mark-gradient" decorative />
+
           <h1 className="text-foreground text-xl font-bold">FinanceFlow</h1>
         </div>
 
