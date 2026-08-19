@@ -370,7 +370,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #49 and #50 — all unreleased. `feat/e2e-smoke` (Feature 17) is open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49, #50 and #51 — all unreleased. No branch open against it. |
 
 ---
 
@@ -1120,7 +1120,7 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 17 — A browser smoke suite ✅ done, PR open
+### Feature 17 — A browser smoke suite ✅ merged (PR #51)
 
 - [x] Playwright, driving a real browser against a real production build
 - [x] Sign-in renders, and a wrong password is refused
