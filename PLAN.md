@@ -47,10 +47,26 @@ and whether `activate` dropped the previous build's caches cannot be seen from
 **If it turns out not to have happened, suspect the registration URL before
 suspecting the cache code.**
 
+**Seen on a real installed device, 2026-08-19: the splash plays on a cold
+start.** That closes the gap this release opened with — a launch screen had only
+ever been watched in a browser tab, and the installed app is the moment it
+exists for. **It does not prove Feature 13.** Navigations are network-first, so
+an online device would have been served the new document whether or not a new
+worker installed; the splash playing says the document was fresh, nothing more.
+
+**The update notice deliberately does not appear on a cold start, and that
+confused its first real test.** Opening the installed app after this deploy
+showed no banner, which is correct: the document that just arrived *is* the new
+deployment, so `loadedDeploymentId()` and `/api/version` agree and
+`hasNewDeployment` is false. `components/update-notice.tsx` also does not check
+on mount, on purpose — the first useful moment is the first time a tab is
+*returned to*. **The banner needs a deploy that lands while the app is already
+open**, then a focus or visibility change (or five minutes). A cold start is
+precisely the case it must stay silent for, so "I opened the app and saw no
+banner" is evidence the feature works, not evidence it is broken.
+
 **What this release did not prove.** The deploy is green and the app answers,
-which is a weaker claim than the features working. Still unseen: **the splash in
-the installed app on a real device**, which is the one moment a launch screen
-exists for; **#46's dashboard boundary**, so that it renders inside the shell
+which is a weaker claim than the features working. Still unseen: **#46's dashboard boundary**, so that it renders inside the shell
 rather than replacing it still rests on the file's position; the update-notice
 card itself; whether push actually delivers; whether `financeflow-private-*`
 disappears from Cache Storage on sign-out; and whether an invitation notice
@@ -1490,6 +1506,15 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **The update notice is silent on a cold start, by design.** It compares the
+  id the *document* loaded against `/api/version`, and a freshly opened app is
+  already running the new build — so they agree and nothing shows. It also does
+  not check on mount; the listeners are `focus`, `visibilitychange` and a
+  five-minute interval, because the first useful moment is the first time a tab
+  is returned to. **To see the banner, the deploy has to land while the app is
+  already open**, then background and foreground it. Opening the app after a
+  deploy and seeing no banner is the feature working. This was read as a fault
+  the first time it was tested on a real device.
 - **Never hand-write a `<head>` in the root layout.** Next owns it in the App
   Router. A `<head>` of your own renders, and the page looks right, but React
   re-creates its children on the client: it logs "Encountered a script tag while
