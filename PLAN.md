@@ -10,6 +10,46 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Releasing 2026-08-19 (second)** — PR open, `dev` → `main`, and the largest
+release this project has had. It carries **#49** (the update notice removed),
+**#50** (the mark on the auth card, the sidebar and a phone), **#51** (the
+browser smoke suite), **#52** (CSV export) and **#53** (budget warnings at 80%),
+plus the plan records for each. **This one must be merged as a merge commit,
+not squashed.**
+
+**No migrations. One dependency change, and it is the first in several
+releases.** `git diff main dev -- lib/db/migrations/**` is empty; the only
+`lib/db/` change is a doc comment and a `NotificationType` union gaining
+`budget_warning`, which is a type-level guard over an existing `varchar` and
+costs the database nothing. So the deploy-time migrate step is a no-op again.
+The dependency is **`@playwright/test`, a devDependency** — nothing imports it
+at runtime and nothing in `app/` or `lib/` references it. **Installing it does
+not download browsers**: that was observed directly, when the suite's first run
+failed asking for `playwright install`. It adds install time to the build and
+nothing else.
+
+**What is different about this release: some of it is now self-verifying.** The
+suite in #51 asserts the sign-in page, the splash gate, the gate script's
+position, the dashboard shell at two widths, `/offline`, the manifest, and the
+export's guard and headers — 17 tests against a production build. That is a
+smaller set than the standing gap, but it is the first part of this app that
+does not depend on somebody remembering to look.
+
+**Still unverified, and none of it new:** whether push actually delivers,
+whether `financeflow-private-*` disappears from Cache Storage on sign-out,
+whether an invitation notice reaches the other account, and **whether Feature 13
+ever worked** — the id changed at the last release, which is the precondition,
+but nothing has confirmed a new worker installed and dropped the previous
+build's caches. **This deploy is another chance to see it.**
+
+**Two things in this release have never been seen by a person**, as opposed to
+by a test: the budget *warning* notification actually arriving in the bell, and
+the CSV opening in a spreadsheet. The suite asserts the endpoint's headers and
+the file's header row; it does not assert that Excel is happy with it.
+
+**Still to fill in after the merge:** the merge SHA, that it has two parents,
+and what the live site actually answered. — pending.
+
 **Released 2026-08-19** — `4cc30b8` (PR #48), carrying **#46 (Feature 14 —
 error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
 plan records for the 2026-08-18 release and for #47. **No migrations and no
@@ -374,7 +414,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records — all unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
 
 ---
 
