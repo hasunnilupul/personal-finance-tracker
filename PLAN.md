@@ -10,6 +10,33 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Releasing 2026-08-19** — PR open, `dev` → `main`, carrying **#46 (Feature 14
+— error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
+plan records for the 2026-08-18 release and for #47. **No migrations and no
+dependency changes:** `git diff main dev -- lib/db/` is empty, the lockfile is
+untouched, and the only `package.json` change is the `dev` script moving to port
+3001 — which never runs in production. So the deploy-time migrate step is a
+no-op again. **This one must be merged as a merge commit, not squashed.**
+
+**What this release leaves unverified, before it is merged.** #46's dashboard
+boundary has never been seen — reaching it needs a signed-in session, so that it
+renders *inside* the shell rather than replacing it still rests on the file's
+position rather than on having been watched. #47's splash has been seen in a
+browser tab but **never in the installed app on a real device**, which is the
+one moment a launch screen exists for. Neither gap is new and neither blocks the
+release; both need the owner's own credentials on a real device, which is the
+standing gap no release has closed.
+
+**This is the deployment that can finally prove Feature 13.** The 2026-08-18
+release was the first to hand installed devices the versioned registration, so
+`install` has had no reason to run a second time until now. This deploy is when
+a new worker should install and `activate` should drop the previous build's
+caches for the first time since Feature 10 shipped. **If it does not, suspect
+the registration URL before suspecting the cache code.**
+
+**Still to fill in after the merge:** the merge SHA, that it has two parents,
+and what the live site actually answered. — pending.
+
 **Released 2026-08-18** — `45305b7` (PR #45), carrying #43 (Feature 12 —
 new-version notice) and #44 (Feature 13 — the worker sees a deployment), plus
 the plan records for both. **No migrations and no dependency changes**, so the
@@ -253,7 +280,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record, #46 and #47 — all unreleased. No branch open against it. |
+| `dev`  | Integration branch. Ahead of `main` by #46, #47 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
 
 ---
 
