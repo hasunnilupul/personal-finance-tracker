@@ -1103,6 +1103,7 @@ button, or the two bottom notices stacking on a phone.
 - [x] … and a `decorative` flag, for wherever the wordmark carries the name
 - [x] The sign-in and sign-up card, which had no branding at all
 - [x] The sidebar header, beside the existing wordmark
+- [x] A `md:hidden` brand row in the topbar, since the sidebar is desktop-only
 - [x] Every caller passes an explicit `gradientId`, including the splash
 
 **The duplicate-id bug was the whole reason this was not a five-minute change.**
@@ -1119,11 +1120,18 @@ wordmark competed with it — two things at heading weight, neither winning. The
 same uppercase, tracking and muted colour the splash uses reads as branding
 instead, and ties the launch screen to the first page it hands over to.
 
-**Verified in a browser: sign-in and sign-up.** The mark renders at `size-7`
-beside the wordmark on both, with the heading clearly dominant. **The sidebar is
-not visually verified** — it is behind a session, and the local one had expired.
-The change there is three lines in the same shape as the auth card, but it has
-not been watched.
+**The sidebar is `md:hidden`, so on a phone the app said its own name
+nowhere** — which is what the desktop-only placement missed. The bottom bar is
+not the answer: it is tab navigation, and a logo there would cost one of five
+tab slots. The brand row lives in `AppTopbar` instead, `md:hidden`, inside the
+header's existing padding, so a desktop viewport gains nothing at all.
+
+**Verified in a browser: sign-in, sign-up, and the mobile topbar** — the mark
+renders beside the wordmark on all three, with the heading clearly dominant on
+the auth card. **The desktop sidebar is still not visually verified**: the
+browser window would not resize past a phone-width viewport, reporting success
+each time while the viewport stayed at ~400px. The change there is three lines
+in the same shape as the others, but it has not been watched.
 
 **The stale service worker cost time again**, exactly as the gotcha describes:
 the new Tailwind classes were missing from the served CSS, so the mark rendered
