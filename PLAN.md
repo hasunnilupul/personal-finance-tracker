@@ -10,45 +10,55 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-19 (second)** — PR open, `dev` → `main`, and the largest
-release this project has had. It carries **#49** (the update notice removed),
-**#50** (the mark on the auth card, the sidebar and a phone), **#51** (the
-browser smoke suite), **#52** (CSV export) and **#53** (budget warnings at 80%),
-plus the plan records for each. **This one must be merged as a merge commit,
-not squashed.**
+**Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
+here so far. It carries **#49** (the update notice removed), **#50** (the mark
+on the auth card, the sidebar and a phone), **#51** (the browser smoke suite),
+**#52** (CSV export) and **#53** (budget warnings at 80%), plus the plan records
+for each.
 
-**No migrations. One dependency change, and it is the first in several
-releases.** `git diff main dev -- lib/db/migrations/**` is empty; the only
-`lib/db/` change is a doc comment and a `NotificationType` union gaining
-`budget_warning`, which is a type-level guard over an existing `varchar` and
-costs the database nothing. So the deploy-time migrate step is a no-op again.
-The dependency is **`@playwright/test`, a devDependency** — nothing imports it
-at runtime and nothing in `app/` or `lib/` references it. **Installing it does
-not download browsers**: that was observed directly, when the suite's first run
-failed asking for `playwright install`. It adds install time to the build and
-nothing else.
+**No migrations. One dependency change, and the record says what kind.** No
+migration files; the only `lib/db/` change was a doc comment and a
+`NotificationType` union gaining `budget_warning`, a type-level guard over an
+existing `varchar`. So the migrate step was a no-op again. The dependency is
+**`@playwright/test`, a devDependency** that nothing imports at runtime, and
+**installing it does not download browsers** — observed directly when the
+suite's first run failed asking for `playwright install`.
 
-**What is different about this release: some of it is now self-verifying.** The
-suite in #51 asserts the sign-in page, the splash gate, the gate script's
-position, the dashboard shell at two widths, `/offline`, the manifest, and the
-export's guard and headers — 17 tests against a production build. That is a
-smaller set than the standing gap, but it is the first part of this app that
-does not depend on somebody remembering to look.
+**Merged with a merge commit, and the history is convergent.** `c1c1e00` has two
+parents (`4cc30b8` and `685951b`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Three releases in a row now follow the rule rather than
+repair it.
 
-**Still unverified, and none of it new:** whether push actually delivers,
-whether `financeflow-private-*` disappears from Cache Storage on sign-out,
-whether an invitation notice reaches the other account, and **whether Feature 13
-ever worked** — the id changed at the last release, which is the precondition,
-but nothing has confirmed a new worker installed and dropped the previous
-build's caches. **This deploy is another chance to see it.**
+**The deploy was not instant, and checking too early would have recorded a
+lie.** The first pass against the live site found the deployment id *unchanged*
+and `/api/export` answering **404** — both saying the same thing: production was
+still serving the previous build, while `/`, `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answered exactly as they should,
+because those existed before. **"The site is up" proves nothing about a release
+whose new routes are not there yet.** It went live within the next minute.
 
-**Two things in this release have never been seen by a person**, as opposed to
-by a test: the budget *warning* notification actually arriving in the bell, and
-the CSV opening in a spreadsheet. The suite asserts the endpoint's headers and
-the file's header row; it does not assert that Excel is happy with it.
+Verified against the live site once it had: `/` 307s to `/sign-in`; `/sign-in`,
+`/offline` and `/manifest.webmanifest` answer 200; `/sw.js` answers 200 as
+JavaScript with `no-cache, no-store, must-revalidate`, identically with
+`?v=<id>`. `/api/version` reports `dpl_ErZ28EnsDah6xQiyyymKRdyJnDsu` and the
+page's `data-dpl-id` is the same string — **a new id, which is the precondition
+for everything Feature 13 does.** The splash gate ships in the response body.
 
-**Still to fill in after the merge:** the merge SHA, that it has two parents,
-and what the live site actually answered. — pending.
+**The export is guarded in production, which is the check that mattered most.**
+A signed-out `GET /api/export` answers **307 to `/sign-in` with an empty body**.
+Every other endpoint leaks one page at a time; that one would have handed over
+the entire ledger, so it is the one worth confirming from outside rather than
+trusting to a test.
+
+**Still unverified, and now the list is shorter than the app.** Never seen by a
+person as opposed to by a test: **the budget warning arriving in the bell**, and
+**the CSV opening in a spreadsheet** — the suite asserts the endpoint's headers
+and the file's header row, not that Excel is happy with it. Unchanged from
+before: whether push delivers, whether `financeflow-private-*` disappears from
+Cache Storage on sign-out, whether an invitation notice reaches the other
+account, and **whether Feature 13 has ever worked** — three releases have now
+changed the id without anybody confirming a new worker installed and dropped the
+previous build's caches.
 
 **Released 2026-08-19** — `4cc30b8` (PR #48), carrying **#46 (Feature 14 —
 error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
@@ -413,8 +423,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
+| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Deployed and green.            |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
 
 ---
 
