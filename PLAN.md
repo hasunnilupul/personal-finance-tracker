@@ -293,11 +293,18 @@ documentation branch of its own: the repo owner asked for those to stop on
 2026-08-17, and everything else belongs in the commits of the feature it
 describes.
 
-**Feature 16 — the mark where people actually look** is the latest work, on
-`feat/brand-mark-placement`. Feature 15 drew a logo and then showed it in the
-one place nobody stays: a splash that leaves after 1.45s. This puts it on the
-sign-in and sign-up card — which had no branding at all, and is the first thing
-anybody sees of this app — and in the sidebar header beside the wordmark.
+**Feature 16 — the mark where people actually look** merged as #50
+(`e9396da`). Feature 15 drew a logo and then showed it in the one place nobody
+stays: a splash that leaves after 1.45s. This puts it on the sign-in and sign-up
+card — which had no branding at all, and is the first thing anybody sees of this
+app — in the sidebar header, and in a `md:hidden` topbar row, because the
+sidebar is desktop-only and a phone is where this app is opened.
+
+**One thing in it is still unwatched: the desktop sidebar.** The browser window
+refused to resize past a phone-width viewport, reporting success each time while
+the viewport stayed at ~400px, and the extension disconnected before another
+attempt was possible. It is three lines in the same shape as the two that were
+verified, and it merged on that basis. **Worth a glance at a desktop width.**
 
 **It made `BrandMark` safe to draw twice, which it was not.** The gradient's DOM
 id was hard-coded, and the splash is in the root layout, so every page now
@@ -347,7 +354,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by the release record and #49 (the notice removed), which is unreleased. `feat/brand-mark-placement` (Feature 16) is open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #49 and #50 — all unreleased. No branch open against it. |
 
 ---
 
@@ -1097,7 +1104,7 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 16 — The mark where people look ✅ done, PR open
+### Feature 16 — The mark where people look ✅ merged (PR #50)
 
 - [x] `BrandMark` takes a `gradientId`, so two marks on a page cannot share one
 - [x] … and a `decorative` flag, for wherever the wordmark carries the name
