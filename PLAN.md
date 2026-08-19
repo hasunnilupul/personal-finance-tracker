@@ -179,14 +179,19 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Feature 14 — error boundaries** is the latest work, on
-`feat/error-boundaries`, branched cleanly from `dev` this time. **Feature 15 —
-a cold-start splash** is agreed and not started: a branded launch screen for the
-installed app, with an SVG mark drawn in the language of the existing icon so
-its parts can animate separately. It deliberately does **not** touch the route
-skeletons — Feature 11 settled that a shape-matched fallback beats a generic
-one, and a logo animation on every navigation would be exactly the generic one.
-It waits for this PR to merge.
+**Feature 14 — error boundaries** merged as #46. **Feature 15 — a cold-start
+splash** is the latest work, on `feat/splash-screen`, branched cleanly from
+`dev`: a branded launch screen for the installed app, with an SVG mark drawn in
+the language of the existing icon so its parts can animate separately. It
+deliberately does **not** touch the route skeletons — Feature 11 settled that a
+shape-matched fallback beats a generic one, and a logo animation on every
+navigation would be exactly the generic one.
+
+**It is the first feature verified in a browser before its PR was opened**, and
+that is the only reason it is correct: the splash renders, the mark sizes to
+`5rem`, the gate suppresses it on the second load of a session, and the console
+is clean. Two separate faults were invisible to `typecheck`, `lint`, `test` and
+`build`, which all passed against both of them — see the two gotchas below.
 
 **Feature 13 was built stacked on `feat/update-notice` rather than branched from
 `dev`**, because it reuses the `loadedDeploymentId()` that Feature 12
@@ -244,7 +249,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by the release record. `feat/error-boundaries` (Feature 14) is open against it. |
+| `dev`  | Integration branch. Level with `main` in code; ahead by the release record and #46. `feat/splash-screen` (Feature 15) is open against it. |
 
 ---
 
@@ -375,6 +380,10 @@ Locked in. Revisit only with a reason — and note the reason here.
 ---
 
 ## Conventions
+
+**The dev server runs on port 3001.** `pnpm dev` is `next dev -p 3001`, pinned
+rather than left to default, so the URL is the same every time and a second
+Next instance cannot quietly claim 3000 and leave you testing the wrong tree.
 
 **Layering.** Pages and Server Actions call services. Services call
 repositories. Only repositories touch `db`. No exceptions — it is what keeps
@@ -982,7 +991,50 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 14 — Error boundaries ✅ done, PR open
+### Feature 15 — Cold-start splash ✅ done, PR open
+
+- [x] `components/brand-mark.tsx` — the icon redrawn as inline SVG, its bars,
+      arrow and head separately addressable so they can animate apart
+- [x] `components/app-splash.tsx` — the overlay, server-rendered, no client
+      component and no hydration on the path that shows it
+- [x] `lib/pwa/splash.ts` — the session gate, as source for an inline script
+- [x] The whole lifecycle in `app/globals.css`, dismissal included
+- [x] `lib/pwa/splash.test.ts` — the gate executed, not pattern-matched
+- [x] `app/splash-dismissal.test.ts` — the dismissal cannot become conditional
+
+**Nothing has to run for the splash to leave.** It is a fixed overlay across the
+whole viewport, so every mechanism that could fail to remove it is a way to lose
+the application completely — not degrade it, lose it. So the dismissal is a CSS
+animation with `forwards`, defined outside every guard: it plays under reduced
+motion, and it plays with JavaScript blocked or broken.
+`app/splash-dismissal.test.ts` asserts that shape rather than the appearance,
+because the realistic way it breaks is somebody tidying the fade-out in with the
+decorative animations under `prefers-reduced-motion`, where they are switched off
+together. That reads perfectly in review and would be caught by nobody who did
+not have the preference set.
+
+**The gate fails towards showing.** `sessionStorage` does not merely come back
+empty in Safari's private mode and under blocked cookies — it *throws*, in
+`<body>`'s first script, before anything else. So it is wrapped in
+`try`/`catch`, and the catch leaves the splash playing: the cost of that
+direction is a repeated animation, where marking it done by mistake would mean
+nobody ever saw the launch screen and nothing would ever say so.
+
+**`sessionStorage`, not `localStorage`, and the scope is the feature.** A splash
+is for a cold start. `sessionStorage` ends when the tab or the installed app is
+closed, which is exactly when the next open is a real launch; `localStorage`
+would show it once ever, and a timestamp in `localStorage` would be a guess at
+what "a new launch" means.
+
+**Verified in a browser on `localhost:3001`, both halves.** Cold start: the
+overlay renders, the mark computes to `80px`, `ff-splash-dismiss` is the running
+animation, and it clears to the sign-in card. Second load in the same tab:
+`<html data-splash="done">`, the overlay computes `display: none`, and the app
+is there immediately with no flash. **Still unseen: the installed app on a real
+device**, which is the moment the feature exists for — a browser tab is the
+nearest thing reachable from here.
+
+### Feature 14 — Error boundaries ✅ merged (PR #46)
 
 - [x] `app/(dashboard)/error.tsx` — a failed page keeps the sidebar, the topbar
       and the mobile navigation
@@ -1386,6 +1438,32 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **Never hand-write a `<head>` in the root layout.** Next owns it in the App
+  Router. A `<head>` of your own renders, and the page looks right, but React
+  re-creates its children on the client: it logs "Encountered a script tag while
+  rendering React component" on every load and substitutes a `<div>` for the
+  script. That warning is **dev-only** — it exists solely in React's
+  `.development.js` builds — so `build` cannot see it and neither can the tests.
+  An inline script that must beat the first paint goes at the **top of `<body>`**
+  instead: a synchronous script blocks the parser where it stands, so it still
+  runs before the markup below it is parsed. `lib/pwa/splash.ts` is the example.
+- **`next/script` cannot run anything before the first paint**, whatever the
+  strategy says. `strategy="beforeInteractive"` does not put the source in the
+  document head; it compiles to a `self.__next_s.push([...])` in the body, which
+  Next's runtime drains at hydration. For a theme gate or a splash gate —
+  anything whose whole job is to be finished before the browser paints — that is
+  far too late, and the failure is a visible flash rather than an error. Use a
+  raw inline `<script>`; `next-themes` does exactly that for the same reason.
+- **The service worker will serve stale JS and CSS to `localhost` across branch
+  switches.** Turbopack's dev chunk URLs are stable rather than content-hashed,
+  so `financeflow-shell-v1` keeps answering for a chunk name whose contents have
+  since changed — and it survives restarting the dev server *and* deleting
+  `.next`. This cost real time once: new CSS appeared not to apply at all, the
+  splash mark rendered at 1905px instead of `5rem`, and `curl` and the browser
+  disagreed about the bytes at one URL. **If styles or scripts look impossibly
+  stale, suspect the worker before the code**: unregister it and delete the
+  caches in the console, or the symptom outlives every other thing you try.
 
 - **`error.tsx` takes `unstable_retry`, not `reset`** — Next 16.2 added it, and
   it is not the signature most references still show. Both props exist, which is
