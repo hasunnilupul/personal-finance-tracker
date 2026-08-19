@@ -318,10 +318,26 @@ default can never collide with the splash.
 **The mark is `decorative` wherever a visible "FinanceFlow" sits beside it**,
 or a screen reader announces the name twice for one piece of branding.
 
-**Still to come:** no other feature is planned. The one known gap is offline *entry*,
-which Feature 10 deliberately leaves out: writes are not queued, and doing it
-properly means IndexedDB and a replay queue with the same idempotency care the
-recurring materialiser needed.
+**Still to come — three features, agreed 2026-08-19, in this order:**
+
+1. **Feature 17 — a browser smoke suite.** The reason it is first: every real
+   defect of the past week was invisible to all four checks. It also retires the
+   "needs a signed-in browser with the owner's own credentials" gap that six
+   release records have now repeated.
+2. **Feature 18 — data export.** There is none. Years of hand-entered figures
+   in one database with no user-facing way to get them out.
+3. **Feature 19 — warn before a budget is blown.** `findExceeded` already runs
+   after every expense, but only ever says *you went over*, by which point the
+   money is spent.
+
+**Offline *entry* is deliberately not among them.** It is the largest item on
+the list — IndexedDB and a replay queue with the same idempotency care the
+recurring materialiser needed — and offline *reads* have never been proved on a
+device. Feature 17 is what would make that provable, so it goes first.
+
+**Merging `expenses` and `income` is still not worth doing**, for the reason
+already recorded under follow-ups: the shared service layer absorbs most of the
+cost, and the migration would buy tidiness rather than capability.
 
 **Both cron routes are scheduled and both are live.** `vercel.json` lists
 `/api/cron/refresh-rates` at 03:00 and `/api/cron/materialise-recurring` at
@@ -1103,6 +1119,57 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Feature 17 — A browser smoke suite ⏳ not started
+
+- [ ] Playwright, driving a real browser against a real build
+- [ ] Sign-in renders, and a wrong password is refused
+- [ ] The splash gate: shown once, `data-splash="done"` on the second load
+- [ ] The dashboard shell paints for a signed-in session
+- [ ] `/offline` answers
+
+**Why this is first.** Four green checks — `typecheck`, `lint`, 319 tests,
+`build` — passed against every defect found in the week of 2026-08-19: a
+hand-written `<head>` that made React substitute a `<div>` for the splash gate
+script, a mark that rendered at 1905px when the stylesheet did not land, a
+notice that was correct and unreachable, and a sidebar that merged unwatched.
+The unit suite is good at the layer it covers and structurally blind to
+anything that only exists in a rendered page.
+
+**The second payoff is the larger one.** "Needs a signed-in browser with the
+owner's own credentials" has been recorded as a standing gap in six consecutive
+release records — push delivery, invitation notices, the sign-out cache purge,
+the dashboard error boundary, Feature 13's cache eviction. A suite that can sign
+itself in retires that list instead of re-recording it every release.
+
+**It should not download a browser if it can be helped.** Playwright's own
+Chromium is a large binary and there is no CI here to need it; the machine
+already has Chrome. Prefer the installed channel and record what was chosen.
+
+### Feature 18 — Data export ⏳ not started
+
+- [ ] CSV of a space's entries, scoped and permission-checked like every other read
+- [ ] Honest about currency: the entered amount and the base amount are different
+      numbers and both matter
+- [ ] Streamed or chunked rather than built in memory
+
+**Why.** There is no export of any kind. This is years of hand-entered
+financial data in a single database, and the only answer to "can I get my
+figures out" is a database client. It is also the honest answer to "can I
+leave", which matters for something a family is being asked to put its spending
+into.
+
+### Feature 19 — Warn before a budget is blown ⏳ not started
+
+- [ ] A threshold crossing notifies, not only the breach
+- [ ] It uses `findExceeded`'s arithmetic rather than a second opinion — a
+      warning that disagreed with the bar on screen would be worse than none
+- [ ] It does not nag: one warning per budget per window
+
+**Why.** The machinery is built and tested. `budgetService.findExceeded` runs
+after every expense write and notifies the space, but only ever says *you went
+over* — after the money is spent. The same two functions answer "85% with nine
+days left", which is the version that can change what somebody does.
 
 ### Feature 16 — The mark where people look ✅ merged (PR #50)
 
