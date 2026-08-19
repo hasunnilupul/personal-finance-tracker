@@ -179,13 +179,17 @@ this release rebuilt. **Verify by pressing the toggle, not by loading the
 page:** a missing server-side key makes the toggle say "not configured", but a
 missing or mismatched *public* key fails only at `pushManager.subscribe`.
 
-**Feature 14 — error boundaries** merged as #46. **Feature 15 — a cold-start
-splash** is the latest work, on `feat/splash-screen`, branched cleanly from
-`dev`: a branded launch screen for the installed app, with an SVG mark drawn in
-the language of the existing icon so its parts can animate separately. It
-deliberately does **not** touch the route skeletons — Feature 11 settled that a
-shape-matched fallback beats a generic one, and a logo animation on every
-navigation would be exactly the generic one.
+**Feature 14 — error boundaries** merged as #46, and **Feature 15 — the
+cold-start splash** as #47 (`48c112c`, squash-merged, 2026-08-19): a branded
+launch screen for the installed app, with an SVG mark drawn in the language of
+the existing icon so its parts animate separately. It deliberately does **not**
+touch the route skeletons — Feature 11 settled that a shape-matched fallback
+beats a generic one, and a logo animation on every navigation would be exactly
+the generic one.
+
+**Both are merged into `dev` and neither has been released.** `main` is still at
+`45305b7`, so nothing in #46 or #47 has been near production; the next release
+PR carries both.
 
 **It is the first feature verified in a browser before its PR was opened**, and
 that is the only reason it is correct: the splash renders, the mark sizes to
@@ -249,7 +253,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `45305b7` (PR #45, 2026-08-18). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by the release record and #46. `feat/splash-screen` (Feature 15) is open against it. |
+| `dev`  | Integration branch. Ahead of `main` by the release record, #46 and #47 — all unreleased. No branch open against it. |
 
 ---
 
@@ -991,7 +995,7 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 15 — Cold-start splash ✅ done, PR open
+### Feature 15 — Cold-start splash ✅ merged (PR #47)
 
 - [x] `components/brand-mark.tsx` — the icon redrawn as inline SVG, its bars,
       arrow and head separately addressable so they can animate apart
