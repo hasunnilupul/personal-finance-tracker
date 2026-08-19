@@ -1,4 +1,5 @@
 import BaseCurrencyForm from "@/components/base-currency-form";
+import ExportCard from "@/components/export-card";
 import PushToggle from "@/components/push-toggle";
 import { Card } from "@/components/ui/card";
 import { requireActiveSpace } from "@/lib/auth/dal";
@@ -35,6 +36,13 @@ const SpaceSettingsPage = async () => {
           </p>
         </Card>
       )}
+
+      {/*
+        Every role that can read the ledger can export it. There is no separate
+        permission because there is nothing here a member cannot already see one
+        page at a time — an export changes the convenience, not the access.
+      */}
+      <ExportCard spaceName={space.name} baseCurrency={space.baseCurrency} />
 
       {/*
         Push belongs to the device rather than to the space, but this is the
