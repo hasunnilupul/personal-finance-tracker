@@ -81,9 +81,9 @@ test.describe("the dashboard shell", () => {
   });
 
   test("gives an iPhone the iOS bar and everything else Android's", async ({ browser }) => {
-    // Both bars render the same markup today, so `data-platform` is the whole
-    // assertion. It is what will still be checking the right thing once the two
-    // designs diverge.
+    // The two designs have diverged, so `data-platform` is no longer the only
+    // difference — but it stays the assertion, because it is the choice being
+    // tested rather than the styling that follows from it.
     const iphone = await browser.newContext({
       storageState: STORAGE_STATE,
       viewport: { width: 390, height: 844 },
@@ -114,6 +114,116 @@ test.describe("the dashboard shell", () => {
     await expect(otherPage.getByRole("navigation")).toHaveAttribute("data-platform", "android");
 
     await other.close();
+  });
+
+  test.describe("the iOS glass bar", () => {
+    const IPHONE = {
+      viewport: { width: 390, height: 844 },
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    };
+
+    test("floats clear of every edge, and is really translucent", async ({ browser }) => {
+      const context = await browser.newContext({ storageState: STORAGE_STATE, ...IPHONE });
+      const page = await context.newPage();
+
+      await page.goto("/");
+
+      const bar = page.locator("nav[data-platform='ios']");
+      const box = await bar.boundingBox();
+
+      // A missing box means the bar did not render at all, which is worth a
+      // sentence rather than a null-dereference three lines down.
+      expect(box, "the iOS bar should be laid out on an iPhone viewport").not.toBeNull();
+
+      const { width, height } = IPHONE.viewport;
+
+      // A capsule, not a full-width surface. Inset on both sides and clear of
+      // the bottom — the complaint the whole platform split started from.
+      expect(box?.x).toBeGreaterThanOrEqual(8);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width - 8);
+      expect(height - ((box?.y ?? 0) + (box?.height ?? 0))).toBeGreaterThanOrEqual(16);
+
+      // The glass. A background that resolved opaque, or a `backdrop-filter`
+      // of `none`, would still look like a bar in a screenshot — this is the
+      // difference a picture cannot show.
+      const glass = await bar.evaluate((el) => {
+        const style = getComputedStyle(el);
+
+        return { background: style.backgroundColor, backdrop: style.backdropFilter };
+      });
+
+      expect(glass.backdrop).toContain("blur");
+      // `oklch(… / 0.62)` and friends serialise with an alpha component; a
+      // solid colour would not carry one at all.
+      expect(glass.background).toMatch(/0\.\d+\s*\)/);
+
+      await context.close();
+    });
+
+    test("puts the pill under the tab you are actually on", async ({ browser }) => {
+      const context = await browser.newContext({ storageState: STORAGE_STATE, ...IPHONE });
+      const page = await context.newPage();
+
+      const pill = page.locator(".ff-iosbar-pill");
+
+      await page.goto("/");
+      await expect(pill).toHaveCSS("--ff-index", "0");
+
+      await page.goto("/budgets");
+      // Budgets is the fourth primary tab, so index 3. The pill is one element
+      // that slides rather than five that light up, which is why an index is
+      // the thing worth asserting.
+      await expect(pill).toHaveCSS("--ff-index", "3");
+
+      // A page reached through "More" belongs to the last column, not to no
+      // column and not to Dashboard.
+      await page.goto("/reports");
+      await expect(pill).toHaveCSS("--ff-index", "4");
+
+      await context.close();
+    });
+
+    test("carries exactly one copy of the refraction filter", async ({ browser }) => {
+      const context = await browser.newContext({ storageState: STORAGE_STATE, ...IPHONE });
+      const page = await context.newPage();
+
+      await page.goto("/");
+
+      // A duplicate id would not break the picture today — `url(#…)` simply
+      // resolves to the first match — which is exactly why it needs asserting.
+      // It is the same trap `BrandMark`'s `gradientId` exists to avoid.
+      await expect(page.locator("#ff-glass-refraction")).toHaveCount(1);
+
+      // And it must take no layout space, or it pushes the page around from
+      // inside a `position: absolute` box nobody can see.
+      const box = await page.locator(".ff-iosbar-filter").boundingBox();
+
+      expect(box?.width ?? 0).toBe(0);
+      expect(box?.height ?? 0).toBe(0);
+
+      await context.close();
+    });
+
+    test("stays off the desktop, where the sidebar is", async ({ browser }) => {
+      // The trap this exists for: `.ff-iosbar` sets `display: flex`, and
+      // unlayered CSS beats *every* layered rule — including Tailwind's
+      // `md:hidden` utility. Written outside `@layer components` this bar
+      // renders at 1280px, next to the sidebar it replaces.
+      const context = await browser.newContext({
+        storageState: STORAGE_STATE,
+        viewport: { width: 1280, height: 900 },
+        userAgent: IPHONE.userAgent,
+      });
+      const page = await context.newPage();
+
+      await page.goto("/");
+
+      await expect(page.locator("nav[data-platform='ios']")).toBeHidden();
+      await expect(page.locator("aside")).toBeVisible();
+
+      await context.close();
+    });
   });
 
   test("navigates to expenses and keeps the shell", async ({ page }) => {
