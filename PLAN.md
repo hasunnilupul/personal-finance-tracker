@@ -10,45 +10,104 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-19 (second)** — PR open, `dev` → `main`, and the largest
-release this project has had. It carries **#49** (the update notice removed),
-**#50** (the mark on the auth card, the sidebar and a phone), **#51** (the
-browser smoke suite), **#52** (CSV export) and **#53** (budget warnings at 80%),
-plus the plan records for each. **This one must be merged as a merge commit,
-not squashed.**
+**Releasing 2026-08-21** — the mobile navigation release. It carries **#55**
+(Feature 20 — a bar per platform, and room under the icons), **#56** (the dev
+worker no longer serves stale Turbopack chunks) and **#57** (Feature 21 — the
+iOS glass bar), plus the plan records for each.
 
-**No migrations. One dependency change, and it is the first in several
-releases.** `git diff main dev -- lib/db/migrations/**` is empty; the only
-`lib/db/` change is a doc comment and a `NotificationType` union gaining
-`budget_warning`, which is a type-level guard over an existing `varchar` and
-costs the database nothing. So the deploy-time migrate step is a no-op again.
-The dependency is **`@playwright/test`, a devDependency** — nothing imports it
-at runtime and nothing in `app/` or `lib/` references it. **Installing it does
-not download browsers**: that was observed directly, when the suite's first run
-failed asking for `playwright install`. It adds install time to the build and
-nothing else.
+_Merge SHA and live-site results are filled in below once it has merged. Written
+before the merge, as step 7 of the Workflow requires — the half that is knowable
+in advance is knowable now, and writing it afterwards is how it has twice come
+to be an afterthought._
 
-**What is different about this release: some of it is now self-verifying.** The
-suite in #51 asserts the sign-in page, the splash gate, the gate script's
-position, the dashboard shell at two widths, `/offline`, the manifest, and the
-export's guard and headers — 17 tests against a production build. That is a
-smaller set than the standing gap, but it is the first part of this app that
-does not depend on somebody remembering to look.
+**No migrations and no dependency changes.** `git diff main dev -- lib/db/` is
+empty and so is the diff over `package.json` and `pnpm-lock.yaml`, so the
+deploy-time migrate step is a no-op again — the lowest-risk shape a release can
+have here.
 
-**Still unverified, and none of it new:** whether push actually delivers,
-whether `financeflow-private-*` disappears from Cache Storage on sign-out,
-whether an invitation notice reaches the other account, and **whether Feature 13
-ever worked** — the id changed at the last release, which is the precondition,
-but nothing has confirmed a new worker installed and dropped the previous
-build's caches. **This deploy is another chance to see it.**
+**History is convergent before the merge, which is what the check is for.** The
+merge base of `main` and `dev` is `685951b`, and that is exactly `c1c1e00`'s
+second parent — so this release PR lists only #55, #56, #57 and the trailing
+record from last time, with nothing re-listed. **Merge it as a merge commit.**
+Squashing costs `main` the ancestry and makes every later release PR re-list
+what already shipped; it happened once, with #38, and the repair is `4c0795a`.
 
-**Two things in this release have never been seen by a person**, as opposed to
-by a test: the budget *warning* notification actually arriving in the bell, and
-the CSV opening in a spreadsheet. The suite asserts the endpoint's headers and
-the file's header row; it does not assert that Excel is happy with it.
+**This release changes `public/sw.js`, which the last four did not.** Two
+consequences worth watching rather than assuming:
 
-**Still to fill in after the merge:** the merge SHA, that it has two parents,
-and what the live site actually answered. — pending.
+1. **`SHELL_SCHEMA` went to `2`, so every installed device drops its shell cache
+   and precaches again.** That is the intended mechanism — it is what heals a
+   poisoned development machine — but in production it means the first load
+   after the deploy refetches `/offline` and the icons. Harmless, and the first
+   time this app has deliberately invalidated a cache on real devices.
+2. **It confounds Feature 13, and the record has to say so before anybody
+   claims otherwise.** A new worker will certainly install this time — but
+   because the *bytes* changed, which is the ordinary update path, not because
+   the `?v=<deployment id>` query did anything. **This release cannot be
+   evidence that Feature 13 works.** The next release that leaves `sw.js`
+   untouched is the one that can be.
+
+**What can be checked from outside is unusually good this time.** `/sw.js` is
+public and its contents are now release-specific: if the deployed worker
+contains `SHELL_SCHEMA`, this build's worker really shipped, which is a stronger
+claim than the "answers 200" every previous record settled for.
+
+**What cannot.** The iOS bar is behind authentication and only renders for an
+iOS user agent, so nothing about it is visible to a signed-out visitor. And the
+standing gap is unchanged and now pointed: **the glass has never been seen in
+WebKit.** Everything about it was judged in Chrome, and the `@supports` guard
+does not protect the refraction — see the gotcha. Opening the installed app on
+the owner's iPhone is the check, and it is the one thing this release most needs.
+
+**Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
+here so far. It carries **#49** (the update notice removed), **#50** (the mark
+on the auth card, the sidebar and a phone), **#51** (the browser smoke suite),
+**#52** (CSV export) and **#53** (budget warnings at 80%), plus the plan records
+for each.
+
+**No migrations. One dependency change, and the record says what kind.** No
+migration files; the only `lib/db/` change was a doc comment and a
+`NotificationType` union gaining `budget_warning`, a type-level guard over an
+existing `varchar`. So the migrate step was a no-op again. The dependency is
+**`@playwright/test`, a devDependency** that nothing imports at runtime, and
+**installing it does not download browsers** — observed directly when the
+suite's first run failed asking for `playwright install`.
+
+**Merged with a merge commit, and the history is convergent.** `c1c1e00` has two
+parents (`4cc30b8` and `685951b`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Three releases in a row now follow the rule rather than
+repair it.
+
+**The deploy was not instant, and checking too early would have recorded a
+lie.** The first pass against the live site found the deployment id *unchanged*
+and `/api/export` answering **404** — both saying the same thing: production was
+still serving the previous build, while `/`, `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answered exactly as they should,
+because those existed before. **"The site is up" proves nothing about a release
+whose new routes are not there yet.** It went live within the next minute.
+
+Verified against the live site once it had: `/` 307s to `/sign-in`; `/sign-in`,
+`/offline` and `/manifest.webmanifest` answer 200; `/sw.js` answers 200 as
+JavaScript with `no-cache, no-store, must-revalidate`, identically with
+`?v=<id>`. `/api/version` reports `dpl_ErZ28EnsDah6xQiyyymKRdyJnDsu` and the
+page's `data-dpl-id` is the same string — **a new id, which is the precondition
+for everything Feature 13 does.** The splash gate ships in the response body.
+
+**The export is guarded in production, which is the check that mattered most.**
+A signed-out `GET /api/export` answers **307 to `/sign-in` with an empty body**.
+Every other endpoint leaks one page at a time; that one would have handed over
+the entire ledger, so it is the one worth confirming from outside rather than
+trusting to a test.
+
+**Still unverified, and now the list is shorter than the app.** Never seen by a
+person as opposed to by a test: **the budget warning arriving in the bell**, and
+**the CSV opening in a spreadsheet** — the suite asserts the endpoint's headers
+and the file's header row, not that Excel is happy with it. Unchanged from
+before: whether push delivers, whether `financeflow-private-*` disappears from
+Cache Storage on sign-out, whether an invitation notice reaches the other
+account, and **whether Feature 13 has ever worked** — three releases have now
+changed the id without anybody confirming a new worker installed and dropped the
+previous build's caches.
 
 **Released 2026-08-19** — `4cc30b8` (PR #48), carrying **#46 (Feature 14 —
 error boundaries)** and **#47 (Feature 15 — the cold-start splash)**, plus the
@@ -413,8 +472,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `4cc30b8` (PR #48, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by #49, #50, #51, #52, #53 and the plan records. Release PR open into `main` — **merge it as a merge commit, not a squash**. |
+| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Release PR open against it.     |
+| `dev`  | Integration branch. Ahead of `main` by #55, #56 and #57. No feature branch open against it. |
 
 ---
 
@@ -1164,6 +1223,206 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
+### Feature 21 — The iOS bar gets its own design ✅ merged (PR #57)
+
+- [x] A floating glass capsule, inset from every edge
+- [x] `backdrop-filter` blur + saturate, with an `feImage`/`feDisplacementMap`
+      refraction layered on top
+- [x] One pill that slides between columns, driven by `--ff-index`
+- [x] Apple's 44px touch targets, reduced-motion, and a `forced-colors` fallback
+- [x] The displacement map drawn in ~500 bytes rather than shipped as 30KB
+- [x] Four browser assertions, and the whole suite green at 23
+
+**Feature 20 built the seam; this is what it was for.** Every line of this
+landed in `mobile-nav-ios.tsx` and `app/globals.css`. `mobile-nav-android.tsx`
+was not opened, and no Android phone can have moved a pixel — which is the
+claim the split was made to be able to state.
+
+**A capsule rather than a full-width surface, and that is the design.** Android's
+bar is part of the screen; Apple's is an object sitting over it. It is also the
+only shape that *can* be glass: a bar spanning the viewport with an opaque page
+behind it has nothing to refract, so the effect would be a tint pretending.
+
+**The pill is one element that slides, not five that light up.** `--ff-index` is
+the only thing that changes and it moves by `translate`, so it stays on the
+compositor. A route matching no tab — a future `/expenses/123` — hides the pill
+rather than parking it on Dashboard, because a pill under the wrong tab is a
+confident lie about where you are.
+
+**The `@supports` guard is weaker than it looks, and it is written down rather
+than relied on.** `@supports (backdrop-filter: url("#…"))` tests that the value
+*parses*, not that the engine renders it. An engine that accepts `url()` and
+then does nothing with `feImage` passes the check and gets no fallback. It is
+kept because it costs nothing and does exclude engines with no `url()` filter
+support at all. **The real protection is that the design survives losing it**:
+without the displacement the bar is still tint + blur + saturate, which is its
+whole shape. The refraction is the flourish, never the structure.
+
+**The displacement map is drawn, not shipped.** The reference design carried a
+~30KB base64 WebP inlined *twice*, once per filter. This is the same idea in
+about 500 bytes: neutral is 128 in both channels, red drives horizontal
+displacement and green vertical, and two gradient rects composite with `screen`
+— which works precisely because each one zeroes the other's channel.
+
+**The filter lives inside the component, not the root layout.** It therefore
+exists exactly once and only on the platform that uses it, since `MobileNav`
+renders one bar and never both. A shared filter in the layout would be a
+duplicate `url(#…)` id waiting to happen — the same trap `BrandMark`'s
+`gradientId` already exists to avoid, and a test asserts the count is 1.
+
+**Two things the browser caught that reasoning did not:**
+
+1. **A white pill on white glass over a white page is invisible.** The first
+   version followed the glass-edge convention and tinted the selected segment
+   *up* in both themes. iOS tints it down in light and up in dark, and the
+   reason is exactly this.
+2. **Glass over a flat page is indistinguishable from opaque.** Two screenshots
+   looked perfectly good and proved nothing, because no content was behind the
+   bar. The effect can only be judged with something scrolled under it.
+
+**The CSS must live in `@layer components`, and that is not tidiness** — see the
+gotcha. It is the one thing here that would have shipped broken.
+
+### Fix — the dev worker stops serving stale chunks ✅ merged (PR #56)
+
+- [x] `/sw.js?dev=1` in development; the worker reads it off its own script URL
+- [x] `isShellAsset` no longer cache-firsts `/_next/static/` for a dev worker
+- [x] `SHELL_SCHEMA`, so the existing sweep evicts every poisoned cache already
+      out there
+- [x] The handover window closed — a dev worker purges `/_next/` on activate
+- [x] Verified on a machine that actually had the bad cache: the module error is
+      gone, both caches hold zero `/_next/` entries, and the console is clean
+
+**Reported as a React warning, and it was three steps from the cause.**
+"Encountered a script tag while rendering React component", pointing at the
+splash gate in the root layout — the same warning the `<head>` gotcha records,
+which is what made it look like a regression of that. It was not. Underneath it
+sat `Module … app/global-error.tsx … was instantiated because it was required
+from … but the module factory is not available`: a chunk graph half from one
+build and half from another. With `global-error.tsx` unavailable, the root error
+path client-renders the document, which mounts the layout's `<script>` on the
+client, which is precisely what React warns about.
+
+**Next's message named the cause outright** — "or a service worker serving
+outdated responses" — and it was read past twice, once in each incident.
+
+**The premise `cacheFirst` rests on is false in development.** Its comment said
+so all along: safe "only for immutable things", because "a `/_next/static/` path
+carries a build hash". Turbopack's dev chunk URLs do not. The rule was right and
+its precondition was never checked.
+
+**The worker is told, not left to guess.** A worker cannot read `NODE_ENV`, and
+the hostname is not the answer either — the smoke suite serves a real production
+build from `localhost`, where cache-first is exactly right. The page knows for
+certain, so the page says, in the query beside `v` and never in the path, for
+the same reason `v` is: a changed path is a second registration and takes every
+device's push subscription with it.
+
+**The fix could not be delivered by the fix.** The poisoned cache was serving
+the very chunk that contains the registration code, so nothing shipped through
+the page could load; and in development `VERSION` is always `v1`, so the sweep
+saw the bad cache as current and kept it. New bytes at `/sw.js` are the one
+thing that always gets through, because the worker is never cached. Hence
+`SHELL_SCHEMA`: renaming the cache makes the sweep that already existed do the
+eviction, on every machine, with nobody opening devtools. **Watched happening**
+— `financeflow-shell-v1` disappeared and `financeflow-shell-2-v1` came back
+holding only `/offline` and the icons.
+
+**There is a one-load handover window, and it was observed rather than
+predicted.** A dev machine is briefly controlled by a worker registered at the
+bare `/sw.js`, since the page has to load before it can re-register with
+`dev=1`, and that load's chunks get cache-firsted on the way past — 24 of them.
+They are inert, because the worker that replaces it does not intercept
+`/_next/` at all, but leaving them is how the trap re-arms. `activate` purges
+them.
+
+**Development still runs the real worker**, deliberately. `dev=1` changes one
+rule and nothing else: install, activate, push, the offline fallback and the
+page cache all behave as they do in production, so local work still exercises
+the worker rather than a different one.
+
+### Feature 20 — A bar per platform ✅ merged (PR #55)
+
+- [x] The mobile bar keeps a strip of its own under the icons
+- [x] `components/navigation/` — one tab list, two bars, and the pick between them
+- [x] `MobileNavAndroid`, which is the bar that has always shipped, and the
+      fallback for anything not recognised as iOS
+- [x] `MobileNavIos`, identical for now, waiting on the repo owner's design
+- [x] `lib/pwa/platform.ts`, shared with the install hint, with its own tests
+- [x] Two browser assertions: the gap under the bar, and an iPhone user agent
+      getting the iOS bar
+- [x] Verified in a browser at 390×844 against a production build — the whole
+      suite is 19 green
+
+**The complaint was that the icons sat on the bottom edge of the screen**, which
+on a phone means under the reach of a gesture bar. The fix is `pb-5` on the bar
+itself rather than taller items, so the icons stay where they are and the bar
+grows downwards into the strip nobody should be tapping.
+
+**Three numbers are matched by hand and nothing computes them**: the bar's own
+padding, `pb-28` on the dashboard `<main>`, and `bottom-28` on the install hint's
+stack. The bar is `fixed`, so it is out of the flow and anything that has to
+clear it must be told its height. All three are commented with what they are
+tracking; a bar that changes height moves all three.
+
+**The split is the point, and it ships before the design.** Splitting a
+component that renders identically twice looks like nothing until the moment a
+design lands: with one file, an iOS tab bar means editing the bar every Android
+phone also sees, and the only way to be sure it did not is to check both. With
+two, the iOS design is a change to `mobile-nav-ios.tsx` and cannot reach
+anything else. The duplicated markup is deliberate, and both files say so — the
+part actually worth sharing is the tab list, and that is in `tabs.ts`.
+
+**Platform detection is a user-agent sniff, deliberately.** There is no feature
+to detect. The question is not what the browser can do but which platform's
+conventions its owner expects, and nothing but the user agent answers that. It
+fails towards `"android"`, which is the bar that already shipped, so being wrong
+costs the wrong bar rather than a broken page.
+
+**iPadOS is the only hard case.** Since iPadOS 13 an iPad's user agent is a
+Mac's, character for character, so `maxTouchPoints` is the tell: a trackpad
+reports 0 or 1, an iPad reports 5. `pwa-provider.tsx` already knew this and had
+its own private copy of the test; the two are now one function with tests
+against four real user-agent strings, including the Mac the iPad impersonates.
+
+**The server renders Android's bar**, because there is no user agent to read
+while the HTML is built. The alternatives are worse: no bar at all until
+hydration leaves a phone with no navigation on first paint, and reading the
+request header makes every dashboard page vary by user agent — uncacheable, to
+choose between two bars in the same position. iOS swaps immediately after
+hydration, through `useSyncExternalStore` with a server snapshot, which is the
+same shape `pwa-provider.tsx` uses and is what keeps React from calling the
+difference a mismatch.
+
+**That swap is invisible today and will not be forever.** Once the iOS bar has
+its own design, an iPhone will paint Android's for the length of a hydration.
+If that reads badly the answer is a CSS-only signal, not an effect — an effect
+runs at exactly the same moment and only adds a lint rule to argue with.
+
+**Exactly one bar is in the document**, not both with one hidden. Two `<nav>`
+elements are two navigation landmarks, and the smoke suite's
+`getByRole("navigation")` would fail strict mode rather than quietly pass.
+
+**`data-platform` on the bar is what makes the split checkable.** With both bars
+rendering the same markup, nothing — not a test, not somebody in devtools —
+could otherwise say which one is on screen. The e2e test drives a real iPhone
+user agent and asserts the attribute, so it will still be checking the right
+thing after the designs diverge.
+
+**No `env(safe-area-inset-bottom)`, and that is a decision rather than an
+oversight.** It reports zero unless the viewport is declared `viewport-fit=cover`,
+and this app's is not. An `env()` in the class list would look like it was doing
+the work while contributing nothing at all. If the iOS design wants the real
+home-indicator inset, `viewport-fit=cover` has to be set first — and that puts
+content under the notch and the rounded corners too, so it is its own piece of
+work rather than a word added to `app/layout.tsx`.
+
+**One piece of dead code went with it.** `AppSidebar` ended with
+`<div className="h-24 md:hidden" />`, described as the mobile content padding.
+It was a zero-width flex item in a `flex` row, so it contributed nothing in
+either axis; `pb-24` on `<main>` was doing the whole job. Removed rather than
+carried into two new files.
+
 ### Feature 17 — A browser smoke suite ✅ merged (PR #51)
 
 - [x] Playwright, driving a real browser against a real production build
@@ -1829,16 +2088,60 @@ Things already hit, so they are not hit twice.
   anything whose whole job is to be finished before the browser paints — that is
   far too late, and the failure is a visible flash rather than an error. Use a
   raw inline `<script>`; `next-themes` does exactly that for the same reason.
-- **The service worker will serve stale JS and CSS to `localhost` across branch
-  switches.** Turbopack's dev chunk URLs are stable rather than content-hashed,
-  so `financeflow-shell-v1` keeps answering for a chunk name whose contents have
-  since changed — and it survives restarting the dev server *and* deleting
-  `.next`. This cost real time once: new CSS appeared not to apply at all, the
-  splash mark rendered at 1905px instead of `5rem`, and `curl` and the browser
-  disagreed about the bytes at one URL. **If styles or scripts look impossibly
-  stale, suspect the worker before the code**: unregister it and delete the
-  caches in the console, or the symptom outlives every other thing you try.
+- **~~The service worker will serve stale JS and CSS to `localhost`.~~ Fixed in
+  code on 2026-08-21** — kept because the shape of the failure is worth
+  recognising, and because the fix has a lesson of its own. Turbopack's dev chunk
+  URLs are stable rather than content-hashed, so the worker's `cacheFirst` rule
+  for `/_next/static/` — correct for a build whose paths carry a content hash —
+  pinned the browser to whichever chunk it saw first, surviving a dev-server
+  restart *and* deleting `.next`. It cost real time twice. The first time it
+  looked like CSS not applying and the splash mark rendering at 1905px; the
+  second like a React warning about a script tag in the root layout, which was
+  three steps downstream of a chunk graph half from one build and half from
+  another. **Next's own message named the cause and was read past both times**:
+  "or a service worker serving outdated responses".
+  The page now registers `/sw.js?dev=1` and the worker skips the rule. **If
+  styles or scripts still look impossibly stale, suspect the worker first.**
+- **A cache bug can block its own fix from reaching the browser.** This one did:
+  the poisoned cache was serving the chunk that contains the registration code,
+  so a fix shipped through the page could never load, and in development
+  `VERSION` is always `v1`, so the worker's version sweep saw the bad cache as
+  current and kept it. The one thing that always gets through is **new bytes at
+  `/sw.js`**, which is never cached by anything. `SHELL_SCHEMA` exists for that:
+  bumping it renames the cache, so the sweep the worker already had evicts the
+  old one on the next load, everywhere, without anybody opening devtools. **When
+  a cached artefact is wrong rather than merely old, rename the cache — do not
+  write code to clean it, because the code has to arrive first.**
 
+- **Unlayered CSS beats every layered rule, including every Tailwind utility.**
+  Tailwind v4 puts its utilities in `@layer utilities`, and an unlayered author
+  rule outranks the whole cascade-layer stack no matter how weak its selector —
+  so `.ff-iosbar { display: flex }` written at the top level of `globals.css`
+  wins against the `md:hidden` on the same element, and the iOS bar renders at
+  1280px beside the sidebar it exists to replace. Nothing warns; it typechecks,
+  lints, builds and passes every phone-width test. Component CSS in this file
+  goes in `@layer components`. The `:root`/`.dark` token blocks stay unlayered,
+  which is safe because custom properties collide with nothing.
+- **`@supports` proves a value parses, not that it works.**
+  `@supports (backdrop-filter: url("#f"))` is true in any engine that accepts
+  `url()` there, whether or not it renders the filter — so it cannot guard
+  against an engine that takes the declaration and draws nothing. Feature
+  queries test syntax. Where the risk is *rendering*, the guard has to be that
+  losing the effect leaves something that still works, which is how the iOS
+  bar's refraction is built.
+- **`env(safe-area-inset-*)` is zero unless the viewport says `viewport-fit=cover`.**
+  It is not an error and nothing warns — the padding simply is not there, which
+  looks exactly like a class that did not apply. This app's viewport does not set
+  it, so the mobile bar uses a plain `pb-5` rather than an `env()` that would
+  read as though it were doing the work. Turning `viewport-fit=cover` on is its
+  own change, not a word added to `app/layout.tsx`: it also puts content under
+  the notch and the rounded corners.
+- **A `fixed` bar's height is matched by hand in three places.** The bar is out
+  of the flow, so anything that has to clear it is told its height rather than
+  measuring it: `pb-28` on the dashboard `<main>`, `bottom-28` on the install
+  hint's stack, and the bar's own padding. Changing the bar's height and not the
+  other two hides the last row of every page behind it — visible only on a phone
+  viewport, which is where nothing else is checked.
 - **`error.tsx` takes `unstable_retry`, not `reset`** — Next 16.2 added it, and
   it is not the signature most references still show. Both props exist, which is
   what makes it quiet: `reset` compiles, renders, and gives a "Try again" button

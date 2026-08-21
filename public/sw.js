@@ -42,7 +42,41 @@
  */
 const VERSION = new URL(self.location.href).searchParams.get("v") || "v1";
 
-const SHELL_CACHE = `financeflow-shell-${VERSION}`;
+/**
+ * Whether this worker belongs to a development build.
+ *
+ * Set by the page, in the query, because the worker cannot work it out for
+ * itself: there is no `NODE_ENV` here, and the hostname is not the answer —
+ * the smoke suite serves a real production build from `localhost`, where the
+ * caching below is exactly right. See `lib/pwa/service-worker.ts`.
+ *
+ * It changes one thing, and only one: whether `/_next/static/` is cache-first.
+ * Everything else — install, activate, push, the offline fallback — behaves
+ * identically, so development still exercises the worker rather than a
+ * different one.
+ */
+const IS_DEV = new URL(self.location.href).searchParams.get("dev") === "1";
+
+/**
+ * Bumped when what is *in* the shell cache is wrong, rather than merely old.
+ *
+ * The `activate` sweep below drops every `financeflow-` cache that is not one
+ * of the current two, so changing this name is what evicts the previous one —
+ * and it is the only eviction that works on a machine already holding a bad
+ * cache. **That machine cannot be reached any other way**: its worker is
+ * serving the stale `/_next/` chunks that contain the page's own registration
+ * code, so a fix delivered through the page never loads, and in development
+ * `VERSION` is always `v1`, so the sweep sees the poisoned cache as current and
+ * keeps it. The worker script itself is never cached — `next.config.ts` and
+ * `isNeverCacheable` agree on that — so new bytes here are the one thing that
+ * always gets through.
+ *
+ * `2` evicts the development caches full of Turbopack chunks that
+ * `isShellAsset` should never have stored. See its comment.
+ */
+const SHELL_SCHEMA = "2";
+
+const SHELL_CACHE = `financeflow-shell-${SHELL_SCHEMA}-${VERSION}`;
 
 /** Must match `PRIVATE_CACHE_PREFIX` in `lib/pwa/private-cache.ts`. */
 const PRIVATE_CACHE_PREFIX = "financeflow-private-";
@@ -71,9 +105,25 @@ function isNeverCacheable(url) {
   );
 }
 
-/** Build output and icons: hashed or versioned, so safe to keep indefinitely. */
+/**
+ * Build output and icons: hashed or versioned, so safe to keep indefinitely.
+ *
+ * **Except in development, where the premise is false.** Cache-first for
+ * `/_next/static/` rests entirely on the path carrying a content hash, so that
+ * a changed file is a changed URL. Turbopack's dev chunk URLs are stable
+ * instead, which turns the same rule into a trap: the browser is pinned to
+ * whichever version of a chunk it saw first, for ever, and it survives
+ * restarting the dev server and deleting `.next`. The symptom is not a stale
+ * page but a broken one — a chunk graph half from one build and half from
+ * another, which Turbopack reports as a missing module factory, and which took
+ * a real debugging session to trace back here. Twice.
+ */
 function isShellAsset(url) {
-  return url.pathname.startsWith("/_next/static/") || SHELL_ASSETS.includes(url.pathname);
+  if (url.pathname.startsWith("/_next/static/")) {
+    return !IS_DEV;
+  }
+
+  return SHELL_ASSETS.includes(url.pathname);
 }
 
 self.addEventListener("install", (event) => {
@@ -114,6 +164,25 @@ self.addEventListener("activate", (event) => {
           .filter((name) => name.startsWith("financeflow-"))
           .map((name) => caches.delete(name)),
       );
+
+      // Close the handover window. A development machine is briefly controlled
+      // by a worker registered at the bare `/sw.js` — the page has to load
+      // before it can re-register with `dev=1`, and whatever that load fetched
+      // was cache-firsted on the way past. Those entries are already inert,
+      // since the worker that replaces it does not intercept `/_next/` at all,
+      // but leaving them is how the trap re-arms: anything that later loses the
+      // `dev=1` flag would start serving them again. Observed, not theorised —
+      // 24 chunks landed in exactly this window.
+      if (IS_DEV) {
+        const shell = await caches.open(SHELL_CACHE);
+        const cached = await shell.keys();
+
+        await Promise.all(
+          cached
+            .filter((request) => new URL(request.url).pathname.startsWith("/_next/"))
+            .map((request) => shell.delete(request)),
+        );
+      }
 
       await self.clients.claim();
     })(),
