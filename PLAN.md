@@ -10,54 +10,81 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-21** — the mobile navigation release. It carries **#55**
-(Feature 20 — a bar per platform, and room under the icons), **#56** (the dev
-worker no longer serves stale Turbopack chunks) and **#57** (Feature 21 — the
-iOS glass bar), plus the plan records for each.
+**Released 2026-08-21** — `564227f` (PR #58), the mobile navigation release. It
+carries **#55** (Feature 20 — a bar per platform, and room under the icons),
+**#56** (the dev worker no longer serves stale Turbopack chunks) and **#57**
+(Feature 21 — the iOS glass bar), plus the plan records for each.
 
-_Merge SHA and live-site results are filled in below once it has merged. Written
-before the merge, as step 7 of the Workflow requires — the half that is knowable
-in advance is knowable now, and writing it afterwards is how it has twice come
-to be an afterthought._
-
-**No migrations and no dependency changes.** `git diff main dev -- lib/db/` is
-empty and so is the diff over `package.json` and `pnpm-lock.yaml`, so the
-deploy-time migrate step is a no-op again — the lowest-risk shape a release can
+**No migrations and no dependency changes.** `git diff main dev -- lib/db/` was
+empty and so was the diff over `package.json` and `pnpm-lock.yaml`, so the
+deploy-time migrate step was a no-op again — the lowest-risk shape a release can
 have here.
 
-**History is convergent before the merge, which is what the check is for.** The
-merge base of `main` and `dev` is `685951b`, and that is exactly `c1c1e00`'s
-second parent — so this release PR lists only #55, #56, #57 and the trailing
-record from last time, with nothing re-listed. **Merge it as a merge commit.**
-Squashing costs `main` the ancestry and makes every later release PR re-list
-what already shipped; it happened once, with #38, and the repair is `4c0795a`.
+**Merged with a merge commit, and the history is convergent.** `564227f` has two
+parents (`c1c1e00` and `7dbab9c`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Four releases in a row now follow the rule rather than
+repair it.
 
-**This release changes `public/sw.js`, which the last four did not.** Two
-consequences worth watching rather than assuming:
+**This release is the first since Feature 10 to change `public/sw.js`.** Two
+consequences, both recorded before the merge so neither could be misremembered
+afterwards:
 
 1. **`SHELL_SCHEMA` went to `2`, so every installed device drops its shell cache
-   and precaches again.** That is the intended mechanism — it is what heals a
-   poisoned development machine — but in production it means the first load
-   after the deploy refetches `/offline` and the icons. Harmless, and the first
-   time this app has deliberately invalidated a cache on real devices.
-2. **It confounds Feature 13, and the record has to say so before anybody
-   claims otherwise.** A new worker will certainly install this time — but
-   because the *bytes* changed, which is the ordinary update path, not because
-   the `?v=<deployment id>` query did anything. **This release cannot be
-   evidence that Feature 13 works.** The next release that leaves `sw.js`
-   untouched is the one that can be.
+   and precaches again.** The intended mechanism — it is what heals a poisoned
+   development machine — and the first time this app has deliberately
+   invalidated a cache on real devices.
+2. **It confounds Feature 13.** A new worker will certainly install, but because
+   the *bytes* changed, which is the ordinary update path, not because the
+   `?v=<deployment id>` query did anything. **This release is not evidence that
+   Feature 13 works.** The next release that leaves `sw.js` untouched is the one
+   that can be.
 
-**What can be checked from outside is unusually good this time.** `/sw.js` is
-public and its contents are now release-specific: if the deployed worker
-contains `SHELL_SCHEMA`, this build's worker really shipped, which is a stronger
-claim than the "answers 200" every previous record settled for.
+**The worker that shipped is provably this build's, which no previous record
+could claim.** `/sw.js` is public and its contents are now release-specific: the
+deployed file contains `const SHELL_SCHEMA = "2"` and the `IS_DEV` guard. Every
+earlier record settled for "answers 200", which proves a worker exists and
+nothing about which one.
 
-**What cannot.** The iOS bar is behind authentication and only renders for an
-iOS user agent, so nothing about it is visible to a signed-out visitor. And the
-standing gap is unchanged and now pointed: **the glass has never been seen in
-WebKit.** Everything about it was judged in Chrome, and the `@supports` guard
-does not protect the refraction — see the gotcha. Opening the installed app on
-the owner's iPhone is the check, and it is the one thing this release most needs.
+**Production has shell caching ON, and that was worth checking rather than
+assuming.** The whole fix hangs on `NODE_ENV === "development"` being inlined
+correctly at build time; had it resolved the wrong way, production would have
+quietly stopped caching build output and nothing on screen would have said so.
+The production client bundle calls the builder with `!1` —
+`register(…(document.documentElement.dataset.dplId||null,!1))` — so the live app
+registers `/sw.js?v=<id>` with no `dev` flag. The `dev=1` string is present in
+the chunk only as the unreachable branch of the function.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200. `/sw.js` is
+`application/javascript; charset=utf-8` with `no-cache, no-store,
+must-revalidate`, identically with `?v=<id>` — so the query misses neither the
+header rule nor the static file. The splash gate ships in the response body.
+
+**The id changed and both sides agree.** `/api/version` reports
+`dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF` and the page's `data-dpl-id` is the same
+string; the previous release reported `dpl_ErZ28EnsDah6xQiyyymKRdyJnDsu`.
+
+**The export is still guarded**, which stays the check worth making from
+outside: a signed-out `GET /api/export` answers **307 to `/sign-in` with a
+zero-byte body**. Every other endpoint leaks one page at a time; that one would
+hand over the entire ledger.
+
+**Nothing in this release is visible to a signed-out visitor, and the iOS bar is
+doubly hidden** — behind authentication *and* behind an iOS user agent. So
+"the deploy is green" is even further from "the feature works" than usual here.
+
+**The one thing this release most needs is a look on an iPhone.** The glass has
+never been seen in WebKit: it was designed and verified entirely in Chrome, and
+the `@supports` guard does not protect the refraction — it proves the value
+parses, not that the engine renders it. If the refraction does not render,
+deleting the `@supports` block is the whole fix and the bar keeps its shape.
+
+**Still unverified, and the list is the same one six records have carried:**
+whether push delivers, whether `financeflow-private-*` disappears from Cache
+Storage on sign-out, whether an invitation notice reaches the other account,
+whether the budget warning arrives in the bell, whether the CSV opens in a
+spreadsheet — and now the iOS bar on a real device. **Feature 13 is still
+unproven and this release cannot settle it**, for the reason above.
 
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
@@ -472,8 +499,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Release PR open against it.     |
-| `dev`  | Integration branch. Ahead of `main` by #55, #56 and #57. No feature branch open against it. |
+| `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
 
 ---
 
