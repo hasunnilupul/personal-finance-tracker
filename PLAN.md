@@ -10,32 +10,54 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: Feature 21 — the iOS bar gets its own design**, on
-`feat/ios-glass-bar` and not yet merged. A floating glass capsule: `backdrop-filter`
-blur and saturate with an `feImage`/`feDisplacementMap` refraction over it, and
-one pill that slides between columns. **It touched `mobile-nav-ios.tsx` and
-`app/globals.css` and nothing else** — which is exactly what Feature 20's split
-was built to make possible. Verified at 390×844 in both themes against a
-production build, suite green at 23.
+**Releasing 2026-08-21** — the mobile navigation release. It carries **#55**
+(Feature 20 — a bar per platform, and room under the icons), **#56** (the dev
+worker no longer serves stale Turbopack chunks) and **#57** (Feature 21 — the
+iOS glass bar), plus the plan records for each.
 
-**It has never been seen in WebKit, and that is the open question.** Everything
-here was judged in Chrome. The refraction is the part at risk and the
-`@supports` guard does *not* protect it — see the gotcha. The bar is built so
-that losing the displacement costs a flourish rather than the design.
+_Merge SHA and live-site results are filled in below once it has merged. Written
+before the merge, as step 7 of the Workflow requires — the half that is knowable
+in advance is knowable now, and writing it afterwards is how it has twice come
+to be an afterthought._
 
-**Before that: the dev worker stops serving stale chunks** (PR #56, merged
-`a12e644`). Reported as a React warning about the splash gate's `<script>`; it
-was three steps downstream of the service worker cache-firsting Turbopack's dev
-chunks, whose URLs are stable rather than content-hashed. **The gotcha for this
-was already written and it still cost a second debugging session**, so it is now
-fixed in code rather than in a note: `/sw.js?dev=1` turns the rule off for a
-development worker, and `SHELL_SCHEMA` evicts every cache already poisoned.
+**No migrations and no dependency changes.** `git diff main dev -- lib/db/` is
+empty and so is the diff over `package.json` and `pnpm-lock.yaml`, so the
+deploy-time migrate step is a no-op again — the lowest-risk shape a release can
+have here.
 
-**Before that: Feature 20 — a bar per platform** (PR #55, merged `f7bb5a4`). The
-mobile bar keeps a strip under its icons instead of sitting on the bottom edge,
-and there are two bars rather than one.
+**History is convergent before the merge, which is what the check is for.** The
+merge base of `main` and `dev` is `685951b`, and that is exactly `c1c1e00`'s
+second parent — so this release PR lists only #55, #56, #57 and the trailing
+record from last time, with nothing re-listed. **Merge it as a merge commit.**
+Squashing costs `main` the ancestry and makes every later release PR re-list
+what already shipped; it happened once, with #38, and the repair is `4c0795a`.
 
-**None of the three is released**; `main` is still at `c1c1e00`.
+**This release changes `public/sw.js`, which the last four did not.** Two
+consequences worth watching rather than assuming:
+
+1. **`SHELL_SCHEMA` went to `2`, so every installed device drops its shell cache
+   and precaches again.** That is the intended mechanism — it is what heals a
+   poisoned development machine — but in production it means the first load
+   after the deploy refetches `/offline` and the icons. Harmless, and the first
+   time this app has deliberately invalidated a cache on real devices.
+2. **It confounds Feature 13, and the record has to say so before anybody
+   claims otherwise.** A new worker will certainly install this time — but
+   because the *bytes* changed, which is the ordinary update path, not because
+   the `?v=<deployment id>` query did anything. **This release cannot be
+   evidence that Feature 13 works.** The next release that leaves `sw.js`
+   untouched is the one that can be.
+
+**What can be checked from outside is unusually good this time.** `/sw.js` is
+public and its contents are now release-specific: if the deployed worker
+contains `SHELL_SCHEMA`, this build's worker really shipped, which is a stronger
+claim than the "answers 200" every previous record settled for.
+
+**What cannot.** The iOS bar is behind authentication and only renders for an
+iOS user agent, so nothing about it is visible to a signed-out visitor. And the
+standing gap is unchanged and now pointed: **the glass has never been seen in
+WebKit.** Everything about it was judged in Chrome, and the `@supports` guard
+does not protect the refraction — see the gotcha. Opening the installed app on
+the owner's iPhone is the check, and it is the one thing this release most needs.
 
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
@@ -450,8 +472,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by Feature 20 (#55) and the worker fix (#56). `feat/ios-glass-bar` open against it. |
+| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Release PR open against it.     |
+| `dev`  | Integration branch. Ahead of `main` by #55, #56 and #57. No feature branch open against it. |
 
 ---
 
@@ -1201,7 +1223,7 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 21 — The iOS bar gets its own design ✅ done, PR open
+### Feature 21 — The iOS bar gets its own design ✅ merged (PR #57)
 
 - [x] A floating glass capsule, inset from every edge
 - [x] `backdrop-filter` blur + saturate, with an `feImage`/`feDisplacementMap`
