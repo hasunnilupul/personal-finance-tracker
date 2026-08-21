@@ -27,7 +27,13 @@ const DashboardLayout = async ({
     <div className="bg-background flex h-screen w-screen overflow-hidden">
       <AppSidebar />
 
-      <main className="w-full flex-1 overflow-auto pb-24 md:pb-0">
+      {/*
+        `pb-28` clears the mobile bar, which is fixed and therefore out of the
+        flow. It is matched by hand to the bar's height in
+        `components/navigation/` — about 5rem now that the bar keeps a strip of
+        its own under the icons — so a bar that grows has to move this with it.
+      */}
+      <main className="w-full flex-1 overflow-auto pb-28 md:pb-0">
         {/*
           Above the topbar and inside the scroller, so it reads as part of the
           page's own header rather than as a floating overlay — and so it
