@@ -60,6 +60,62 @@ test.describe("the dashboard shell", () => {
     await expect(page.locator("header").getByText("FinanceFlow", { exact: true })).toBeVisible();
   });
 
+  test("keeps the bar clear of the bottom edge", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+
+    const bar = page.getByRole("navigation");
+    const lastItem = bar.getByRole("link", { name: "Budgets" });
+
+    const gap = await lastItem.evaluate((el) => {
+      const item = el.getBoundingClientRect();
+
+      return window.innerHeight - item.bottom;
+    });
+
+    // The complaint this was built for: the icons sat on the bottom edge, under
+    // the reach of a gesture bar. The figure is the bar's own bottom padding, so
+    // it is asserted as a floor rather than an exact value — a later design may
+    // give iOS more, and should not have to come back and edit this.
+    expect(gap).toBeGreaterThanOrEqual(16);
+  });
+
+  test("gives an iPhone the iOS bar and everything else Android's", async ({ browser }) => {
+    // Both bars render the same markup today, so `data-platform` is the whole
+    // assertion. It is what will still be checking the right thing once the two
+    // designs diverge.
+    const iphone = await browser.newContext({
+      storageState: STORAGE_STATE,
+      viewport: { width: 390, height: 844 },
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    });
+    const iphonePage = await iphone.newPage();
+
+    await iphonePage.goto("/");
+    await expect(iphonePage.getByRole("navigation")).toHaveAttribute("data-platform", "ios");
+
+    // Exactly one bar, not two with one hidden — a second `<nav>` would be a
+    // second navigation landmark, and `getByRole` above would have failed
+    // strict mode rather than passing twice.
+    await expect(iphonePage.locator("nav[data-platform]")).toHaveCount(1);
+
+    await iphone.close();
+
+    // The default context's user agent is desktop Chrome, which is not iOS and
+    // therefore takes the fallback — the bar the app has always shipped.
+    const other = await browser.newContext({
+      storageState: STORAGE_STATE,
+      viewport: { width: 390, height: 844 },
+    });
+    const otherPage = await other.newPage();
+
+    await otherPage.goto("/");
+    await expect(otherPage.getByRole("navigation")).toHaveAttribute("data-platform", "android");
+
+    await other.close();
+  });
+
   test("navigates to expenses and keeps the shell", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");

@@ -10,6 +10,15 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Last completed: Feature 20 — a bar per platform**, on `feat/platform-mobile-nav`
+and not yet merged. The mobile bar now keeps a strip under its icons instead of
+sitting on the bottom edge, and there are two bars rather than one: iOS gets
+`MobileNavIos` and everything else `MobileNavAndroid`, which is the bar that has
+always shipped. **The two are identical today** — the split exists so the repo
+owner's iOS design can land in one file without touching what every Android
+phone sees. Verified in a browser at 390×844 against a production build, with the
+whole suite green at 19.
+
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
 on the auth card, the sidebar and a phone), **#51** (the browser smoke suite),
@@ -424,7 +433,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `feat/platform-mobile-nav` open against it. |
 
 ---
 
@@ -1174,6 +1183,88 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
+### Feature 20 — A bar per platform ✅ done, PR open
+
+- [x] The mobile bar keeps a strip of its own under the icons
+- [x] `components/navigation/` — one tab list, two bars, and the pick between them
+- [x] `MobileNavAndroid`, which is the bar that has always shipped, and the
+      fallback for anything not recognised as iOS
+- [x] `MobileNavIos`, identical for now, waiting on the repo owner's design
+- [x] `lib/pwa/platform.ts`, shared with the install hint, with its own tests
+- [x] Two browser assertions: the gap under the bar, and an iPhone user agent
+      getting the iOS bar
+- [x] Verified in a browser at 390×844 against a production build — the whole
+      suite is 19 green
+
+**The complaint was that the icons sat on the bottom edge of the screen**, which
+on a phone means under the reach of a gesture bar. The fix is `pb-5` on the bar
+itself rather than taller items, so the icons stay where they are and the bar
+grows downwards into the strip nobody should be tapping.
+
+**Three numbers are matched by hand and nothing computes them**: the bar's own
+padding, `pb-28` on the dashboard `<main>`, and `bottom-28` on the install hint's
+stack. The bar is `fixed`, so it is out of the flow and anything that has to
+clear it must be told its height. All three are commented with what they are
+tracking; a bar that changes height moves all three.
+
+**The split is the point, and it ships before the design.** Splitting a
+component that renders identically twice looks like nothing until the moment a
+design lands: with one file, an iOS tab bar means editing the bar every Android
+phone also sees, and the only way to be sure it did not is to check both. With
+two, the iOS design is a change to `mobile-nav-ios.tsx` and cannot reach
+anything else. The duplicated markup is deliberate, and both files say so — the
+part actually worth sharing is the tab list, and that is in `tabs.ts`.
+
+**Platform detection is a user-agent sniff, deliberately.** There is no feature
+to detect. The question is not what the browser can do but which platform's
+conventions its owner expects, and nothing but the user agent answers that. It
+fails towards `"android"`, which is the bar that already shipped, so being wrong
+costs the wrong bar rather than a broken page.
+
+**iPadOS is the only hard case.** Since iPadOS 13 an iPad's user agent is a
+Mac's, character for character, so `maxTouchPoints` is the tell: a trackpad
+reports 0 or 1, an iPad reports 5. `pwa-provider.tsx` already knew this and had
+its own private copy of the test; the two are now one function with tests
+against four real user-agent strings, including the Mac the iPad impersonates.
+
+**The server renders Android's bar**, because there is no user agent to read
+while the HTML is built. The alternatives are worse: no bar at all until
+hydration leaves a phone with no navigation on first paint, and reading the
+request header makes every dashboard page vary by user agent — uncacheable, to
+choose between two bars in the same position. iOS swaps immediately after
+hydration, through `useSyncExternalStore` with a server snapshot, which is the
+same shape `pwa-provider.tsx` uses and is what keeps React from calling the
+difference a mismatch.
+
+**That swap is invisible today and will not be forever.** Once the iOS bar has
+its own design, an iPhone will paint Android's for the length of a hydration.
+If that reads badly the answer is a CSS-only signal, not an effect — an effect
+runs at exactly the same moment and only adds a lint rule to argue with.
+
+**Exactly one bar is in the document**, not both with one hidden. Two `<nav>`
+elements are two navigation landmarks, and the smoke suite's
+`getByRole("navigation")` would fail strict mode rather than quietly pass.
+
+**`data-platform` on the bar is what makes the split checkable.** With both bars
+rendering the same markup, nothing — not a test, not somebody in devtools —
+could otherwise say which one is on screen. The e2e test drives a real iPhone
+user agent and asserts the attribute, so it will still be checking the right
+thing after the designs diverge.
+
+**No `env(safe-area-inset-bottom)`, and that is a decision rather than an
+oversight.** It reports zero unless the viewport is declared `viewport-fit=cover`,
+and this app's is not. An `env()` in the class list would look like it was doing
+the work while contributing nothing at all. If the iOS design wants the real
+home-indicator inset, `viewport-fit=cover` has to be set first — and that puts
+content under the notch and the rounded corners too, so it is its own piece of
+work rather than a word added to `app/layout.tsx`.
+
+**One piece of dead code went with it.** `AppSidebar` ended with
+`<div className="h-24 md:hidden" />`, described as the mobile content padding.
+It was a zero-width flex item in a `flex` row, so it contributed nothing in
+either axis; `pb-24` on `<main>` was doing the whole job. Removed rather than
+carried into two new files.
+
 ### Feature 17 — A browser smoke suite ✅ merged (PR #51)
 
 - [x] Playwright, driving a real browser against a real production build
@@ -1849,6 +1940,19 @@ Things already hit, so they are not hit twice.
   stale, suspect the worker before the code**: unregister it and delete the
   caches in the console, or the symptom outlives every other thing you try.
 
+- **`env(safe-area-inset-*)` is zero unless the viewport says `viewport-fit=cover`.**
+  It is not an error and nothing warns — the padding simply is not there, which
+  looks exactly like a class that did not apply. This app's viewport does not set
+  it, so the mobile bar uses a plain `pb-5` rather than an `env()` that would
+  read as though it were doing the work. Turning `viewport-fit=cover` on is its
+  own change, not a word added to `app/layout.tsx`: it also puts content under
+  the notch and the rounded corners.
+- **A `fixed` bar's height is matched by hand in three places.** The bar is out
+  of the flow, so anything that has to clear it is told its height rather than
+  measuring it: `pb-28` on the dashboard `<main>`, `bottom-28` on the install
+  hint's stack, and the bar's own padding. Changing the bar's height and not the
+  other two hides the last row of every page behind it — visible only on a phone
+  viewport, which is where nothing else is checked.
 - **`error.tsx` takes `unstable_retry`, not `reset`** — Next 16.2 added it, and
   it is not the signature most references still show. Both props exist, which is
   what makes it quiet: `reset` compiles, renders, and gives a "Try again" button

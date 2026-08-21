@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { ShareIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { isIos } from "@/lib/pwa/platform";
 import { serviceWorkerUrl } from "@/lib/pwa/service-worker";
 import { loadedDeploymentId } from "@/lib/version/loaded-deployment";
 import { logger } from "@/lib/logger/logger";
@@ -19,15 +20,6 @@ function isStandalone(): boolean {
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
-/** iPadOS 13+ claims to be a Mac, so touch points are the tell. */
-function isIos(): boolean {
-  const ua = window.navigator.userAgent;
-
-  return (
-    /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && window.navigator.maxTouchPoints > 1)
   );
 }
 
@@ -51,7 +43,7 @@ function shouldShowHint(): boolean {
     return false;
   }
 
-  return isIos();
+  return isIos(window.navigator);
 }
 
 function dismissHint(): void {
@@ -106,10 +98,12 @@ const PwaProvider = () => {
   }, []);
 
   return (
-    // Sits above the mobile bottom navigation, which is 4rem tall and fixed.
-    // The stack itself never takes a click — it is full-width and mostly empty,
-    // so only the cards inside it are given pointer events back.
-    <div className="pointer-events-none fixed inset-x-3 bottom-20 z-50 flex flex-col items-center gap-2 md:bottom-4">
+    // Sits above the mobile bottom navigation, which is fixed and about 5rem
+    // tall now that it keeps a strip of its own under the icons — `bottom-28`
+    // is matched to that by hand, as `pb-28` on the dashboard `<main>` is. The
+    // stack itself never takes a click — it is full-width and mostly empty, so
+    // only the cards inside it are given pointer events back.
+    <div className="pointer-events-none fixed inset-x-3 bottom-28 z-50 flex flex-col items-center gap-2 md:bottom-4">
       {showHint && (
         <div className="bg-card border-border pointer-events-auto flex w-full max-w-md items-start gap-3 border p-3 shadow-2xl">
           <div className="min-w-0 flex-1">
