@@ -83,7 +83,13 @@ const PwaProvider = () => {
       // nothing and the worker installed on the first visit is the one it
       // keeps — see `serviceWorkerUrl`. The path, and therefore the scope and
       // the registration the push subscription belongs to, is unchanged.
-      .register(serviceWorkerUrl(loadedDeploymentId()), {
+      // `dev=1` in development, and the worker reads it back off its own script
+      // URL. Without it the worker cache-firsts `/_next/static/`, which is right
+      // for a build whose chunk URLs carry a content hash and wrong for
+      // Turbopack's dev chunks, whose URLs are stable while their contents
+      // change — so the browser is pinned to whichever version it saw first.
+      // `NODE_ENV` is a build-time fact and inlining it here is correct.
+      .register(serviceWorkerUrl(loadedDeploymentId(), process.env.NODE_ENV === "development"), {
         // Never satisfy the worker's own update check from the HTTP cache.
         // `next.config.ts` already sends `no-store` for `/sw.js`; this is the
         // half that does not depend on a host or a CDN honouring it, and a

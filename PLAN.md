@@ -10,14 +10,22 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: Feature 20 — a bar per platform**, on `feat/platform-mobile-nav`
-and not yet merged. The mobile bar now keeps a strip under its icons instead of
-sitting on the bottom edge, and there are two bars rather than one: iOS gets
-`MobileNavIos` and everything else `MobileNavAndroid`, which is the bar that has
-always shipped. **The two are identical today** — the split exists so the repo
-owner's iOS design can land in one file without touching what every Android
-phone sees. Verified in a browser at 390×844 against a production build, with the
-whole suite green at 19.
+**Last completed: the dev worker stops serving stale chunks**, on
+`fix/dev-worker-stale-chunks` and not yet merged. Reported as a React warning
+about the splash gate's `<script>`; it was three steps downstream of the service
+worker cache-firsting Turbopack's dev chunks, whose URLs are stable rather than
+content-hashed. **The gotcha for this was already written and it still cost a
+second debugging session**, so it is now fixed in code rather than in a note:
+`/sw.js?dev=1` turns the rule off for a development worker, and `SHELL_SCHEMA`
+evicts every cache already poisoned. Verified on a machine that had one.
+
+**Before that: Feature 20 — a bar per platform** (PR #55, merged `f7bb5a4`). The
+mobile bar keeps a strip under its icons instead of sitting on the bottom edge,
+and there are two bars rather than one: iOS gets `MobileNavIos` and everything
+else `MobileNavAndroid`, which is the bar that has always shipped. **The two are
+identical today** — the split exists so the iOS design can land in one file
+without touching what every Android phone sees. **Neither is released**; `main`
+is still at `c1c1e00`.
 
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
@@ -433,7 +441,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `feat/platform-mobile-nav` open against it. |
+| `dev`  | Integration branch. Ahead of `main` by Feature 20 (PR #55). `fix/dev-worker-stale-chunks` open against it. |
 
 ---
 
@@ -1183,7 +1191,65 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Feature 20 — A bar per platform ✅ done, PR open
+### Fix — the dev worker stops serving stale chunks ✅ done, PR open
+
+- [x] `/sw.js?dev=1` in development; the worker reads it off its own script URL
+- [x] `isShellAsset` no longer cache-firsts `/_next/static/` for a dev worker
+- [x] `SHELL_SCHEMA`, so the existing sweep evicts every poisoned cache already
+      out there
+- [x] The handover window closed — a dev worker purges `/_next/` on activate
+- [x] Verified on a machine that actually had the bad cache: the module error is
+      gone, both caches hold zero `/_next/` entries, and the console is clean
+
+**Reported as a React warning, and it was three steps from the cause.**
+"Encountered a script tag while rendering React component", pointing at the
+splash gate in the root layout — the same warning the `<head>` gotcha records,
+which is what made it look like a regression of that. It was not. Underneath it
+sat `Module … app/global-error.tsx … was instantiated because it was required
+from … but the module factory is not available`: a chunk graph half from one
+build and half from another. With `global-error.tsx` unavailable, the root error
+path client-renders the document, which mounts the layout's `<script>` on the
+client, which is precisely what React warns about.
+
+**Next's message named the cause outright** — "or a service worker serving
+outdated responses" — and it was read past twice, once in each incident.
+
+**The premise `cacheFirst` rests on is false in development.** Its comment said
+so all along: safe "only for immutable things", because "a `/_next/static/` path
+carries a build hash". Turbopack's dev chunk URLs do not. The rule was right and
+its precondition was never checked.
+
+**The worker is told, not left to guess.** A worker cannot read `NODE_ENV`, and
+the hostname is not the answer either — the smoke suite serves a real production
+build from `localhost`, where cache-first is exactly right. The page knows for
+certain, so the page says, in the query beside `v` and never in the path, for
+the same reason `v` is: a changed path is a second registration and takes every
+device's push subscription with it.
+
+**The fix could not be delivered by the fix.** The poisoned cache was serving
+the very chunk that contains the registration code, so nothing shipped through
+the page could load; and in development `VERSION` is always `v1`, so the sweep
+saw the bad cache as current and kept it. New bytes at `/sw.js` are the one
+thing that always gets through, because the worker is never cached. Hence
+`SHELL_SCHEMA`: renaming the cache makes the sweep that already existed do the
+eviction, on every machine, with nobody opening devtools. **Watched happening**
+— `financeflow-shell-v1` disappeared and `financeflow-shell-2-v1` came back
+holding only `/offline` and the icons.
+
+**There is a one-load handover window, and it was observed rather than
+predicted.** A dev machine is briefly controlled by a worker registered at the
+bare `/sw.js`, since the page has to load before it can re-register with
+`dev=1`, and that load's chunks get cache-firsted on the way past — 24 of them.
+They are inert, because the worker that replaces it does not intercept
+`/_next/` at all, but leaving them is how the trap re-arms. `activate` purges
+them.
+
+**Development still runs the real worker**, deliberately. `dev=1` changes one
+rule and nothing else: install, activate, push, the offline fallback and the
+page cache all behave as they do in production, so local work still exercises
+the worker rather than a different one.
+
+### Feature 20 — A bar per platform ✅ merged (PR #55)
 
 - [x] The mobile bar keeps a strip of its own under the icons
 - [x] `components/navigation/` — one tab list, two bars, and the pick between them
@@ -1930,15 +1996,30 @@ Things already hit, so they are not hit twice.
   anything whose whole job is to be finished before the browser paints — that is
   far too late, and the failure is a visible flash rather than an error. Use a
   raw inline `<script>`; `next-themes` does exactly that for the same reason.
-- **The service worker will serve stale JS and CSS to `localhost` across branch
-  switches.** Turbopack's dev chunk URLs are stable rather than content-hashed,
-  so `financeflow-shell-v1` keeps answering for a chunk name whose contents have
-  since changed — and it survives restarting the dev server *and* deleting
-  `.next`. This cost real time once: new CSS appeared not to apply at all, the
-  splash mark rendered at 1905px instead of `5rem`, and `curl` and the browser
-  disagreed about the bytes at one URL. **If styles or scripts look impossibly
-  stale, suspect the worker before the code**: unregister it and delete the
-  caches in the console, or the symptom outlives every other thing you try.
+- **~~The service worker will serve stale JS and CSS to `localhost`.~~ Fixed in
+  code on 2026-08-21** — kept because the shape of the failure is worth
+  recognising, and because the fix has a lesson of its own. Turbopack's dev chunk
+  URLs are stable rather than content-hashed, so the worker's `cacheFirst` rule
+  for `/_next/static/` — correct for a build whose paths carry a content hash —
+  pinned the browser to whichever chunk it saw first, surviving a dev-server
+  restart *and* deleting `.next`. It cost real time twice. The first time it
+  looked like CSS not applying and the splash mark rendering at 1905px; the
+  second like a React warning about a script tag in the root layout, which was
+  three steps downstream of a chunk graph half from one build and half from
+  another. **Next's own message named the cause and was read past both times**:
+  "or a service worker serving outdated responses".
+  The page now registers `/sw.js?dev=1` and the worker skips the rule. **If
+  styles or scripts still look impossibly stale, suspect the worker first.**
+- **A cache bug can block its own fix from reaching the browser.** This one did:
+  the poisoned cache was serving the chunk that contains the registration code,
+  so a fix shipped through the page could never load, and in development
+  `VERSION` is always `v1`, so the worker's version sweep saw the bad cache as
+  current and kept it. The one thing that always gets through is **new bytes at
+  `/sw.js`**, which is never cached by anything. `SHELL_SCHEMA` exists for that:
+  bumping it renames the cache, so the sweep the worker already had evicts the
+  old one on the next load, everywhere, without anybody opening devtools. **When
+  a cached artefact is wrong rather than merely old, rename the cache — do not
+  write code to clean it, because the code has to arrive first.**
 
 - **`env(safe-area-inset-*)` is zero unless the viewport says `viewport-fit=cover`.**
   It is not an error and nothing warns — the padding simply is not there, which

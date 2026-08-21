@@ -30,6 +30,29 @@ describe("serviceWorkerUrl", () => {
     expect(serviceWorkerUrl("")).toBe("/sw.js");
   });
 
+  it("carries the development flag, with or without an id", () => {
+    // The worker cannot read `NODE_ENV` and the hostname does not answer the
+    // question — the smoke suite serves a production build from `localhost`.
+    // So the page tells it, and this is the telling.
+    expect(serviceWorkerUrl(null, true)).toBe("/sw.js?dev=1");
+    expect(serviceWorkerUrl("dpl_abc123", true)).toBe("/sw.js?v=dpl_abc123&dev=1");
+
+    // Still the same path, so the scope and the registration the push
+    // subscription hangs off are untouched.
+    expect(new URL(serviceWorkerUrl("dpl_abc123", true), "https://example.test").pathname).toBe(
+      "/sw.js",
+    );
+  });
+
+  it("says nothing about development when it is not development", () => {
+    // A production URL that grew a `dev=1` would disable shell caching for
+    // everybody, which is the failure worth being explicit about: the app would
+    // still work and simply stop being offline-capable.
+    expect(serviceWorkerUrl("dpl_abc123", false)).toBe("/sw.js?v=dpl_abc123");
+    expect(serviceWorkerUrl("dpl_abc123")).toBe("/sw.js?v=dpl_abc123");
+    expect(serviceWorkerUrl(null, false)).toBe("/sw.js");
+  });
+
   it("encodes an id that would otherwise change the URL's shape", () => {
     // `VERCEL_URL` is a hostname and a commit sha is hex, so neither needs
     // this today. An id carrying a `&` or a `#` and going in raw would split
