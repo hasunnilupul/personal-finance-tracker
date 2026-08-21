@@ -27,11 +27,30 @@ export const SERVICE_WORKER_PATH = "/sw.js";
  * development and any host that sets none of the variables `deploymentId()`
  * reads. That is the pre-existing behaviour: one worker, updated only when the
  * file itself changes.
+ *
+ * **`dev=1` tells the worker not to cache-first the build output.** It has to
+ * be told rather than work it out: a worker cannot read `NODE_ENV`, and the
+ * hostname does not answer the question either — the smoke suite serves a real
+ * production build from `localhost`, where caching is correct. The page knows
+ * for certain, so the page says. See `isShellAsset` in `public/sw.js` for what
+ * goes wrong without it.
+ *
+ * The flag rides in the **query, beside `v`**, for the same reason `v` does: the
+ * path is unchanged, so the scope and the registration the push subscription
+ * hangs off are unchanged, and only the script identity differs.
  */
-export function serviceWorkerUrl(deploymentId: string | null): string {
-  if (!deploymentId) {
-    return SERVICE_WORKER_PATH;
+export function serviceWorkerUrl(deploymentId: string | null, isDev = false): string {
+  const params = new URLSearchParams();
+
+  if (deploymentId) {
+    params.set("v", deploymentId);
   }
 
-  return `${SERVICE_WORKER_PATH}?v=${encodeURIComponent(deploymentId)}`;
+  if (isDev) {
+    params.set("dev", "1");
+  }
+
+  const query = params.toString();
+
+  return query ? `${SERVICE_WORKER_PATH}?${query}` : SERVICE_WORKER_PATH;
 }
