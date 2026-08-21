@@ -10,22 +10,32 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: the dev worker stops serving stale chunks**, on
-`fix/dev-worker-stale-chunks` and not yet merged. Reported as a React warning
-about the splash gate's `<script>`; it was three steps downstream of the service
-worker cache-firsting Turbopack's dev chunks, whose URLs are stable rather than
-content-hashed. **The gotcha for this was already written and it still cost a
-second debugging session**, so it is now fixed in code rather than in a note:
-`/sw.js?dev=1` turns the rule off for a development worker, and `SHELL_SCHEMA`
-evicts every cache already poisoned. Verified on a machine that had one.
+**Last completed: Feature 21 — the iOS bar gets its own design**, on
+`feat/ios-glass-bar` and not yet merged. A floating glass capsule: `backdrop-filter`
+blur and saturate with an `feImage`/`feDisplacementMap` refraction over it, and
+one pill that slides between columns. **It touched `mobile-nav-ios.tsx` and
+`app/globals.css` and nothing else** — which is exactly what Feature 20's split
+was built to make possible. Verified at 390×844 in both themes against a
+production build, suite green at 23.
+
+**It has never been seen in WebKit, and that is the open question.** Everything
+here was judged in Chrome. The refraction is the part at risk and the
+`@supports` guard does *not* protect it — see the gotcha. The bar is built so
+that losing the displacement costs a flourish rather than the design.
+
+**Before that: the dev worker stops serving stale chunks** (PR #56, merged
+`a12e644`). Reported as a React warning about the splash gate's `<script>`; it
+was three steps downstream of the service worker cache-firsting Turbopack's dev
+chunks, whose URLs are stable rather than content-hashed. **The gotcha for this
+was already written and it still cost a second debugging session**, so it is now
+fixed in code rather than in a note: `/sw.js?dev=1` turns the rule off for a
+development worker, and `SHELL_SCHEMA` evicts every cache already poisoned.
 
 **Before that: Feature 20 — a bar per platform** (PR #55, merged `f7bb5a4`). The
 mobile bar keeps a strip under its icons instead of sitting on the bottom edge,
-and there are two bars rather than one: iOS gets `MobileNavIos` and everything
-else `MobileNavAndroid`, which is the bar that has always shipped. **The two are
-identical today** — the split exists so the iOS design can land in one file
-without touching what every Android phone sees. **Neither is released**; `main`
-is still at `c1c1e00`.
+and there are two bars rather than one.
+
+**None of the three is released**; `main` is still at `c1c1e00`.
 
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
@@ -441,7 +451,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Deployed and green.            |
-| `dev`  | Integration branch. Ahead of `main` by Feature 20 (PR #55). `fix/dev-worker-stale-chunks` open against it. |
+| `dev`  | Integration branch. Ahead of `main` by Feature 20 (#55) and the worker fix (#56). `feat/ios-glass-bar` open against it. |
 
 ---
 
@@ -1191,7 +1201,67 @@ had the same choice to make.
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
 
-### Fix — the dev worker stops serving stale chunks ✅ done, PR open
+### Feature 21 — The iOS bar gets its own design ✅ done, PR open
+
+- [x] A floating glass capsule, inset from every edge
+- [x] `backdrop-filter` blur + saturate, with an `feImage`/`feDisplacementMap`
+      refraction layered on top
+- [x] One pill that slides between columns, driven by `--ff-index`
+- [x] Apple's 44px touch targets, reduced-motion, and a `forced-colors` fallback
+- [x] The displacement map drawn in ~500 bytes rather than shipped as 30KB
+- [x] Four browser assertions, and the whole suite green at 23
+
+**Feature 20 built the seam; this is what it was for.** Every line of this
+landed in `mobile-nav-ios.tsx` and `app/globals.css`. `mobile-nav-android.tsx`
+was not opened, and no Android phone can have moved a pixel — which is the
+claim the split was made to be able to state.
+
+**A capsule rather than a full-width surface, and that is the design.** Android's
+bar is part of the screen; Apple's is an object sitting over it. It is also the
+only shape that *can* be glass: a bar spanning the viewport with an opaque page
+behind it has nothing to refract, so the effect would be a tint pretending.
+
+**The pill is one element that slides, not five that light up.** `--ff-index` is
+the only thing that changes and it moves by `translate`, so it stays on the
+compositor. A route matching no tab — a future `/expenses/123` — hides the pill
+rather than parking it on Dashboard, because a pill under the wrong tab is a
+confident lie about where you are.
+
+**The `@supports` guard is weaker than it looks, and it is written down rather
+than relied on.** `@supports (backdrop-filter: url("#…"))` tests that the value
+*parses*, not that the engine renders it. An engine that accepts `url()` and
+then does nothing with `feImage` passes the check and gets no fallback. It is
+kept because it costs nothing and does exclude engines with no `url()` filter
+support at all. **The real protection is that the design survives losing it**:
+without the displacement the bar is still tint + blur + saturate, which is its
+whole shape. The refraction is the flourish, never the structure.
+
+**The displacement map is drawn, not shipped.** The reference design carried a
+~30KB base64 WebP inlined *twice*, once per filter. This is the same idea in
+about 500 bytes: neutral is 128 in both channels, red drives horizontal
+displacement and green vertical, and two gradient rects composite with `screen`
+— which works precisely because each one zeroes the other's channel.
+
+**The filter lives inside the component, not the root layout.** It therefore
+exists exactly once and only on the platform that uses it, since `MobileNav`
+renders one bar and never both. A shared filter in the layout would be a
+duplicate `url(#…)` id waiting to happen — the same trap `BrandMark`'s
+`gradientId` already exists to avoid, and a test asserts the count is 1.
+
+**Two things the browser caught that reasoning did not:**
+
+1. **A white pill on white glass over a white page is invisible.** The first
+   version followed the glass-edge convention and tinted the selected segment
+   *up* in both themes. iOS tints it down in light and up in dark, and the
+   reason is exactly this.
+2. **Glass over a flat page is indistinguishable from opaque.** Two screenshots
+   looked perfectly good and proved nothing, because no content was behind the
+   bar. The effect can only be judged with something scrolled under it.
+
+**The CSS must live in `@layer components`, and that is not tidiness** — see the
+gotcha. It is the one thing here that would have shipped broken.
+
+### Fix — the dev worker stops serving stale chunks ✅ merged (PR #56)
 
 - [x] `/sw.js?dev=1` in development; the worker reads it off its own script URL
 - [x] `isShellAsset` no longer cache-firsts `/_next/static/` for a dev worker
@@ -2021,6 +2091,22 @@ Things already hit, so they are not hit twice.
   a cached artefact is wrong rather than merely old, rename the cache — do not
   write code to clean it, because the code has to arrive first.**
 
+- **Unlayered CSS beats every layered rule, including every Tailwind utility.**
+  Tailwind v4 puts its utilities in `@layer utilities`, and an unlayered author
+  rule outranks the whole cascade-layer stack no matter how weak its selector —
+  so `.ff-iosbar { display: flex }` written at the top level of `globals.css`
+  wins against the `md:hidden` on the same element, and the iOS bar renders at
+  1280px beside the sidebar it exists to replace. Nothing warns; it typechecks,
+  lints, builds and passes every phone-width test. Component CSS in this file
+  goes in `@layer components`. The `:root`/`.dark` token blocks stay unlayered,
+  which is safe because custom properties collide with nothing.
+- **`@supports` proves a value parses, not that it works.**
+  `@supports (backdrop-filter: url("#f"))` is true in any engine that accepts
+  `url()` there, whether or not it renders the filter — so it cannot guard
+  against an engine that takes the declaration and draws nothing. Feature
+  queries test syntax. Where the risk is *rendering*, the guard has to be that
+  losing the effect leaves something that still works, which is how the iOS
+  bar's refraction is built.
 - **`env(safe-area-inset-*)` is zero unless the viewport says `viewport-fit=cover`.**
   It is not an error and nothing warns — the padding simply is not there, which
   looks exactly like a class that did not apply. This app's viewport does not set
