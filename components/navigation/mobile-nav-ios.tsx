@@ -91,6 +91,21 @@ export default function MobileNavIos() {
         </filter>
       </svg>
 
+      {/*
+        The strip the capsule floats in. Without it the bar is glass over
+        nothing: the page runs sharp and full strength past its left and right
+        ends and under its bottom, so the bar reads as a cut-out rather than as
+        an object laid over the screen. Apple's own tab bar does this — the
+        band below the bar is blurred and shaded, which is what stops those
+        edges being transparent.
+
+        A sibling rather than a child of the bar, and that is load-bearing: an
+        element with `backdrop-filter` establishes a backdrop root, so nested
+        inside `.ff-iosbar` this would blur the bar's backdrop instead of the
+        page and quietly render nothing at all.
+      */}
+      <div aria-hidden="true" className="ff-iosbar-scrim md:hidden" />
+
       <nav
         data-platform="ios"
         className="ff-iosbar md:hidden"

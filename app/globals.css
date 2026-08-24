@@ -325,14 +325,32 @@ html[data-splash="done"] .ff-splash {
 --------------------------------------------------------------------------- */
 
 :root {
-  --ff-glass-tint: oklch(1 0 0 / 0.62);
+  --ff-glass-tint: oklch(1 0 0 / 0.78);
   --ff-glass-edge: oklch(1 0 0 / 0.75);
   --ff-glass-shade: oklch(0.148 0.004 228.8 / 0.14);
   /* Darker, not whiter. A white pill on white glass over a white page is
      invisible — the first version of this design did exactly that. iOS tints
      the selected segment down in light and up in dark. */
   --ff-glass-pill: oklch(0.148 0.004 228.8 / 0.09);
-  --ff-glass-blur: 18px;
+  --ff-glass-blur: 26px;
+
+  /*
+   * The strip the capsule floats in.
+   *
+   * Without it the bar is glass over nothing: content runs sharp and full
+   * strength past its left and right ends and under its bottom, so the bar
+   * reads as a cut-out rather than as something laid over the screen. Seen on
+   * a real iPhone, and visible in Apple's own iOS 26.4 tab bar — the strip
+   * below the bar is blurred and shaded, which is what stops the two edges
+   * being transparent.
+   *
+   * `-height` reaches above the capsule so the fade can finish in open space;
+   * `-fade` is where the mask starts letting go.
+   */
+  --ff-scrim: oklch(1 0 0 / 0.55);
+  --ff-scrim-blur: 14px;
+  --ff-scrim-height: 8rem;
+  --ff-scrim-fade: 52%;
 }
 
 .dark {
@@ -340,9 +358,38 @@ html[data-splash="done"] .ff-splash {
   --ff-glass-edge: oklch(1 0 0 / 0.22);
   --ff-glass-shade: oklch(0 0 0 / 0.5);
   --ff-glass-pill: oklch(1 0 0 / 0.14);
+  /* Darker, not whiter, for the same reason the pill is: a white haze under a
+     dark page would read as fog, not as glass. */
+  --ff-scrim: oklch(0.148 0.004 228.8 / 0.55);
 }
 
 @layer components {
+  /* The strip the capsule floats in.
+
+     A sibling of the bar, never a child of it. An element with
+     `backdrop-filter` establishes a backdrop root, so a scrim nested inside
+     `.ff-iosbar` would filter the bar's own backdrop image rather than the
+     page — the effect would quietly do nothing, with no warning anywhere.
+
+     `mask-image` fades the blur itself, not a gradient painted over it, which
+     is why the top edge has no seam: where the mask lets go there is nothing
+     left to see through. Losing the mask costs the fade and keeps the strip,
+     so an engine without masks still gets a bar that sits over the page. */
+  .ff-iosbar-scrim {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 9;
+    block-size: var(--ff-scrim-height);
+    /* It covers the bottom of every page, so it must never take a tap. */
+    pointer-events: none;
+
+    background: var(--ff-scrim);
+    backdrop-filter: blur(var(--ff-scrim-blur));
+    -webkit-mask-image: linear-gradient(to top, #000 var(--ff-scrim-fade), transparent);
+    mask-image: linear-gradient(to top, #000 var(--ff-scrim-fade), transparent);
+  }
+
   .ff-iosbar {
     /* A floating capsule, inset from the edges, rather than a full-width
        surface with a top border. This is the platform tell: Android's bar is
@@ -477,6 +524,13 @@ html[data-splash="done"] .ff-splash {
      over the page. Fall back to a plain bordered surface: still a bar, and it
      still says which tab is current. */
   @media (forced-colors: active) {
+    /* Forced colors strips the blur and the tint, leaving a flat band of
+       `--ff-scrim` across the bottom of the page. Nothing of the effect
+       survives, so the element is worth removing rather than repainting. */
+    .ff-iosbar-scrim {
+      display: none;
+    }
+
     .ff-iosbar {
       background: Canvas;
       border: 1px solid CanvasText;

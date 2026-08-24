@@ -10,6 +10,30 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Last completed: the iOS bar gets the strip it floats in**, on
+`fix/ios-bar-scrim` and not yet merged. **Found on a real iPhone, which is the
+device the last release said the bar most needed.** The capsule was glass over
+nothing: the page ran sharp and full strength past its left and right ends and
+under its bottom, so the bar read as a cut-out rather than as an object laid
+over the screen. A blurred, tinted strip now spans the bottom of the viewport
+and fades out above the capsule, which is what Apple's own tab bar does.
+
+**The strip is a sibling of the bar, and that is load-bearing rather than
+tidy.** An element with `backdrop-filter` establishes a backdrop root, so a
+scrim nested inside `.ff-iosbar` would filter the bar's own backdrop instead of
+the page — it would render nothing and warn about nothing. See the gotcha.
+
+**The glass got stronger at the same time**: tint `0.62 → 0.78` and blur
+`18px → 26px`. The first version was tuned against screenshots of an almost
+empty page, where a weak blur and a weak tint are indistinguishable from a
+strong one. On a phone with content behind it, it was thin.
+
+**Still not seen in WebKit.** The scrim was designed and judged in Chrome like
+everything before it, and the refraction remains the part at risk. The scrim
+itself is plainer than the bar — `backdrop-filter` plus a mask, both of which
+WebKit has shipped for years — so it is the safer half of what is now on this
+branch.
+
 **Released 2026-08-21** — `564227f` (PR #58), the mobile navigation release. It
 carries **#55** (Feature 20 — a bar per platform, and room under the icons),
 **#56** (the dev worker no longer serves stale Turbopack chunks) and **#57**
@@ -500,7 +524,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. No branch open against it. |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `fix/ios-bar-scrim` open against it. |
 
 ---
 
@@ -1249,6 +1273,54 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Fix — the iOS bar gets the strip it floats in ✅ done, PR open
+
+- [x] A blurred, tinted strip across the bottom of the viewport, masked so it
+      fades out above the capsule
+- [x] A sibling of the bar rather than a child, because `backdrop-filter` makes
+      the bar a backdrop root
+- [x] Tint and blur strengthened on the capsule itself — `0.62 → 0.78`,
+      `18px → 26px`
+- [x] `pointer-events: none`, a `forced-colors` case, and its own dark value
+- [x] Two more browser assertions, and the whole suite green at 24
+
+**Feature 21 was judged in Chrome and this is what the phone said.** The last
+release record ended with "the one thing this release most needs is a look on an
+iPhone". It got one, and the complaint was not the refraction everybody expected
+to be at risk — it was that the bar had no ground. Content ran past the ends of
+an inset capsule at full strength, so the effect read as a hole cut in the page
+rather than as glass laid over it. Apple's own tab bar blurs and shades the band
+below the bar, which is precisely what stops those two edges being transparent.
+
+**The scrim cannot be a child of the bar, and nothing would have said so.** An
+element with `backdrop-filter` establishes a backdrop root: a descendant's own
+`backdrop-filter` samples that root, not the page. Nested inside `.ff-iosbar`
+the strip would blur the bar's already-blurred backdrop — no error, no warning,
+and a screenshot that looks nearly right. It is a sibling, and the reason is
+written where somebody would move it.
+
+**`mask-image` fades the blur, not a gradient over the blur.** Painting a
+transparent-to-solid gradient on top would leave the blur running at full
+strength to a hard line where the element ends. Masking removes the element
+itself, so where the mask lets go there is nothing left to see through, and the
+strip has no top edge at all. Losing masks costs the fade and keeps the strip,
+which is the right way round.
+
+**The glass was tuned against an empty page, and that is why it was thin.** Tint
+`0.62` and blur `18px` looked correct in a screenshot of a page with almost
+nothing on it — the same trap Feature 21 already recorded from the other
+direction, where glass over a flat page is indistinguishable from opaque. With
+real content behind it on a phone, both were too weak to read as a surface.
+
+**Verified at 390×844 in both themes against a production build**, on a page
+with content behind the bar rather than an empty one. The suite gained two
+assertions: the strip spans the viewport, reaches the bottom, starts above the
+capsule, blurs, carries a gradient mask and takes no taps — and it disappears at
+1280px along with the bar, because a blurred band across the bottom of a desktop
+page is the same bug wearing a different shape.
+
+**Still not seen in WebKit**, which is the standing gap for the whole bar.
 
 ### Feature 21 — The iOS bar gets its own design ✅ merged (PR #57)
 
@@ -2149,6 +2221,22 @@ Things already hit, so they are not hit twice.
   lints, builds and passes every phone-width test. Component CSS in this file
   goes in `@layer components`. The `:root`/`.dark` token blocks stay unlayered,
   which is safe because custom properties collide with nothing.
+- **`backdrop-filter` makes an element a backdrop root, so a blurred child
+  blurs its parent's backdrop rather than the page.** The scrim behind the iOS
+  capsule is a *sibling* of `.ff-iosbar` for exactly this reason: nested inside
+  it, its `backdrop-filter` would sample the bar's backdrop image — which is
+  already filtered — and the strip would render all but nothing. There is no
+  error, no warning and no failing test; the screenshot merely looks weaker than
+  it should. **Two elements that both filter the page behind them have to be
+  siblings.**
+- **Glass tuned against an empty page is tuned against nothing.** The iOS bar
+  shipped at tint `0.62` and blur `18px`, both judged in a screenshot of a page
+  with almost no content on it, where a weak blur and a strong one look
+  identical. On a phone with real content behind the bar they were visibly thin
+  and had to go to `0.78` and `26px`. This is the same trap already recorded
+  from the other side — glass over a flat page is indistinguishable from opaque
+  — met while tuning rather than while building. **Judge a translucent surface
+  only over content, and preferably scrolled.**
 - **`@supports` proves a value parses, not that it works.**
   `@supports (backdrop-filter: url("#f"))` is true in any engine that accepts
   `url()` there, whether or not it renders the filter — so it cannot guard
