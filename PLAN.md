@@ -10,10 +10,49 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-24** — the iOS glass release, `dev` → `main`, PR #61. It
+**Released 2026-08-24** — `58b1865` (PR #61), the iOS glass release. It
 carries **#59** (the capsule got the strip it floats in, and the scrim/bar tints
 were found to multiply) and **#60** (the blur was the curtain, not the tint),
 plus the plan records for each and for the 2026-08-21 release.
+
+**Merged with a merge commit, and the history is convergent.** `58b1865` has two
+parents (`564227f` and `253bb24`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Five releases in a row now follow the rule rather than
+repair it.
+
+**The id changed and both sides agree.** `/api/version` reports
+`dpl_FRou8LjTJadQ5khi6siidmzSSkCt` and the page's `data-dpl-id` is the same
+string; before the merge it was `dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF`.
+
+**The CSS this release exists for is provably on the live site**, which is a
+stronger claim than any previous record has made about a deploy. The stylesheet
+the sign-in page links carries `--ff-glass-blur:4px`, `--ff-scrim-blur:3px`,
+`--ff-glass-tint:lab(100% 0 0/.3)`, the new `--ff-glass-halo` token, the
+`.ff-iosbar-scrim` rule and `url("#ff-glass-refraction")`. Every earlier record
+settled for "the route answers 200", which proves a page exists and nothing
+about which build painted it.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200 with the right content
+types. `/sw.js` is `application/javascript; charset=utf-8` with `no-cache,
+no-store, must-revalidate`, identically with `?v=<id>` — so the query misses
+neither the header rule nor the static file.
+
+**The export is still guarded**, which stays the check worth making from
+outside: a signed-out `GET /api/export` answers **307 to `/sign-in` with a
+zero-byte body**. Every other endpoint leaks one page at a time; that one would
+hand over the entire ledger.
+
+**The worker really is untouched, confirmed against the deployed bytes rather
+than against the diff.** The live `/sw.js` is identical to the repo's
+`public/sw.js` apart from line endings, and still contains
+`SHELL_SCHEMA = "2"` — the same value the 2026-08-21 release shipped. **So
+the Feature 13 trial is genuinely clean.** Nothing about this deploy can install
+a new worker except the `?v=<deployment id>` query changing the registration
+URL. If an installed device picks up this build, that is the proof six records
+have been waiting for; if it does not, suspect the registration URL before the
+cache code. **It still needs a device that already had the previous build —
+`curl` cannot answer it, and this record does not claim it has.**
 
 **One feature, three passes at it, and only the third was right.** The bar was
 reported wrong from a real iPhone twice. The first pass raised the tint to
@@ -36,10 +75,13 @@ records have been waiting for**: if an installed device picks up the new build,
 it can only be because the `?v=<deployment id>` query changed the registration
 URL. If it does not, suspect the registration URL before the cache code.
 
-**The deployment id before this release is `dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF`**
-— recorded now, before the merge, so the comparison afterwards cannot be
-fooled by a slow deploy. That id is the one the 2026-08-21 release reported, so
-production had not moved in between.
+**The deployment id before this release was `dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF`**
+— recorded before the merge, so the comparison afterwards could not be fooled
+by a slow deploy. That id was the one the 2026-08-21 release reported, so
+production had not moved in between. **Recording it in advance is the habit
+worth keeping**: this repo has once checked too early, found an unchanged id and
+a 404 on a new route, and nearly wrote down a failed deploy that was simply not
+finished yet.
 
 **Verified before the release PR was opened**, against a production build of
 `5fa8d10`, whose tree is identical to `dev`: `pnpm typecheck`, `pnpm lint`,
@@ -51,7 +93,17 @@ iPhone, which confirmed the bar**.
 signed-out visitor, and the iOS bar is doubly hidden — behind authentication
 *and* behind an iOS user agent. The device check on #60 already covers the part
 that matters, so for once "the deploy is green" is not the strongest claim
-available; it is just the weakest half of one already made on a phone.
+available; it is just the weakest half of one already made on a phone. What the
+stylesheet check adds is the middle step both halves were missing: the bytes on
+the live site are this build's.
+
+**Still unverified after this release**, and the list is shorter by exactly one
+— the iOS bar on a real device, which #60 closed: whether Feature 13 actually
+installs a new worker (this release is the clean trial, not yet the answer),
+whether push delivers, whether `financeflow-private-*` disappears from Cache
+Storage on sign-out, whether an invitation notice reaches the other account,
+whether the budget warning arrives in the bell, and whether the CSV opens in a
+spreadsheet.
 
 **The one thing still unproven in the bar itself is the refraction in WebKit.**
 The displacement was measured in Chrome against hard vertical stripes. The
