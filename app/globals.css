@@ -325,14 +325,67 @@ html[data-splash="done"] .ff-splash {
 --------------------------------------------------------------------------- */
 
 :root {
-  --ff-glass-tint: oklch(1 0 0 / 0.78);
+  /*
+   * Tint is what you are NOT seeing through, so it is the one number that
+   * decides whether this is glass or paint. It is not the whole story either:
+   * the scrim tints the same pixels first, and the two multiply. At the tints
+   * that shipped — scrim 0.55 under bar 0.78 — 90% of the page was covered and
+   * 9.9% came through. Blur, saturate and refraction were all still there and
+   * all had nothing left to act on, which is why the bar read as a flat white
+   * pill however hard the effect behind it was pushed.
+   *
+   * 0.44 over a 0.30 scrim covers 61% and transmits 39% — four times as much
+   * page. Anything much lower and 10px labels start fighting the content
+   * behind them; the blur and the boost are what buy back that legibility.
+   * Change either tint and recompute the pair, never one alone.
+   */
+  --ff-glass-tint: oklch(1 0 0 / 0.44);
   --ff-glass-edge: oklch(1 0 0 / 0.75);
-  --ff-glass-shade: oklch(0.148 0.004 228.8 / 0.14);
+  /* Light bounces back up off the inside of the bottom curve. Without it the
+     capsule has a lit top and a dead bottom, which reads as a panel. */
+  --ff-glass-edge-low: oklch(1 0 0 / 0.4);
+  /*
+   * A hairline that follows the whole radius, not just the top edge — an
+   * object has an edge all the way round.
+   *
+   * **Dark in light mode, and that is the pill's gotcha met a second time.**
+   * The first version of this ring was white, which is invisible on white
+   * glass over a white page — and this app's pages are white. The white top
+   * highlight above stays, because it is what lights the bar when there is
+   * something dark behind it; this is what gives the capsule an outline when
+   * there is not.
+   */
+  --ff-glass-ring: oklch(0.148 0.004 228.8 / 0.1);
+  --ff-glass-shade: oklch(0.148 0.004 228.8 / 0.18);
   /* Darker, not whiter. A white pill on white glass over a white page is
      invisible — the first version of this design did exactly that. iOS tints
      the selected segment down in light and up in dark. */
   --ff-glass-pill: oklch(0.148 0.004 228.8 / 0.09);
-  --ff-glass-blur: 26px;
+  --ff-glass-blur: 28px;
+
+  /* What the glass does to the light it lets through, rather than how much it
+     lets through. Real glass returns colour saturated and a shade brighter,
+     and with the tint down far enough to see any of it, this is now visible
+     instead of theoretical. It is a token because light and dark want
+     opposite ends of `brightness` — see `.dark`. */
+  --ff-glass-boost: saturate(190%) brightness(1.07);
+
+  /*
+   * The specular sheen: bright along the top where the curve catches the
+   * light, clear through the middle, lifting again at the bottom.
+   *
+   * The middle stop is fully transparent on purpose. This gradient sits *over*
+   * the tint, so every stop adds coverage — a flat wash here would undo the
+   * transmission the tint was just lowered to buy. The lit bands are thin and
+   * the centre of the bar, which is the part you look through, is untouched.
+   */
+  --ff-glass-sheen: linear-gradient(
+    to bottom,
+    oklch(1 0 0 / 0.45) 0%,
+    oklch(1 0 0 / 0.05) 38%,
+    oklch(1 0 0 / 0) 62%,
+    oklch(1 0 0 / 0.18) 100%
+  );
 
   /*
    * The strip the capsule floats in.
@@ -347,20 +400,39 @@ html[data-splash="done"] .ff-splash {
    * `-height` reaches above the capsule so the fade can finish in open space;
    * `-fade` is where the mask starts letting go.
    */
-  --ff-scrim: oklch(1 0 0 / 0.55);
-  --ff-scrim-blur: 14px;
+  --ff-scrim: oklch(1 0 0 / 0.3);
+  /* Blur carries the strip now that its tint does not. A haze you can see
+     through still hides the sharp edges the capsule needs hidden; a wash
+     hides them by painting over them, and takes the bar's glass with it. */
+  --ff-scrim-blur: 18px;
   --ff-scrim-height: 8rem;
   --ff-scrim-fade: 52%;
 }
 
 .dark {
-  --ff-glass-tint: oklch(0.218 0.008 223.9 / 0.58);
-  --ff-glass-edge: oklch(1 0 0 / 0.22);
+  /* 0.40 under a 0.34 scrim transmits 39.6%, matching light within a point.
+     The two modes were a whole stop apart before, and dark was the one that
+     looked more like glass — worth keeping them level. */
+  --ff-glass-tint: oklch(0.218 0.008 223.9 / 0.4);
+  --ff-glass-edge: oklch(1 0 0 / 0.3);
+  --ff-glass-edge-low: oklch(1 0 0 / 0.1);
+  --ff-glass-ring: oklch(1 0 0 / 0.1);
   --ff-glass-shade: oklch(0 0 0 / 0.5);
   --ff-glass-pill: oklch(1 0 0 / 0.14);
+  /* `brightness` goes the other way here. Dark glass takes light out of what
+     passes through it, and that is also what keeps a pale photo or a chart
+     from washing the labels off the bar. */
+  --ff-glass-boost: saturate(170%) brightness(0.72);
+  --ff-glass-sheen: linear-gradient(
+    to bottom,
+    oklch(1 0 0 / 0.16) 0%,
+    oklch(1 0 0 / 0.02) 40%,
+    oklch(1 0 0 / 0) 64%,
+    oklch(1 0 0 / 0.07) 100%
+  );
   /* Darker, not whiter, for the same reason the pill is: a white haze under a
      dark page would read as fog, not as glass. */
-  --ff-scrim: oklch(0.148 0.004 228.8 / 0.55);
+  --ff-scrim: oklch(0.148 0.004 228.8 / 0.34);
 }
 
 @layer components {
@@ -385,7 +457,10 @@ html[data-splash="done"] .ff-splash {
     pointer-events: none;
 
     background: var(--ff-scrim);
-    backdrop-filter: blur(var(--ff-scrim-blur));
+    /* Saturated as well as blurred, for the same reason the bar is: an
+       unsaturated blur of a colourful page is grey, and a grey band under a
+       glass bar is the thing that makes the glass look like plastic. */
+    backdrop-filter: blur(var(--ff-scrim-blur)) saturate(140%);
     -webkit-mask-image: linear-gradient(to top, #000 var(--ff-scrim-fade), transparent);
     mask-image: linear-gradient(to top, #000 var(--ff-scrim-fade), transparent);
   }
@@ -406,15 +481,30 @@ html[data-splash="done"] .ff-splash {
     border-radius: 1.75rem;
     isolation: isolate;
 
-    /* Four layers: a tint so it reads as a surface rather than a smear, the
-       blur that is the glass itself, a hairline lit from above that makes it
-       an object, and a shadow so it floats. */
-    background: var(--ff-glass-tint);
-    backdrop-filter: blur(var(--ff-glass-blur)) saturate(180%);
+    /* Glass is transmission first and effects second. The tint is kept low
+       enough that there is something behind the bar to blur, saturate, bend
+       and light — every layer below is acting on the 39% of the page that now
+       comes through, and each one was already here doing nothing to the 10%
+       that did.
+
+       `background-color` and `background-image` are set separately rather than
+       through `background`, so the sheen layers over the tint instead of
+       replacing it — and so the computed `backgroundColor` still carries an
+       alpha, which is how the smoke suite tells translucent from opaque. */
+    background-color: var(--ff-glass-tint);
+    background-image: var(--ff-glass-sheen);
+    backdrop-filter: blur(var(--ff-glass-blur)) var(--ff-glass-boost);
+    /* Three edges then two shadows. The edges are lit along the top, lifting
+       again off the inside of the bottom curve, and a hairline that follows
+       the whole radius — a lit top alone reads as a panel. The shadows are a
+       tight contact one so the capsule sits on the page and a wide soft one so
+       it floats above it. */
     box-shadow:
       inset 0 1px 0 0 var(--ff-glass-edge),
-      inset 0 -1px 0 0 oklch(0 0 0 / 0.06),
-      0 0.5rem 1.5rem -0.25rem var(--ff-glass-shade);
+      inset 0 -1px 0 0 var(--ff-glass-edge-low),
+      inset 0 0 0 1px var(--ff-glass-ring),
+      0 0.125rem 0.375rem -0.25rem var(--ff-glass-shade),
+      0 0.75rem 2rem -0.5rem var(--ff-glass-shade);
   }
 
   /* The refraction: `feImage` + `feDisplacementMap` bend what is behind the bar
@@ -430,7 +520,7 @@ html[data-splash="done"] .ff-splash {
      saturate, which is the whole shape. See PLAN.md. */
   @supports (backdrop-filter: url("#ff-glass-refraction")) {
     .ff-iosbar {
-      backdrop-filter: url("#ff-glass-refraction") blur(var(--ff-glass-blur)) saturate(180%);
+      backdrop-filter: url("#ff-glass-refraction") blur(var(--ff-glass-blur)) var(--ff-glass-boost);
     }
   }
 

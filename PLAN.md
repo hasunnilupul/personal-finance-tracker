@@ -10,9 +10,58 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: the iOS bar gets the strip it floats in**, on
-`fix/ios-bar-scrim` and not yet merged. **Found on a real iPhone, which is the
-device the last release said the bar most needed.** The capsule was glass over
+**Last completed: the glass was paint, and now it transmits**, on
+`fix/ios-bar-scrim` and not yet merged. Reported from a device again: the bar
+"doesn't have the glassy look at all". It was not a broken effect — every layer
+was present and correct — it was that **the scrim's tint and the bar's tint
+multiply, and nobody had multiplied them.** Scrim `0.55` under bar `0.78`
+covers 90% of the page and lets 9.9% through. Blur, saturate and refraction
+were all still there, all acting on a tenth of a page, which is why pushing the
+effect harder had stopped changing anything: the previous pass raised tint
+`0.62 → 0.78` and blur `18 → 26` *to make it stronger* and made it flatter.
+
+Tints are now `0.30` scrim under `0.44` bar — 61% covered, **39% transmitted,
+four times as much page** — and light and dark are within a point of each other
+where they used to be a whole stop apart. **Recompute the pair, never one
+alone.** Three things were added that the tint had been hiding rather than
+replacing: a specular sheen (lit top, clear middle, lifting at the bottom — the
+middle stop is transparent on purpose, since every stop adds back coverage), a
+`brightness` boost that goes *up* in light and *down* in dark, and a hairline
+ring round the whole radius.
+
+**The ring was white first, which is the pill's gotcha made twice.** A white
+hairline on white glass over a white page is invisible, and this app's pages are
+white — the same trap already recorded for `--ff-glass-pill`. It is dark in
+light mode now; the white top highlight stays, because that is what lights the
+bar when something dark is behind it.
+
+**The refraction renders. That is new, and it is measured rather than assumed.**
+Every previous record said the displacement had never been shown to work — the
+`@supports` guard proves a value parses, not that an engine draws it. Probed in
+Chrome against hard vertical stripes, screenshotting the same bar with the
+`url()` filter and then with plain blur: the stripes visibly squeeze and bend at
+the capsule's ends, and the two screenshots are not pixel-identical. So the
+`@supports` block earns its keep in Chrome. **WebKit is still unproven** and is
+still where this bar actually lives.
+
+`scale` went `0.06 → 0.09` for the same reason as everything else here:
+displacement can only move pixels that are visible, so behind the old tint 0.06
+and 0.20 looked the same.
+
+**Verified: 6/6 iOS bar smoke tests, 340 unit tests, typecheck, lint, build.
+Seen: before/after screenshots in both themes, against a production build on a
+390×844 iPhone UA.** The dashboard the suite signs into has no transactions, so
+the content behind the bar in those shots is **injected stand-in markup**, not
+real data — the first two attempts compared two bars over blank white and showed
+nothing, which is the empty-page mistake this file already records once.
+
+**A dim label found next to this and deliberately not fixed:** in dark mode the
+active tab's green is hard to read. `--primary` in `.dark` is
+`oklch(0.432 0.095 166.913)`, *darker* than its light-mode counterpart, over a
+dark bar. It is identical in the before screenshots, so it predates all of this
+and belongs to the theme rather than the bar. Not in this branch's scope. **Before that, on this same branch: the iOS bar got the strip it floats in.**
+**Found on a real iPhone, which is the device the last release said the bar most
+needed.** The capsule was glass over
 nothing: the page ran sharp and full strength past its left and right ends and
 under its bottom, so the bar read as a cut-out rather than as an object laid
 over the screen. A blurred, tinted strip now spans the bottom of the viewport
@@ -26,7 +75,10 @@ the page — it would render nothing and warn about nothing. See the gotcha.
 **The glass got stronger at the same time**: tint `0.62 → 0.78` and blur
 `18px → 26px`. The first version was tuned against screenshots of an almost
 empty page, where a weak blur and a weak tint are indistinguishable from a
-strong one. On a phone with content behind it, it was thin.
+strong one. On a phone with content behind it, it was thin. **That reasoning was
+half right and the fix was backwards** — see the top of this section. The blur
+was thin; the tint was already too high, and raising it while adding a second
+tinted layer underneath is what took the glass out of the glass.
 
 **Still not seen in WebKit.** The scrim was designed and judged in Chrome like
 everything before it, and the refraction remains the part at risk. The scrim
@@ -2163,6 +2215,39 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Stacked translucent layers multiply, and the total is what decides whether
+  glass looks like glass.** The iOS bar had a `0.78` tint over a `0.55` scrim
+  and read as a flat white pill. That is not two thirds of a page showing
+  through, it is a tenth: `1 - (1-0.55)(1-0.78) = 0.90` covered. Every effect
+  behind it — blur, saturate, an SVG displacement map — was working perfectly on
+  the 10% that was left, which is why turning each one up did nothing visible
+  and why the effect looked "broken" when nothing was. **Tune the composite, not
+  the layer you happen to be editing**, and when a design gains a second
+  translucent layer, recompute the first one instead of leaving it. The
+  corollary bit too: a gradient sheen laid *over* a tint adds coverage at every
+  stop, so its middle has to be fully transparent or it undoes the transmission
+  the tint was lowered to buy.
+- **A white hairline is invisible on white glass over a white page**, and this
+  was hit twice on the same component. It is recorded for `--ff-glass-pill`
+  ("darker, not whiter") and then repeated for the bar's edge ring a design pass
+  later. On a light theme the outline that gives a glass object its shape has to
+  be *dark*; the white inner highlight is a separate job — it lights the bar
+  when there is something dark behind it, and does nothing over white.
+- **`@supports (backdrop-filter: url("#id"))` is a parse test, and for once the
+  answer turned out to be yes.** Chrome does render an SVG reference filter in
+  `backdrop-filter`: probed by screenshotting the same bar over hard vertical
+  stripes with the filter and then with plain blur, which bend visibly at the
+  capsule's ends and differ pixel-for-pixel. **That is Chrome only and does not
+  transfer** — the guard still cannot tell a parsing engine from a rendering
+  one, so WebKit remains unproven. The way to settle a question like this is two
+  screenshots and a byte comparison, not a support query.
+- **Tuning a translucent surface against an empty page proves nothing**, and
+  this file has now recorded it twice for the same bar. Screenshots of the iOS
+  bar over the suite's own dashboard show no difference between any two tints,
+  because the e2e account holds no transactions and the page behind the bar is
+  blank white. A blur of nothing is identical to a stronger blur of nothing.
+  Put content behind it — real, or injected markup that stands in for it, said
+  plainly to be a stand-in — before believing any before/after.
 - **A notice that only fires for an already-open session is close to dead on a
   phone.** The update notice compared the document's deployment id against
   `/api/version` and never checked on mount, so it could only appear for a tab
