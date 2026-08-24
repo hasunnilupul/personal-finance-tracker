@@ -58,6 +58,16 @@ export default function MobileNavIos() {
         leaves the middle alone. The two rects composite with `screen`, which
         works precisely because each one zeroes the other's channel.
 
+        `scale` is 0.16, up from 0.06, and the refraction has been promoted
+        from a garnish to the main effect. The blur behind this bar is down to
+        4px because anything more erases the page rather than frosting it (see
+        the tint note in `globals.css`), and a low-blur pane of faint tint on
+        its own is a window, not glass. What now says "glass" is the lens: the
+        card edges and headings behind the bar visibly bend as they pass its
+        ends. Displacement can only move pixels that are visible, which is why
+        this was pointless at the old tint and blur and is the whole effect at
+        this one.
+
         It is rendered *inside this component*, so it exists exactly once and
         only on the platform that uses it — `MobileNav` renders one bar, never
         both. A shared filter in the root layout would be a duplicate-id waiting
@@ -84,12 +94,27 @@ export default function MobileNavIos() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="map"
-            scale="0.06"
+            scale="0.16"
             xChannelSelector="R"
             yChannelSelector="G"
           />
         </filter>
       </svg>
+
+      {/*
+        The strip the capsule floats in. Without it the bar is glass over
+        nothing: the page runs sharp and full strength past its left and right
+        ends and under its bottom, so the bar reads as a cut-out rather than as
+        an object laid over the screen. Apple's own tab bar does this — the
+        band below the bar is blurred and shaded, which is what stops those
+        edges being transparent.
+
+        A sibling rather than a child of the bar, and that is load-bearing: an
+        element with `backdrop-filter` establishes a backdrop root, so nested
+        inside `.ff-iosbar` this would blur the bar's backdrop instead of the
+        page and quietly render nothing at all.
+      */}
+      <div aria-hidden="true" className="ff-iosbar-scrim md:hidden" />
 
       <nav
         data-platform="ios"

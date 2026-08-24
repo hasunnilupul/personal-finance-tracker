@@ -10,54 +10,261 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-21** — the mobile navigation release. It carries **#55**
-(Feature 20 — a bar per platform, and room under the icons), **#56** (the dev
-worker no longer serves stale Turbopack chunks) and **#57** (Feature 21 — the
-iOS glass bar), plus the plan records for each.
+**Releasing 2026-08-24** — the iOS glass release, `dev` → `main`, PR #61. It
+carries **#59** (the capsule got the strip it floats in, and the scrim/bar tints
+were found to multiply) and **#60** (the blur was the curtain, not the tint),
+plus the plan records for each and for the 2026-08-21 release.
 
-_Merge SHA and live-site results are filled in below once it has merged. Written
-before the merge, as step 7 of the Workflow requires — the half that is knowable
-in advance is knowable now, and writing it afterwards is how it has twice come
-to be an afterthought._
+**One feature, three passes at it, and only the third was right.** The bar was
+reported wrong from a real iPhone twice. The first pass raised the tint to
+strengthen the effect and flattened it; the second cut the tint on the theory
+that the scrim's and the bar's multiply, which is true arithmetic about the
+wrong quantity; the third measured a control and found that **blur, not tint,
+was erasing the page**. Anyone reading only the last commit will miss that the
+first two were confident and wrong for the same reason — no measurement.
 
 **No migrations and no dependency changes.** `git diff main dev -- lib/db/` is
 empty and so is the diff over `package.json` and `pnpm-lock.yaml`, so the
-deploy-time migrate step is a no-op again — the lowest-risk shape a release can
+deploy-time migrate step is a no-op again. Four files change in total: `PLAN.md`,
+`app/globals.css`, `components/navigation/mobile-nav-ios.tsx` and
+`e2e/dashboard.spec.ts`. **This is a CSS release.**
+
+**`public/sw.js` is untouched, and that is the point worth marking.** The
+2026-08-21 release changed the worker's bytes, which is the ordinary update path
+and proves nothing about Feature 13. **This release is the clean trial six
+records have been waiting for**: if an installed device picks up the new build,
+it can only be because the `?v=<deployment id>` query changed the registration
+URL. If it does not, suspect the registration URL before the cache code.
+
+**The deployment id before this release is `dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF`**
+— recorded now, before the merge, so the comparison afterwards cannot be
+fooled by a slow deploy. That id is the one the 2026-08-21 release reported, so
+production had not moved in between.
+
+**Verified before the release PR was opened**, against a production build of
+`5fa8d10`, whose tree is identical to `dev`: `pnpm typecheck`, `pnpm lint`,
+`pnpm test` (340) and `pnpm test:e2e` (24, including all 6 iOS bar tests), plus
+before/after screenshots at 390×844 in both themes and **a look on a real
+iPhone, which confirmed the bar**.
+
+**What this release cannot show from outside.** Nothing in it is visible to a
+signed-out visitor, and the iOS bar is doubly hidden — behind authentication
+*and* behind an iOS user agent. The device check on #60 already covers the part
+that matters, so for once "the deploy is green" is not the strongest claim
+available; it is just the weakest half of one already made on a phone.
+
+**The one thing still unproven in the bar itself is the refraction in WebKit.**
+The displacement was measured in Chrome against hard vertical stripes. The
+`@supports` guard proves a value parses, not that an engine draws it. The bar
+was seen whole on an iPhone and looked right, which does not isolate whether the
+lens contributed. If it turns out not to render, deleting the `@supports` block
+is the whole fix and the bar keeps its shape.
+
+**Before that: blur was hiding the page, not tint**, on
+`fix/ios-glass-blur-not-tint`, merged as PR #60 (`1c5f8ce`). The bar came back
+a second time — "like a glass, not a shade that doesn't even see through"
+— after a pass that had already cut the
+tint from 0.78 to 0.44. **That pass was reasoning from arithmetic and the
+arithmetic was about the wrong quantity.**
+
+**What settled it was a control, not an argument.** Behind the bar on the real
+dashboard sits the `Budget health` heading — near-black, 28px tall, measured at
+y795–823 inside a bar spanning 768–824. Dropping the tint to 0.10 left it
+completely invisible. Setting blur to 0 made it perfectly legible. A 52px block
+of solid black shows through either way. **Blur averages a line of text together
+with the white page around it, and text is mostly white page, so a blurred
+heading is white.** Frosting is erasure, and no tint value fixes it.
+
+Blur is therefore `28px → 4px`, the scrim is nearly gone (`0.30/18px →
+0.06/3px`, since its blur lands on the bar's backdrop *before* the bar sees it),
+and **the refraction is promoted from garnish to the main effect** — `scale`
+`0.09 → 0.16`. What now reads as glass is the lens: card edges and headings
+visibly bend as they cross the capsule's ends. That is also why the earlier
+passes could not win by pushing effects — at 28px of blur there was nothing
+left with an edge to bend.
+
+**The transparency is paid for with a halo, not with tint.** At a tint low
+enough to see through, the bar's own 10px labels land on whatever the page puts
+behind them — over a chart, that is the word "Budgets" on a saturated red bar.
+Tinting up until the labels are safe is exactly how this bar became opaque
+twice. `--ff-glass-halo` fixes the text instead of the surface: light in light
+mode, dark in dark, since it works by separating the glyph from its background.
+Tint settled at 0.30, which is legible over a full-bleed chart and still plainly
+see-through.
+
+**Three false leads, recorded because each cost a round trip**: that the token
+overrides were not applying (they were — a red-tint control proved it); that
+`isolation: isolate`, the scrim, or the `url()` refraction was breaking the
+backdrop (none of them — an opaque box behind the bar shows through with all
+three in place); and that content inside `main` was excluded from the backdrop
+because `main` is the scroll container (it is not — the same box shows through
+from inside `main` and from `body` identically). **`backdrop-filter` was working
+correctly the entire time.**
+
+**A caveat on the screenshots that is worth keeping.** Over the app's own white
+cards, a see-through bar and an opaque one look nearly identical, because white
+transmitted is still white. The difference is only visible over content with
+contrast, so the verification shots use an injected full-bleed chart strip —
+which is a deliberate worst case, not a typical page.
+
+Before that, on this same branch: the tints were rebalanced and the multiply
+between scrim and bar was found — scrim `0.55` under bar `0.78` covers 90% of
+the page. That part stands and still matters; it was necessary and, on its own,
+not sufficient. Reported from a device: the bar
+"doesn't have the glassy look at all". It was not a broken effect — every layer
+was present and correct — it was that **the scrim's tint and the bar's tint
+multiply, and nobody had multiplied them.** **This diagnosis was right and
+incomplete**: it fixed the coverage and left the blur at 28px, so the page
+behind stayed invisible and the bar was reported again. See the top of this
+section. Scrim `0.55` under bar `0.78`
+covers 90% of the page and lets 9.9% through. Blur, saturate and refraction
+were all still there, all acting on a tenth of a page, which is why pushing the
+effect harder had stopped changing anything: the previous pass raised tint
+`0.62 → 0.78` and blur `18 → 26` *to make it stronger* and made it flatter.
+
+Tints are now `0.30` scrim under `0.44` bar — 61% covered, **39% transmitted,
+four times as much page** — and light and dark are within a point of each other
+where they used to be a whole stop apart. **Recompute the pair, never one
+alone.** Three things were added that the tint had been hiding rather than
+replacing: a specular sheen (lit top, clear middle, lifting at the bottom — the
+middle stop is transparent on purpose, since every stop adds back coverage), a
+`brightness` boost that goes *up* in light and *down* in dark, and a hairline
+ring round the whole radius.
+
+**The ring was white first, which is the pill's gotcha made twice.** A white
+hairline on white glass over a white page is invisible, and this app's pages are
+white — the same trap already recorded for `--ff-glass-pill`. It is dark in
+light mode now; the white top highlight stays, because that is what lights the
+bar when something dark is behind it.
+
+**The refraction renders. That is new, and it is measured rather than assumed.**
+Every previous record said the displacement had never been shown to work — the
+`@supports` guard proves a value parses, not that an engine draws it. Probed in
+Chrome against hard vertical stripes, screenshotting the same bar with the
+`url()` filter and then with plain blur: the stripes visibly squeeze and bend at
+the capsule's ends, and the two screenshots are not pixel-identical. So the
+`@supports` block earns its keep in Chrome. **WebKit is still unproven** and is
+still where this bar actually lives.
+
+`scale` went `0.06 → 0.09` for the same reason as everything else here:
+displacement can only move pixels that are visible, so behind the old tint 0.06
+and 0.20 looked the same.
+
+**Verified: 6/6 iOS bar smoke tests, 340 unit tests, typecheck, lint, build.
+Seen: before/after screenshots in both themes, against a production build on a
+390×844 iPhone UA.** The dashboard the suite signs into has no transactions, so
+the content behind the bar in those shots is **injected stand-in markup**, not
+real data — the first two attempts compared two bars over blank white and showed
+nothing, which is the empty-page mistake this file already records once.
+
+**A dim label found next to this and deliberately not fixed:** in dark mode the
+active tab's green is hard to read. `--primary` in `.dark` is
+`oklch(0.432 0.095 166.913)`, *darker* than its light-mode counterpart, over a
+dark bar. It is identical in the before screenshots, so it predates all of this
+and belongs to the theme rather than the bar. Not in this branch's scope.
+
+**Before that, on the same branch: the iOS bar got the strip it floats in** —
+merged as PR #59 (`b3dd83d`). **Found on a real iPhone, which is the device the
+last release said the bar most needed.** The capsule was glass over nothing:
+the page ran sharp and full strength past its left and right ends and
+under its bottom, so the bar read as a cut-out rather than as an object laid
+over the screen. A blurred, tinted strip now spans the bottom of the viewport
+and fades out above the capsule, which is what Apple's own tab bar does.
+
+**The strip is a sibling of the bar, and that is load-bearing rather than
+tidy.** An element with `backdrop-filter` establishes a backdrop root, so a
+scrim nested inside `.ff-iosbar` would filter the bar's own backdrop instead of
+the page — it would render nothing and warn about nothing. See the gotcha.
+
+**The glass got stronger at the same time**: tint `0.62 → 0.78` and blur
+`18px → 26px`. The first version was tuned against screenshots of an almost
+empty page, where a weak blur and a weak tint are indistinguishable from a
+strong one. On a phone with content behind it, it was thin. **That reasoning was
+half right and the fix was backwards** — see the top of this section. The blur
+was thin; the tint was already too high, and raising it while adding a second
+tinted layer underneath is what took the glass out of the glass.
+
+**Still not seen in WebKit.** The scrim was designed and judged in Chrome like
+everything before it, and the refraction remains the part at risk. The scrim
+itself is plainer than the bar — `backdrop-filter` plus a mask, both of which
+WebKit has shipped for years — so it is the safer half of what is now on this
+branch.
+
+**Released 2026-08-21** — `564227f` (PR #58), the mobile navigation release. It
+carries **#55** (Feature 20 — a bar per platform, and room under the icons),
+**#56** (the dev worker no longer serves stale Turbopack chunks) and **#57**
+(Feature 21 — the iOS glass bar), plus the plan records for each.
+
+**No migrations and no dependency changes.** `git diff main dev -- lib/db/` was
+empty and so was the diff over `package.json` and `pnpm-lock.yaml`, so the
+deploy-time migrate step was a no-op again — the lowest-risk shape a release can
 have here.
 
-**History is convergent before the merge, which is what the check is for.** The
-merge base of `main` and `dev` is `685951b`, and that is exactly `c1c1e00`'s
-second parent — so this release PR lists only #55, #56, #57 and the trailing
-record from last time, with nothing re-listed. **Merge it as a merge commit.**
-Squashing costs `main` the ancestry and makes every later release PR re-list
-what already shipped; it happened once, with #38, and the repair is `4c0795a`.
+**Merged with a merge commit, and the history is convergent.** `564227f` has two
+parents (`c1c1e00` and `7dbab9c`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Four releases in a row now follow the rule rather than
+repair it.
 
-**This release changes `public/sw.js`, which the last four did not.** Two
-consequences worth watching rather than assuming:
+**This release is the first since Feature 10 to change `public/sw.js`.** Two
+consequences, both recorded before the merge so neither could be misremembered
+afterwards:
 
 1. **`SHELL_SCHEMA` went to `2`, so every installed device drops its shell cache
-   and precaches again.** That is the intended mechanism — it is what heals a
-   poisoned development machine — but in production it means the first load
-   after the deploy refetches `/offline` and the icons. Harmless, and the first
-   time this app has deliberately invalidated a cache on real devices.
-2. **It confounds Feature 13, and the record has to say so before anybody
-   claims otherwise.** A new worker will certainly install this time — but
-   because the *bytes* changed, which is the ordinary update path, not because
-   the `?v=<deployment id>` query did anything. **This release cannot be
-   evidence that Feature 13 works.** The next release that leaves `sw.js`
-   untouched is the one that can be.
+   and precaches again.** The intended mechanism — it is what heals a poisoned
+   development machine — and the first time this app has deliberately
+   invalidated a cache on real devices.
+2. **It confounds Feature 13.** A new worker will certainly install, but because
+   the *bytes* changed, which is the ordinary update path, not because the
+   `?v=<deployment id>` query did anything. **This release is not evidence that
+   Feature 13 works.** The next release that leaves `sw.js` untouched is the one
+   that can be.
 
-**What can be checked from outside is unusually good this time.** `/sw.js` is
-public and its contents are now release-specific: if the deployed worker
-contains `SHELL_SCHEMA`, this build's worker really shipped, which is a stronger
-claim than the "answers 200" every previous record settled for.
+**The worker that shipped is provably this build's, which no previous record
+could claim.** `/sw.js` is public and its contents are now release-specific: the
+deployed file contains `const SHELL_SCHEMA = "2"` and the `IS_DEV` guard. Every
+earlier record settled for "answers 200", which proves a worker exists and
+nothing about which one.
 
-**What cannot.** The iOS bar is behind authentication and only renders for an
-iOS user agent, so nothing about it is visible to a signed-out visitor. And the
-standing gap is unchanged and now pointed: **the glass has never been seen in
-WebKit.** Everything about it was judged in Chrome, and the `@supports` guard
-does not protect the refraction — see the gotcha. Opening the installed app on
-the owner's iPhone is the check, and it is the one thing this release most needs.
+**Production has shell caching ON, and that was worth checking rather than
+assuming.** The whole fix hangs on `NODE_ENV === "development"` being inlined
+correctly at build time; had it resolved the wrong way, production would have
+quietly stopped caching build output and nothing on screen would have said so.
+The production client bundle calls the builder with `!1` —
+`register(…(document.documentElement.dataset.dplId||null,!1))` — so the live app
+registers `/sw.js?v=<id>` with no `dev` flag. The `dev=1` string is present in
+the chunk only as the unreachable branch of the function.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200. `/sw.js` is
+`application/javascript; charset=utf-8` with `no-cache, no-store,
+must-revalidate`, identically with `?v=<id>` — so the query misses neither the
+header rule nor the static file. The splash gate ships in the response body.
+
+**The id changed and both sides agree.** `/api/version` reports
+`dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF` and the page's `data-dpl-id` is the same
+string; the previous release reported `dpl_ErZ28EnsDah6xQiyyymKRdyJnDsu`.
+
+**The export is still guarded**, which stays the check worth making from
+outside: a signed-out `GET /api/export` answers **307 to `/sign-in` with a
+zero-byte body**. Every other endpoint leaks one page at a time; that one would
+hand over the entire ledger.
+
+**Nothing in this release is visible to a signed-out visitor, and the iOS bar is
+doubly hidden** — behind authentication *and* behind an iOS user agent. So
+"the deploy is green" is even further from "the feature works" than usual here.
+
+**The one thing this release most needs is a look on an iPhone.** The glass has
+never been seen in WebKit: it was designed and verified entirely in Chrome, and
+the `@supports` guard does not protect the refraction — it proves the value
+parses, not that the engine renders it. If the refraction does not render,
+deleting the `@supports` block is the whole fix and the bar keeps its shape.
+
+**Still unverified, and the list is the same one six records have carried:**
+whether push delivers, whether `financeflow-private-*` disappears from Cache
+Storage on sign-out, whether an invitation notice reaches the other account,
+whether the budget warning arrives in the bell, whether the CSV opens in a
+spreadsheet — and now the iOS bar on a real device. **Feature 13 is still
+unproven and this release cannot settle it**, for the reason above.
 
 **Released 2026-08-19 (second)** — `c1c1e00` (PR #54), the largest release
 here so far. It carries **#49** (the update notice removed), **#50** (the mark
@@ -472,8 +679,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `c1c1e00` (PR #54, 2026-08-19). Release PR open against it.     |
-| `dev`  | Integration branch. Ahead of `main` by #55, #56 and #57. No feature branch open against it. |
+| `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `fix/ios-bar-scrim` open against it. |
 
 ---
 
@@ -1222,6 +1429,54 @@ had the same choice to make.
 **Not watched in a browser.** The detection is proven end to end with curl
 against `next start`; what nobody has seen is the card appearing, the Reload
 button, or the two bottom notices stacking on a phone.
+
+### Fix — the iOS bar gets the strip it floats in ✅ done, PR open
+
+- [x] A blurred, tinted strip across the bottom of the viewport, masked so it
+      fades out above the capsule
+- [x] A sibling of the bar rather than a child, because `backdrop-filter` makes
+      the bar a backdrop root
+- [x] Tint and blur strengthened on the capsule itself — `0.62 → 0.78`,
+      `18px → 26px`
+- [x] `pointer-events: none`, a `forced-colors` case, and its own dark value
+- [x] Two more browser assertions, and the whole suite green at 24
+
+**Feature 21 was judged in Chrome and this is what the phone said.** The last
+release record ended with "the one thing this release most needs is a look on an
+iPhone". It got one, and the complaint was not the refraction everybody expected
+to be at risk — it was that the bar had no ground. Content ran past the ends of
+an inset capsule at full strength, so the effect read as a hole cut in the page
+rather than as glass laid over it. Apple's own tab bar blurs and shades the band
+below the bar, which is precisely what stops those two edges being transparent.
+
+**The scrim cannot be a child of the bar, and nothing would have said so.** An
+element with `backdrop-filter` establishes a backdrop root: a descendant's own
+`backdrop-filter` samples that root, not the page. Nested inside `.ff-iosbar`
+the strip would blur the bar's already-blurred backdrop — no error, no warning,
+and a screenshot that looks nearly right. It is a sibling, and the reason is
+written where somebody would move it.
+
+**`mask-image` fades the blur, not a gradient over the blur.** Painting a
+transparent-to-solid gradient on top would leave the blur running at full
+strength to a hard line where the element ends. Masking removes the element
+itself, so where the mask lets go there is nothing left to see through, and the
+strip has no top edge at all. Losing masks costs the fade and keeps the strip,
+which is the right way round.
+
+**The glass was tuned against an empty page, and that is why it was thin.** Tint
+`0.62` and blur `18px` looked correct in a screenshot of a page with almost
+nothing on it — the same trap Feature 21 already recorded from the other
+direction, where glass over a flat page is indistinguishable from opaque. With
+real content behind it on a phone, both were too weak to read as a surface.
+
+**Verified at 390×844 in both themes against a production build**, on a page
+with content behind the bar rather than an empty one. The suite gained two
+assertions: the strip spans the viewport, reaches the bottom, starts above the
+capsule, blurs, carries a gradient mask and takes no taps — and it disappears at
+1280px along with the bar, because a blurred band across the bottom of a desktop
+page is the same bug wearing a different shape.
+
+**Still not seen in WebKit**, which is the standing gap for the whole bar.
 
 ### Feature 21 — The iOS bar gets its own design ✅ merged (PR #57)
 
@@ -2064,6 +2319,64 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Blur hides a page far more completely than tint does, and the two are not
+  interchangeable.** This bar was reported as "not see-through" twice, and the
+  first fix cut the tint nearly in half without helping, because the blur was
+  the thing erasing the page. The test that settles it takes one minute: pick a
+  real piece of dark text behind the surface, set the tint to almost nothing,
+  and sweep the blur. Here a near-black 28px heading was invisible at 8px of
+  blur and perfectly legible at 0, at a tint of 0.10 throughout. A large solid
+  block survives any blur, which is why a coloured-rectangle mock says the
+  effect works when text says it does not — **judge a blur against text, not
+  against blocks**. If a surface has to be see-through, the blur budget is
+  small and something else has to carry the look.
+- **A translucent bar that must stay legible should fix the text, not the
+  surface.** Raising the tint until 10px labels survive whatever the page puts
+  behind them is how this bar reached 0.78 and stopped being glass — twice. A
+  halo on the label costs nothing and leaves the surface clear. It has to
+  invert with the theme, since it works by contrast with the *background*, not
+  by being a particular colour.
+- **When an effect looks broken, prove the mechanism before tuning its
+  numbers.** Four rounds of value tuning went into a bar whose `backdrop-filter`
+  had been working perfectly the whole time. Two controls would have skipped all
+  of it: set the tint to an opaque red (does the element paint what I think it
+  paints?) and put an opaque black box behind it (does the backdrop sample what
+  I think it samples?). Both are one line and neither can be argued with.
+  Suspecting `isolation: isolate`, the scrim and the `url()` filter each cost a
+  round trip and all three were innocent.
+- **Stacked translucent layers multiply, and the total is what decides whether
+  glass looks like glass.** The iOS bar had a `0.78` tint over a `0.55` scrim
+  and read as a flat white pill. That is not two thirds of a page showing
+  through, it is a tenth: `1 - (1-0.55)(1-0.78) = 0.90` covered. Every effect
+  behind it — blur, saturate, an SVG displacement map — was working perfectly on
+  the 10% that was left, which is why turning each one up did nothing visible
+  and why the effect looked "broken" when nothing was. **Tune the composite, not
+  the layer you happen to be editing**, and when a design gains a second
+  translucent layer, recompute the first one instead of leaving it. The
+  corollary bit too: a gradient sheen laid *over* a tint adds coverage at every
+  stop, so its middle has to be fully transparent or it undoes the transmission
+  the tint was lowered to buy.
+- **A white hairline is invisible on white glass over a white page**, and this
+  was hit twice on the same component. It is recorded for `--ff-glass-pill`
+  ("darker, not whiter") and then repeated for the bar's edge ring a design pass
+  later. On a light theme the outline that gives a glass object its shape has to
+  be *dark*; the white inner highlight is a separate job — it lights the bar
+  when there is something dark behind it, and does nothing over white.
+- **`@supports (backdrop-filter: url("#id"))` is a parse test, and for once the
+  answer turned out to be yes.** Chrome does render an SVG reference filter in
+  `backdrop-filter`: probed by screenshotting the same bar over hard vertical
+  stripes with the filter and then with plain blur, which bend visibly at the
+  capsule's ends and differ pixel-for-pixel. **That is Chrome only and does not
+  transfer** — the guard still cannot tell a parsing engine from a rendering
+  one, so WebKit remains unproven. The way to settle a question like this is two
+  screenshots and a byte comparison, not a support query.
+- **Tuning a translucent surface against an empty page proves nothing**, and
+  this file has now recorded it twice for the same bar. Screenshots of the iOS
+  bar over the suite's own dashboard show no difference between any two tints,
+  because the e2e account holds no transactions and the page behind the bar is
+  blank white. A blur of nothing is identical to a stronger blur of nothing.
+  Put content behind it — real, or injected markup that stands in for it, said
+  plainly to be a stand-in — before believing any before/after.
 - **A notice that only fires for an already-open session is close to dead on a
   phone.** The update notice compared the document's deployment id against
   `/api/version` and never checked on mount, so it could only appear for a tab
@@ -2122,6 +2435,22 @@ Things already hit, so they are not hit twice.
   lints, builds and passes every phone-width test. Component CSS in this file
   goes in `@layer components`. The `:root`/`.dark` token blocks stay unlayered,
   which is safe because custom properties collide with nothing.
+- **`backdrop-filter` makes an element a backdrop root, so a blurred child
+  blurs its parent's backdrop rather than the page.** The scrim behind the iOS
+  capsule is a *sibling* of `.ff-iosbar` for exactly this reason: nested inside
+  it, its `backdrop-filter` would sample the bar's backdrop image — which is
+  already filtered — and the strip would render all but nothing. There is no
+  error, no warning and no failing test; the screenshot merely looks weaker than
+  it should. **Two elements that both filter the page behind them have to be
+  siblings.**
+- **Glass tuned against an empty page is tuned against nothing.** The iOS bar
+  shipped at tint `0.62` and blur `18px`, both judged in a screenshot of a page
+  with almost no content on it, where a weak blur and a strong one look
+  identical. On a phone with real content behind the bar they were visibly thin
+  and had to go to `0.78` and `26px`. This is the same trap already recorded
+  from the other side — glass over a flat page is indistinguishable from opaque
+  — met while tuning rather than while building. **Judge a translucent surface
+  only over content, and preferably scrolled.**
 - **`@supports` proves a value parses, not that it works.**
   `@supports (backdrop-filter: url("#f"))` is true in any engine that accepts
   `url()` there, whether or not it renders the filter — so it cannot guard
