@@ -161,6 +161,53 @@ test.describe("the dashboard shell", () => {
       await context.close();
     });
 
+    test("lays a blurred strip under the capsule", async ({ browser }) => {
+      const context = await browser.newContext({ storageState: STORAGE_STATE, ...IPHONE });
+      const page = await context.newPage();
+
+      await page.goto("/");
+
+      const scrim = page.locator(".ff-iosbar-scrim");
+      const bar = page.locator("nav[data-platform='ios']");
+
+      const scrimBox = await scrim.boundingBox();
+      const barBox = await bar.boundingBox();
+
+      expect(scrimBox, "the scrim should be laid out on an iPhone viewport").not.toBeNull();
+      expect(barBox).not.toBeNull();
+
+      // Edge to edge and down to the bottom, which is the whole point: the bar
+      // is inset, so without this the page runs sharp past both its ends.
+      expect(scrimBox?.x).toBe(0);
+      expect(scrimBox?.width).toBe(IPHONE.viewport.width);
+      expect((scrimBox?.y ?? 0) + (scrimBox?.height ?? 0)).toBe(IPHONE.viewport.height);
+
+      // And it reaches above the capsule, so the fade finishes in open space
+      // rather than at the bar's own top edge — where it would be a visible
+      // line instead of a gradient.
+      expect(scrimBox?.y ?? 0).toBeLessThan(barBox?.y ?? 0);
+
+      const strip = await scrim.evaluate((el) => {
+        const style = getComputedStyle(el);
+
+        return {
+          backdrop: style.backdropFilter,
+          mask: style.maskImage || style.webkitMaskImage,
+          pointerEvents: style.pointerEvents,
+        };
+      });
+
+      // A strip that tinted without blurring would be a grey band, and one
+      // without the mask would end in a hard line across the page.
+      expect(strip.backdrop).toContain("blur");
+      expect(strip.mask).toContain("gradient");
+      // It covers the bottom of every page, so a scrim that took taps would
+      // swallow them silently — the worst kind of bug to find from a report.
+      expect(strip.pointerEvents).toBe("none");
+
+      await context.close();
+    });
+
     test("puts the pill under the tab you are actually on", async ({ browser }) => {
       const context = await browser.newContext({ storageState: STORAGE_STATE, ...IPHONE });
       const page = await context.newPage();
@@ -220,6 +267,9 @@ test.describe("the dashboard shell", () => {
       await page.goto("/");
 
       await expect(page.locator("nav[data-platform='ios']")).toBeHidden();
+      // The strip goes with it. A blurred band across the bottom of a desktop
+      // page, with no bar in it, is the same bug wearing a different shape.
+      await expect(page.locator(".ff-iosbar-scrim")).toBeHidden();
       await expect(page.locator("aside")).toBeVisible();
 
       await context.close();

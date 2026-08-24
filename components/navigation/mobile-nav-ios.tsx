@@ -58,6 +58,11 @@ export default function MobileNavIos() {
         leaves the middle alone. The two rects composite with `screen`, which
         works precisely because each one zeroes the other's channel.
 
+        `scale` is up from 0.06, and that is the tint change and not a second
+        opinion about how much glass bends light. Displacement can only move
+        pixels that are visible: behind a bar covering 90% of what was there,
+        0.06 and 0.20 look identical. See the tint note in `globals.css`.
+
         It is rendered *inside this component*, so it exists exactly once and
         only on the platform that uses it — `MobileNav` renders one bar, never
         both. A shared filter in the root layout would be a duplicate-id waiting
@@ -84,12 +89,27 @@ export default function MobileNavIos() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="map"
-            scale="0.06"
+            scale="0.09"
             xChannelSelector="R"
             yChannelSelector="G"
           />
         </filter>
       </svg>
+
+      {/*
+        The strip the capsule floats in. Without it the bar is glass over
+        nothing: the page runs sharp and full strength past its left and right
+        ends and under its bottom, so the bar reads as a cut-out rather than as
+        an object laid over the screen. Apple's own tab bar does this — the
+        band below the bar is blurred and shaded, which is what stops those
+        edges being transparent.
+
+        A sibling rather than a child of the bar, and that is load-bearing: an
+        element with `backdrop-filter` establishes a backdrop root, so nested
+        inside `.ff-iosbar` this would blur the bar's backdrop instead of the
+        page and quietly render nothing at all.
+      */}
+      <div aria-hidden="true" className="ff-iosbar-scrim md:hidden" />
 
       <nav
         data-platform="ios"
