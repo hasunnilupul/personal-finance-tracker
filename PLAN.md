@@ -10,9 +10,60 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: blur was hiding the page, not tint**, on `fix/ios-bar-scrim`
-and not yet merged. The bar came back a second time — "like a glass, not a
-shade that doesn't even see through" — after a pass that had already cut the
+**Releasing 2026-08-24** — the iOS glass release, `dev` → `main`, PR #61. It
+carries **#59** (the capsule got the strip it floats in, and the scrim/bar tints
+were found to multiply) and **#60** (the blur was the curtain, not the tint),
+plus the plan records for each and for the 2026-08-21 release.
+
+**One feature, three passes at it, and only the third was right.** The bar was
+reported wrong from a real iPhone twice. The first pass raised the tint to
+strengthen the effect and flattened it; the second cut the tint on the theory
+that the scrim's and the bar's multiply, which is true arithmetic about the
+wrong quantity; the third measured a control and found that **blur, not tint,
+was erasing the page**. Anyone reading only the last commit will miss that the
+first two were confident and wrong for the same reason — no measurement.
+
+**No migrations and no dependency changes.** `git diff main dev -- lib/db/` is
+empty and so is the diff over `package.json` and `pnpm-lock.yaml`, so the
+deploy-time migrate step is a no-op again. Four files change in total: `PLAN.md`,
+`app/globals.css`, `components/navigation/mobile-nav-ios.tsx` and
+`e2e/dashboard.spec.ts`. **This is a CSS release.**
+
+**`public/sw.js` is untouched, and that is the point worth marking.** The
+2026-08-21 release changed the worker's bytes, which is the ordinary update path
+and proves nothing about Feature 13. **This release is the clean trial six
+records have been waiting for**: if an installed device picks up the new build,
+it can only be because the `?v=<deployment id>` query changed the registration
+URL. If it does not, suspect the registration URL before the cache code.
+
+**The deployment id before this release is `dpl_5tDZvTYXxf8vtnkutSAjKmGNuUAF`**
+— recorded now, before the merge, so the comparison afterwards cannot be
+fooled by a slow deploy. That id is the one the 2026-08-21 release reported, so
+production had not moved in between.
+
+**Verified before the release PR was opened**, against a production build of
+`5fa8d10`, whose tree is identical to `dev`: `pnpm typecheck`, `pnpm lint`,
+`pnpm test` (340) and `pnpm test:e2e` (24, including all 6 iOS bar tests), plus
+before/after screenshots at 390×844 in both themes and **a look on a real
+iPhone, which confirmed the bar**.
+
+**What this release cannot show from outside.** Nothing in it is visible to a
+signed-out visitor, and the iOS bar is doubly hidden — behind authentication
+*and* behind an iOS user agent. The device check on #60 already covers the part
+that matters, so for once "the deploy is green" is not the strongest claim
+available; it is just the weakest half of one already made on a phone.
+
+**The one thing still unproven in the bar itself is the refraction in WebKit.**
+The displacement was measured in Chrome against hard vertical stripes. The
+`@supports` guard proves a value parses, not that an engine draws it. The bar
+was seen whole on an iPhone and looked right, which does not isolate whether the
+lens contributed. If it turns out not to render, deleting the `@supports` block
+is the whole fix and the bar keeps its shape.
+
+**Before that: blur was hiding the page, not tint**, on
+`fix/ios-glass-blur-not-tint`, merged as PR #60 (`1c5f8ce`). The bar came back
+a second time — "like a glass, not a shade that doesn't even see through"
+— after a pass that had already cut the
 tint from 0.78 to 0.44. **That pass was reasoning from arithmetic and the
 arithmetic was about the wrong quantity.**
 
@@ -110,10 +161,12 @@ nothing, which is the empty-page mistake this file already records once.
 active tab's green is hard to read. `--primary` in `.dark` is
 `oklch(0.432 0.095 166.913)`, *darker* than its light-mode counterpart, over a
 dark bar. It is identical in the before screenshots, so it predates all of this
-and belongs to the theme rather than the bar. Not in this branch's scope. **Before that, on this same branch: the iOS bar got the strip it floats in.**
-**Found on a real iPhone, which is the device the last release said the bar most
-needed.** The capsule was glass over
-nothing: the page ran sharp and full strength past its left and right ends and
+and belongs to the theme rather than the bar. Not in this branch's scope.
+
+**Before that, on the same branch: the iOS bar got the strip it floats in** —
+merged as PR #59 (`b3dd83d`). **Found on a real iPhone, which is the device the
+last release said the bar most needed.** The capsule was glass over nothing:
+the page ran sharp and full strength past its left and right ends and
 under its bottom, so the bar read as a cut-out rather than as an object laid
 over the screen. A blurred, tinted strip now spans the bottom of the viewport
 and fades out above the capsule, which is what Apple's own tab bar does.
