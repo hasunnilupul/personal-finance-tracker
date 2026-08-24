@@ -58,10 +58,15 @@ export default function MobileNavIos() {
         leaves the middle alone. The two rects composite with `screen`, which
         works precisely because each one zeroes the other's channel.
 
-        `scale` is up from 0.06, and that is the tint change and not a second
-        opinion about how much glass bends light. Displacement can only move
-        pixels that are visible: behind a bar covering 90% of what was there,
-        0.06 and 0.20 look identical. See the tint note in `globals.css`.
+        `scale` is 0.16, up from 0.06, and the refraction has been promoted
+        from a garnish to the main effect. The blur behind this bar is down to
+        4px because anything more erases the page rather than frosting it (see
+        the tint note in `globals.css`), and a low-blur pane of faint tint on
+        its own is a window, not glass. What now says "glass" is the lens: the
+        card edges and headings behind the bar visibly bend as they pass its
+        ends. Displacement can only move pixels that are visible, which is why
+        this was pointless at the old tint and blur and is the whole effect at
+        this one.
 
         It is rendered *inside this component*, so it exists exactly once and
         only on the platform that uses it — `MobileNav` renders one bar, never
@@ -89,7 +94,7 @@ export default function MobileNavIos() {
           <feDisplacementMap
             in="SourceGraphic"
             in2="map"
-            scale="0.09"
+            scale="0.16"
             xChannelSelector="R"
             yChannelSelector="G"
           />

@@ -10,11 +10,62 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: the glass was paint, and now it transmits**, on
-`fix/ios-bar-scrim` and not yet merged. Reported from a device again: the bar
+**Last completed: blur was hiding the page, not tint**, on `fix/ios-bar-scrim`
+and not yet merged. The bar came back a second time — "like a glass, not a
+shade that doesn't even see through" — after a pass that had already cut the
+tint from 0.78 to 0.44. **That pass was reasoning from arithmetic and the
+arithmetic was about the wrong quantity.**
+
+**What settled it was a control, not an argument.** Behind the bar on the real
+dashboard sits the `Budget health` heading — near-black, 28px tall, measured at
+y795–823 inside a bar spanning 768–824. Dropping the tint to 0.10 left it
+completely invisible. Setting blur to 0 made it perfectly legible. A 52px block
+of solid black shows through either way. **Blur averages a line of text together
+with the white page around it, and text is mostly white page, so a blurred
+heading is white.** Frosting is erasure, and no tint value fixes it.
+
+Blur is therefore `28px → 4px`, the scrim is nearly gone (`0.30/18px →
+0.06/3px`, since its blur lands on the bar's backdrop *before* the bar sees it),
+and **the refraction is promoted from garnish to the main effect** — `scale`
+`0.09 → 0.16`. What now reads as glass is the lens: card edges and headings
+visibly bend as they cross the capsule's ends. That is also why the earlier
+passes could not win by pushing effects — at 28px of blur there was nothing
+left with an edge to bend.
+
+**The transparency is paid for with a halo, not with tint.** At a tint low
+enough to see through, the bar's own 10px labels land on whatever the page puts
+behind them — over a chart, that is the word "Budgets" on a saturated red bar.
+Tinting up until the labels are safe is exactly how this bar became opaque
+twice. `--ff-glass-halo` fixes the text instead of the surface: light in light
+mode, dark in dark, since it works by separating the glyph from its background.
+Tint settled at 0.30, which is legible over a full-bleed chart and still plainly
+see-through.
+
+**Three false leads, recorded because each cost a round trip**: that the token
+overrides were not applying (they were — a red-tint control proved it); that
+`isolation: isolate`, the scrim, or the `url()` refraction was breaking the
+backdrop (none of them — an opaque box behind the bar shows through with all
+three in place); and that content inside `main` was excluded from the backdrop
+because `main` is the scroll container (it is not — the same box shows through
+from inside `main` and from `body` identically). **`backdrop-filter` was working
+correctly the entire time.**
+
+**A caveat on the screenshots that is worth keeping.** Over the app's own white
+cards, a see-through bar and an opaque one look nearly identical, because white
+transmitted is still white. The difference is only visible over content with
+contrast, so the verification shots use an injected full-bleed chart strip —
+which is a deliberate worst case, not a typical page.
+
+Before that, on this same branch: the tints were rebalanced and the multiply
+between scrim and bar was found — scrim `0.55` under bar `0.78` covers 90% of
+the page. That part stands and still matters; it was necessary and, on its own,
+not sufficient. Reported from a device: the bar
 "doesn't have the glassy look at all". It was not a broken effect — every layer
 was present and correct — it was that **the scrim's tint and the bar's tint
-multiply, and nobody had multiplied them.** Scrim `0.55` under bar `0.78`
+multiply, and nobody had multiplied them.** **This diagnosis was right and
+incomplete**: it fixed the coverage and left the blur at 28px, so the page
+behind stayed invisible and the bar was reported again. See the top of this
+section. Scrim `0.55` under bar `0.78`
 covers 90% of the page and lets 9.9% through. Blur, saturate and refraction
 were all still there, all acting on a tenth of a page, which is why pushing the
 effect harder had stopped changing anything: the previous pass raised tint
@@ -2215,6 +2266,31 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Blur hides a page far more completely than tint does, and the two are not
+  interchangeable.** This bar was reported as "not see-through" twice, and the
+  first fix cut the tint nearly in half without helping, because the blur was
+  the thing erasing the page. The test that settles it takes one minute: pick a
+  real piece of dark text behind the surface, set the tint to almost nothing,
+  and sweep the blur. Here a near-black 28px heading was invisible at 8px of
+  blur and perfectly legible at 0, at a tint of 0.10 throughout. A large solid
+  block survives any blur, which is why a coloured-rectangle mock says the
+  effect works when text says it does not — **judge a blur against text, not
+  against blocks**. If a surface has to be see-through, the blur budget is
+  small and something else has to carry the look.
+- **A translucent bar that must stay legible should fix the text, not the
+  surface.** Raising the tint until 10px labels survive whatever the page puts
+  behind them is how this bar reached 0.78 and stopped being glass — twice. A
+  halo on the label costs nothing and leaves the surface clear. It has to
+  invert with the theme, since it works by contrast with the *background*, not
+  by being a particular colour.
+- **When an effect looks broken, prove the mechanism before tuning its
+  numbers.** Four rounds of value tuning went into a bar whose `backdrop-filter`
+  had been working perfectly the whole time. Two controls would have skipped all
+  of it: set the tint to an opaque red (does the element paint what I think it
+  paints?) and put an opaque black box behind it (does the backdrop sample what
+  I think it samples?). Both are one line and neither can be argued with.
+  Suspecting `isolation: isolate`, the scrim and the `url()` filter each cost a
+  round trip and all three were innocent.
 - **Stacked translucent layers multiply, and the total is what decides whether
   glass looks like glass.** The iOS bar had a `0.78` tint over a `0.55` scrim
   and read as a flat white pill. That is not two thirds of a page showing
