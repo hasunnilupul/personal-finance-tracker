@@ -64,25 +64,31 @@ query changing the registration URL. **Seven records have now been waiting on a
 device that already had the previous build. `curl` cannot answer it and this one
 does not claim to.**
 
-**Whether the migration applied is an inference, not an observation, and the
-inference is sound.** `vercel.json` sets `buildCommand` to `pnpm run
-build:deploy`, which is `tsx ./scripts/migrate-on-deploy.ts && next build` — the
-statements are chained, so a migration that failed would have taken the build
-down instead of promoting it. The production build is green, therefore the
-migrate step exited 0. **What that does not show is the columns existing**, which
-needs a signed-in session or the database, and neither is reachable from here.
+**The migration applied to production, and this is observed rather than
+inferred.** The build log for the deployment carries drizzle-kit's own
+`[✓] migrations applied successfully!` followed by `Migrations applied.`, which
+is `migrate-on-deploy.ts`'s line at the end of its success path. **Both together
+are what make it conclusive**: the second cannot be reached unless drizzle-kit
+exited 0, and neither can be reached at all on the skip path, which returns
+before either — so this also rules out the failure the `&&` chain cannot,
+`VERCEL_ENV` not being `production` and the whole step being skipped. A skipped
+migrate step produces a green build exactly like a successful one, and would have
+left the schema behind the code with nothing on screen saying so.
 
-**The build log is where the inference becomes an observation**, and it costs one
-click:
-`https://vercel.com/hasun-nilupuls-projects/personal-finance-tracker-uicg/AdT6GCiPDGrpT1UmZXKUGvxhFvXn`.
-`migrate-on-deploy.ts` prints either its skip line — it exits early unless
-`VERCEL_ENV` is `production` — or drizzle-kit's own
-`[✓] migrations applied successfully!`. Those are different claims and only the
-log tells them apart: a skipped migrate step also produces a green build, and
-would have left the schema behind the code with nothing on screen saying so.
+**This is the first release here where the migrate step is known to have done
+something**, rather than being a no-op nobody had to look at. Every previous
+record could say "the deploy is green" and mean only that the step did not fail.
+Worth the habit: on a release carrying a migration, read the two lines.
+
+**What is still not shown is the columns existing**, which needs a signed-in
+session or the database and neither is reachable from here. The gap is now small
+— drizzle-kit reports what it applied, and it applied this file — but it is a
+gap, and the same one that would hide a migration that succeeded against the
+wrong database. `drizzle.config.ts` refuses that case up front by comparing the
+pooled and direct hosts, which is why it is not on the list below.
 
 **That log is also where the pre-count belongs**, which is the follow-up below.
-The evidence that a migration ran already lives there; the number it destroyed
+The evidence that a migration ran already lives there; the number it destroys
 should live beside it, in the same place, written before the `DELETE` rather than
 asked for in a PR body.
 
