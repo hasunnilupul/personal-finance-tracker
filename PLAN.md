@@ -10,8 +10,84 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: Feature 22 — one pocket, one ledger**, on
-`feat/shared-expenses-hit-personal-income` and not yet merged. Reported by the
+**Releasing 2026-08-28** — `dev` → `main`, carrying **#62** (Feature 22 — one
+pocket, one ledger) and the two plan records around it. **This half of the record
+was written before the merge; the merge SHA and the live-site results are added
+straight to `dev` afterwards.**
+
+**This is the first release here that holds a real migration, and it is
+destructive.** Every release since the deploy-time migrate step was added has
+been a no-op — this one is not, and it is the difference between a deploy to
+glance at and a deploy to watch. `20260828140515_brown_sauron` is seven
+statements: two `ALTER TABLE … ADD COLUMN` (both nullable, so neither can fail on
+existing rows), one `CREATE INDEX`, one `UPDATE` that backfills
+`personalBaseAmount` for the shared expenses needing no conversion, and **three
+`DELETE`s** — shared-space income entries, then income recurring templates, then
+income categories, in that order so nothing is de-categorised on the way past and
+the cascade to budgets comes last.
+
+**There are no dependency changes.** `git diff main dev -- package.json
+pnpm-lock.yaml` is empty, so the install is the tree that was tested.
+
+**The one thing that must happen before the merge, and it has not happened
+yet.** Those `DELETE`s are irreversible and nobody has priced them against
+production. `scripts/count-shared-income.ts` prints, per shared space, how many
+income entries, categories and templates would go — it was written for exactly
+this moment and has only been run against development, where the answer was **0
+entries, 5 categories, 0 templates**. Production is a separate database with
+separate history, and this machine has no connection string for it. **Run it, or
+the equivalent SQL, against production first.** If the answer is zero, the
+migration is as safe as it looked; if it is not, that is a number somebody should
+see before it stops existing rather than after.
+
+**The deployment id before the merge is `dpl_P7w6r3vGgbz1ohsqFUoWecoVfN5d`**,
+recorded in advance so a slow deploy cannot fool the comparison afterwards.
+**Note that this is not the id the 2026-08-24 record reported** — that was
+`dpl_FRou8LjTJadQ5khi6siidmzSSkCt`, so production moved at some point between the
+two releases without a record being written. The "did it change?" check after
+this merge has to be made against the id in this paragraph, not against the one
+in the record above.
+
+**`public/sw.js` is untouched, and the live worker is provably the repo's** — the
+deployed file still carries `SHELL_SCHEMA = "2"`, the same value the repo holds.
+So this is another clean Feature 13 trial: nothing in this release can install a
+new worker except the `?v=<deployment id>` query changing the registration URL.
+Six records have now been waiting on a device that already had the previous build
+to answer that, and `curl` still cannot.
+
+Verified against the live site **before** the merge, so the after-state has
+something to be compared with: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200; and a signed-out
+`GET /api/export` answers **307 to `/sign-in`** — still guarded, which stays the
+check worth making from outside, because every other endpoint leaks one page at a
+time and that one would hand over the entire ledger.
+
+**Verified on `dev` at `b25ecf0`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(358), `pnpm build` and `pnpm test:e2e` (30). The e2e run was against the tree at
+`392d50f`, which differs from `b25ecf0` by one Markdown file.
+
+**One honest wrinkle in the build.** The first `pnpm build` of this release
+failed with a module-not-found on the JetBrains Mono stylesheet from
+`next/font/google`, and the identical command passed on the next run. It is a
+build-time font fetch, so it is a network flake rather than anything in the diff
+— but it is the kind of failure that can take a Vercel build down for no reason,
+and a rebuild is the whole fix. Recorded because a red deploy on this release
+would otherwise be assumed to be the migration.
+
+**Still unverified after this release**, and the list is the one six records have
+carried: whether Feature 13 actually installs a new worker (this release is
+another clean trial, not yet the answer), whether push delivers, whether
+`financeflow-private-*` disappears from Cache Storage on sign-out, whether an
+invitation notice reaches the other account, whether the budget warning arrives
+in the bell, and whether the CSV opens in a spreadsheet. **New to the list:**
+whether the personal ledger's cross-space total is right on production data
+rather than on the handful of rows in development, and whether
+`scripts/backfill-personal-amounts.ts` has anything to do there — it is a no-op
+unless a shared space and one of its members' personal spaces report in different
+currencies.
+
+**Last completed: Feature 22 — one pocket, one ledger**, merged as **PR #62**
+(`93395bf`, squash-merged into `dev`). Reported by the
 repo owner as a bug rather than a feature request, and it was both: *"when I add
 an expense to a shared space, it doesn't deduct from my personal income, and each
 shared space has separate income records but it shouldn't be like that."*
@@ -812,7 +888,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `feat/shared-expenses-hit-personal-income` open against it. |
+| `dev`  | Integration branch. Ahead of `main` by #62 and its records; the release PR is open. |
 
 ---
 
@@ -1631,7 +1707,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 22 — One pocket, one ledger ✅ done, PR open
+### Feature 22 — One pocket, one ledger ✅ merged (PR #62)
 
 - [x] `TransactionScope`: a personal ledger reads its owner's expenses across
       every space they belong to, keyed on `createdBy` and bounded by membership
