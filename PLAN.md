@@ -41,16 +41,34 @@ answer 200 as HTML, `/manifest.webmanifest` as `application/manifest+json`,
 repo's, so the worker is untouched and this remains a clean Feature 13 trial —
 still unanswered, and still needing a device that already had the previous build.
 
-**What this release cannot show from outside, and it is the whole of what it
-changed.** The pre-count runs at build time, so the only evidence it worked is a
-`Pre-count:` line in the Vercel build log for
-`dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`, above drizzle-kit's output. With nothing
-pending it should read `no pending migrations`. **Nothing checked from here can
-see it**, and its absence would be silent by design — the exit status is ignored
-so a diagnostic can never take a release down. **Unverified, and it is the one
-line worth a glance**: if it is missing, the control is not armed for the
-migration that needs it, and the next destructive migration would ship with the
-same gap the last one had.
+**The pre-count ran on production, and the build log says so.** Above
+drizzle-kit's output, for `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`:
+
+```
+Pre-count: no pending migrations.
+Applying migrations to the production database...
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/vercel/path0/drizzle.config.ts'
+```
+
+**That one line proves more than that the script exists.** Three things had to
+work to produce it, and each was a real doubt: `tsx` resolved through
+`spawnSync` on Vercel's build image, not just on Windows with pnpm's PATH; it ran
+*before* drizzle-kit rather than alongside it; and it connected to the production
+database and read `drizzle.__drizzle_migrations` — because `no pending
+migrations` is only reachable **after** that `SELECT` succeeds. Had the query
+failed, the catch prints `no migration history in this database; nothing to
+count` instead. The two messages are different on purpose, and this is the one
+that means the connection worked.
+
+**What is still unexercised in production is the branch that matters most.** The
+scan-and-count path needs a *pending* migration containing a `DELETE`, and this
+release had none. It has been trialled against the development database with
+quoted and unquoted identifiers, a missing table and a `DELETE FROM` inside a
+comment — but the first destructive migration to reach production will be the
+first real run. **When one is next written, read the build log rather than
+assuming**: the numbers should appear above drizzle-kit's output, and their
+absence is silent by design.
 
 **Nothing in it touches the application.** No `app/`, no `components/`, no `lib/`
 — five files, of which two are `scripts/`, one is `eslint.config.mjs`, one is
@@ -3227,6 +3245,11 @@ Not blocking, but worth doing.
       the one it prevents. Comments are stripped before scanning, so a table
       named in prose is not counted — verified, along with unquoted identifiers,
       against a trial migration.
+
+      **Confirmed running on production** in the 2026-08-28 (second) release's
+      build log, which also proves it reaches the production database rather than
+      merely being spawned — see the record above. The counting branch itself
+      awaits the first destructive migration to reach production.
 
       The stricter option — refusing to apply a `DELETE` without an explicit
       environment variable — is deliberately not taken. It would have stopped a
