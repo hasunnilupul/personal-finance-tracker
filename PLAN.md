@@ -10,6 +10,55 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Releasing 2026-08-28 (second)** — `dev` → `main`, carrying the pre-count
+control, the finished record of the release before it, and an e2e fix. **This
+half was written before the merge; the merge SHA and the live-site results are
+added straight to `dev` afterwards.**
+
+**Nothing in it touches the application.** No `app/`, no `components/`, no `lib/`
+— five files, of which two are `scripts/`, one is `eslint.config.mjs`, one is
+`README.md` (a blank line prettier normalised) and one is this. **No migrations
+and no dependency changes**, so the migrate step is a no-op again. That makes it
+the lowest-risk shape a release can have here *and* an unusual one: the only
+thing that can go wrong is the deploy script itself, which is the very thing
+being changed.
+
+**So the deploy script was rehearsed rather than reasoned about.** Run locally as
+`VERCEL_ENV=production pnpm tsx ./scripts/migrate-on-deploy.ts` against the
+development database — the same path production takes, in the same order — it
+printed `Pre-count: no pending migrations.`, then drizzle-kit's
+`[✓] migrations applied successfully!`, then `Migrations applied.` **That is the
+whole of what this release changes, exercised end to end**, and it also settles
+the thing worth doubting: `tsx` resolves through `spawnSync` with `shell: true`
+from the PATH pnpm provides, exactly as the `drizzle-kit` call beside it already
+did.
+
+**What the log should say after this deploy**, and it is the only new thing to
+look for: a `Pre-count:` line above drizzle-kit's output. With nothing pending it
+will read `no pending migrations`. **If it is absent entirely, the spawn failed
+silently** — which is by design, since the pre-count's exit status is ignored so a
+diagnostic can never take a release down, but it would mean the control is not
+armed for the migration that needs it.
+
+**The deployment id before the merge is `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**, the
+same one the previous release ended on — so production has not moved in between,
+and this time that is confirmed rather than assumed.
+
+Verified against the live site before the merge: `/` 307s to `/sign-in`;
+`/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js` all answer 200 with
+the right content types; a signed-out `GET /api/export` answers **307 to
+`/sign-in` with a zero-byte body**.
+
+**Verified on `dev` at `60d2844`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(358), `pnpm build`, `pnpm test:e2e` (30) — and the rehearsal above.
+
+**One test was flaky and was fixed rather than re-run.** The shared-space suite
+failed on a switch that had not finished rather than one that had failed:
+`SpaceSwitcher` disables its trigger while the server action and the following
+`router.refresh()` run, and *keeps showing the old space* until they do, so
+asserting the label alone polled a stale value until it timed out. Waiting for
+the control to be enabled first is the order that cannot lie. See the gotcha.
+
 **Released 2026-08-28** — `fe730aa` (PR #63), carrying **#62** (Feature 22 —
 one pocket, one ledger) and the plan records around it.
 
@@ -965,7 +1014,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `fe730aa` (PR #63, 2026-08-28). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` at `fe730aa`; ahead only by this record. |
+| `dev`  | Integration branch. Ahead of `main` by the pre-count control and its records; the release PR is open. |
 
 ---
 
@@ -2664,6 +2713,22 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **A disabled control still shows its old value, so assert it is enabled before
+  reading it.** `SpaceSwitcher` disables its trigger for the duration of the
+  server action and the `router.refresh()` after it, and goes on displaying the
+  space being switched *away from*. A Playwright assertion on the label alone
+  therefore polls a stale string and fails on a switch that is merely slow —
+  reported as "expected /E2E Shared/, received Personal", which reads exactly
+  like a switch that went to the wrong place. `toBeEnabled()` then `toHaveText()`
+  distinguishes the two, and it is the general shape for any control that
+  disables itself while working.
+- **A per-test timeout is a budget for the work, not a constant.** Fixing the
+  above pushed a test past the 30s default, which had always been too small for
+  one that switches spaces several times; the failure then moved to a `page.goto`
+  and read as a navigation bug. Where a project's tests are all slow for the same
+  reason, the timeout belongs on the project in `playwright.config.ts`, where
+  there is room to say why.
 
 - **Top-level `await` in a `scripts/` file passes `pnpm typecheck` and fails at
   runtime.** tsx compiles these to CJS, and esbuild rejects it outright:
