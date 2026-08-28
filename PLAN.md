@@ -72,6 +72,20 @@ down instead of promoting it. The production build is green, therefore the
 migrate step exited 0. **What that does not show is the columns existing**, which
 needs a signed-in session or the database, and neither is reachable from here.
 
+**The build log is where the inference becomes an observation**, and it costs one
+click:
+`https://vercel.com/hasun-nilupuls-projects/personal-finance-tracker-uicg/AdT6GCiPDGrpT1UmZXKUGvxhFvXn`.
+`migrate-on-deploy.ts` prints either its skip line — it exits early unless
+`VERCEL_ENV` is `production` — or drizzle-kit's own
+`[✓] migrations applied successfully!`. Those are different claims and only the
+log tells them apart: a skipped migrate step also produces a green build, and
+would have left the schema behind the code with nothing on screen saying so.
+
+**That log is also where the pre-count belongs**, which is the follow-up below.
+The evidence that a migration ran already lives there; the number it destroyed
+should live beside it, in the same place, written before the `DELETE` rather than
+asked for in a PR body.
+
 **The deletes removed nothing from production: there was no shared-space income
 there.** Confirmed by the repo owner after the merge. So the destructive half of
 this migration was a no-op in practice, and the same is now true of it for ever —
