@@ -3085,14 +3085,23 @@ Not blocking, but worth doing.
       one of its members' personal spaces report in different base currencies.
       Until then those rows read as their shared-space amount, which is what they
       read before Feature 22 — so this is a correctness improvement, not a repair.
-- [ ] **`fc0dccf` put a demo URL and credentials in a public README.** Committed
-      straight to `main` on 2026-08-25, outside any branch or PR, which is also
-      how it slipped past every check here. Worth a deliberate look at what that
-      account can reach: it is a real account in the production database, so
-      anybody reading the repo can sign in as it, and everything Feature 22 just
-      changed about personal ledgers applies to whatever it owns. If it is meant
-      to be a sandbox, it should hold nothing but sample data — and it should not
-      be able to invite anyone.
+- [x] ~~**`fc0dccf` put a demo URL and credentials in a public README**, and the
+      account is in the production database.~~ **Wrong on the part that
+      mattered.** The URL is
+      `…-uicg-git-dev-hasun-nilupuls-projects.vercel.app` — the **`dev` branch
+      preview** deployment, which takes the preview environment and therefore the
+      *development* database. `demo@financeflow.com` is a row in that database,
+      not in production, so a reader of the repo signing in reaches sample data
+      and nothing else. Corrected by the repo owner on 2026-08-28.
+
+      **The lesson is about reading a URL before reasoning from it.** A
+      `*.vercel.app` host was treated as "the production site" when the
+      `-git-<branch>-` segment in the middle is exactly what says it is not. The
+      one real consequence left is worth knowing rather than acting on: that
+      preview shares its database with local development and the browser suite,
+      so a demo visitor and `pnpm test:e2e` write to the same rows — which is why
+      a stray `E2E Shared` space or a half-written test entry can show up in a
+      demo.
 
 - [x] ~~`pnpm-lock.yaml` is git-ignored.~~ Committed, so every build resolves the
       same tree. `drizzle-orm` and `drizzle-kit` are pinned at `1.0.0-rc.4`
