@@ -15,7 +15,6 @@ ledger, and can optionally create shared spaces for joint expenses.
 | Validation | Zod                                        |
 | Hosting    | Vercel                                     |
 
-
 ## Demo
 
 - URL: https://personal-finance-tracker-uicg-git-dev-hasun-nilupuls-projects.vercel.app

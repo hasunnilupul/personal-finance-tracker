@@ -48,6 +48,7 @@ const eslintConfig = defineConfig([
     // two are operator scripts whose entire purpose is the report they print.
     files: [
       "scripts/migrate-on-deploy.ts",
+      "scripts/pre-count-destructive.ts",
       "scripts/count-shared-income.ts",
       "scripts/backfill-personal-amounts.ts",
     ],

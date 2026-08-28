@@ -10,10 +10,157 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-28** — `dev` → `main`, carrying **#62** (Feature 22 — one
-pocket, one ledger) and the two plan records around it. **This half of the record
-was written before the merge; the merge SHA and the live-site results are added
-straight to `dev` afterwards.**
+**Releasing 2026-08-28 (second)** — `dev` → `main`, carrying the pre-count
+control, the finished record of the release before it, and an e2e fix. **This
+half was written before the merge; the merge SHA and the live-site results are
+added straight to `dev` afterwards.**
+
+**Nothing in it touches the application.** No `app/`, no `components/`, no `lib/`
+— five files, of which two are `scripts/`, one is `eslint.config.mjs`, one is
+`README.md` (a blank line prettier normalised) and one is this. **No migrations
+and no dependency changes**, so the migrate step is a no-op again. That makes it
+the lowest-risk shape a release can have here *and* an unusual one: the only
+thing that can go wrong is the deploy script itself, which is the very thing
+being changed.
+
+**So the deploy script was rehearsed rather than reasoned about.** Run locally as
+`VERCEL_ENV=production pnpm tsx ./scripts/migrate-on-deploy.ts` against the
+development database — the same path production takes, in the same order — it
+printed `Pre-count: no pending migrations.`, then drizzle-kit's
+`[✓] migrations applied successfully!`, then `Migrations applied.` **That is the
+whole of what this release changes, exercised end to end**, and it also settles
+the thing worth doubting: `tsx` resolves through `spawnSync` with `shell: true`
+from the PATH pnpm provides, exactly as the `drizzle-kit` call beside it already
+did.
+
+**What the log should say after this deploy**, and it is the only new thing to
+look for: a `Pre-count:` line above drizzle-kit's output. With nothing pending it
+will read `no pending migrations`. **If it is absent entirely, the spawn failed
+silently** — which is by design, since the pre-count's exit status is ignored so a
+diagnostic can never take a release down, but it would mean the control is not
+armed for the migration that needs it.
+
+**The deployment id before the merge is `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**, the
+same one the previous release ended on — so production has not moved in between,
+and this time that is confirmed rather than assumed.
+
+Verified against the live site before the merge: `/` 307s to `/sign-in`;
+`/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js` all answer 200 with
+the right content types; a signed-out `GET /api/export` answers **307 to
+`/sign-in` with a zero-byte body**.
+
+**Verified on `dev` at `60d2844`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(358), `pnpm build`, `pnpm test:e2e` (30) — and the rehearsal above.
+
+**One test was flaky and was fixed rather than re-run.** The shared-space suite
+failed on a switch that had not finished rather than one that had failed:
+`SpaceSwitcher` disables its trigger while the server action and the following
+`router.refresh()` run, and *keeps showing the old space* until they do, so
+asserting the label alone polled a stale value until it timed out. Waiting for
+the control to be enabled first is the order that cannot lie. See the gotcha.
+
+**Released 2026-08-28** — `fe730aa` (PR #63), carrying **#62** (Feature 22 —
+one pocket, one ledger) and the plan records around it.
+
+**Merged with a merge commit.** `fe730aa` has two parents — `fc0dccf` and
+`786a28a` — and `dev` is an ancestor of `main`. Six releases in a row now follow
+the rule rather than repair it.
+
+**But `git diff main dev` was *not* empty afterwards, and the reason is worth
+more than the release.** `fc0dccf` — "Added Demo URL and Credentials" — was
+committed **straight to `main`** on 2026-08-25 and never came back to `dev`, so
+`main` carried seven README lines `dev` did not. Reconverged the same way #38 was,
+by merging `main` into `dev` (a fast-forward, no content decision to make), and
+`dev` is level again. **The two causes are different and both produce the same
+symptom**: #38 was a squashed release PR, this was a direct commit to `main`. A
+release is not the only thing that can put `main` ahead.
+
+**It also explains the deployment id nobody could account for.** The pre-merge
+record noted production was on `dpl_P7w6r3vGgbz1ohsqFUoWecoVfN5d` rather than the
+id the 2026-08-24 record reported, with no release in between to explain it. That
+README push is what redeployed production. **An unexplained id was a real signal,
+and following it found a divergence that would otherwise have been discovered by
+the next release listing work it had already shipped.**
+
+**The id moved, and both sides agree.** `/api/version` reports
+`dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn` and the page's `data-dpl-id` is the same
+string — and it matches the deployment named in the Vercel status on `fe730aa`
+itself, which ties the running build to this commit rather than merely to
+something newer.
+
+**Checked too early, again, and this time the fix was different.** The first read
+after the merge returned the *old* id from both `/api/version` and the page,
+while the Vercel status already said success. Repeating it with a cache-busting
+query returned the new id, and a plain request a moment later agreed. Either the
+deploy finished in the seconds between the two, or something in the path served a
+stale body despite `Cache-Control: no-store` — this cannot tell which. **The
+lesson is the cheap one: before recording an unchanged id, ask again with a
+query string.** The previous record's advice was to wait; waiting alone would
+have worked here too, but it would not have distinguished a slow deploy from a
+cached answer, and neither does this.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200 as HTML, `/manifest.webmanifest` as
+`application/manifest+json`, `/sw.js` as `application/javascript`. A signed-out
+`GET /api/export` answers **307 to `/sign-in` with a zero-byte body** — still
+the check worth making from outside, because every other endpoint leaks one page
+at a time and that one would hand over the entire ledger.
+
+**`public/sw.js` is untouched and the deployed file is byte-identical to the
+repo's**, ignoring line endings. So this is another clean Feature 13 trial:
+nothing in this release can install a new worker except the `?v=<deployment id>`
+query changing the registration URL. **Seven records have now been waiting on a
+device that already had the previous build. `curl` cannot answer it and this one
+does not claim to.**
+
+**The migration applied to production, and this is observed rather than
+inferred.** The build log for the deployment carries drizzle-kit's own
+`[✓] migrations applied successfully!` followed by `Migrations applied.`, which
+is `migrate-on-deploy.ts`'s line at the end of its success path. **Both together
+are what make it conclusive**: the second cannot be reached unless drizzle-kit
+exited 0, and neither can be reached at all on the skip path, which returns
+before either — so this also rules out the failure the `&&` chain cannot,
+`VERCEL_ENV` not being `production` and the whole step being skipped. A skipped
+migrate step produces a green build exactly like a successful one, and would have
+left the schema behind the code with nothing on screen saying so.
+
+**This is the first release here where the migrate step is known to have done
+something**, rather than being a no-op nobody had to look at. Every previous
+record could say "the deploy is green" and mean only that the step did not fail.
+Worth the habit: on a release carrying a migration, read the two lines.
+
+**What is still not shown is the columns existing**, which needs a signed-in
+session or the database and neither is reachable from here. The gap is now small
+— drizzle-kit reports what it applied, and it applied this file — but it is a
+gap, and the same one that would hide a migration that succeeded against the
+wrong database. `drizzle.config.ts` refuses that case up front by comparing the
+pooled and direct hosts, which is why it is not on the list below.
+
+**That log is also where the pre-count belongs**, which is the follow-up below.
+The evidence that a migration ran already lives there; the number it destroys
+should live beside it, in the same place, written before the `DELETE` rather than
+asked for in a PR body.
+
+**The deletes removed nothing from production: there was no shared-space income
+there.** Confirmed by the repo owner after the merge. So the destructive half of
+this migration was a no-op in practice, and the same is now true of it for ever —
+`DELETE`s that match no rows cannot be run again to any effect.
+
+**Reported rather than measured here, and the distinction is the whole point.**
+`scripts/count-shared-income.ts` was written to produce that number *before* the
+merge, and the release PR asked for it in as many words; this machine has no
+production connection string, so nothing in this record could check it either
+way. It happened to be zero. Had it not been, the number would have been gone
+before anyone thought to look for it — which is why the follow-up below stands
+even though this release cost nothing. **A control that only works when the
+answer is already safe is not a control.**
+
+**The backfill script has not been run against production either.**
+`scripts/backfill-personal-amounts.ts` is a no-op unless some shared space and
+one of its members' personal spaces report in different currencies; whether that
+is true of production is unknown from here. Until it runs, any such rows read as
+their shared-space amount — which is what they read before this release, so
+nothing is worse than it was.
 
 **This is the first release here that holds a real migration, and it is
 destructive.** Every release since the deploy-time migrate step was added has
@@ -29,38 +176,17 @@ the cascade to budgets comes last.
 **There are no dependency changes.** `git diff main dev -- package.json
 pnpm-lock.yaml` is empty, so the install is the tree that was tested.
 
-**The one thing that must happen before the merge, and it has not happened
-yet.** Those `DELETE`s are irreversible and nobody has priced them against
-production. `scripts/count-shared-income.ts` prints, per shared space, how many
-income entries, categories and templates would go — it was written for exactly
-this moment and has only been run against development, where the answer was **0
-entries, 5 categories, 0 templates**. Production is a separate database with
-separate history, and this machine has no connection string for it. **Run it, or
-the equivalent SQL, against production first.** If the answer is zero, the
-migration is as safe as it looked; if it is not, that is a number somebody should
-see before it stops existing rather than after.
+**Priced against development and never against production.** The `DELETE`s are
+irreversible, and `scripts/count-shared-income.ts` exists to print, per shared
+space, what they would remove. Against development the answer was **0 entries, 5
+categories, 0 templates**. Production is a separate database with separate
+history and this machine has no connection string for it; the owner confirmed
+afterwards that it held no shared-space income either — see above.
 
-**The deployment id before the merge is `dpl_P7w6r3vGgbz1ohsqFUoWecoVfN5d`**,
-recorded in advance so a slow deploy cannot fool the comparison afterwards.
-**Note that this is not the id the 2026-08-24 record reported** — that was
-`dpl_FRou8LjTJadQ5khi6siidmzSSkCt`, so production moved at some point between the
-two releases without a record being written. The "did it change?" check after
-this merge has to be made against the id in this paragraph, not against the one
-in the record above.
-
-**`public/sw.js` is untouched, and the live worker is provably the repo's** — the
-deployed file still carries `SHELL_SCHEMA = "2"`, the same value the repo holds.
-So this is another clean Feature 13 trial: nothing in this release can install a
-new worker except the `?v=<deployment id>` query changing the registration URL.
-Six records have now been waiting on a device that already had the previous build
-to answer that, and `curl` still cannot.
-
-Verified against the live site **before** the merge, so the after-state has
-something to be compared with: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
-`/manifest.webmanifest` and `/sw.js` all answer 200; and a signed-out
-`GET /api/export` answers **307 to `/sign-in`** — still guarded, which stays the
-check worth making from outside, because every other endpoint leaks one page at a
-time and that one would hand over the entire ledger.
+**The deployment id before the merge was `dpl_P7w6r3vGgbz1ohsqFUoWecoVfN5d`**,
+recorded in advance so a slow deploy could not fool the comparison afterwards.
+**Recording it in advance is the habit worth keeping** — it is what made the
+unexplained `fc0dccf` deploy visible at all.
 
 **Verified on `dev` at `b25ecf0`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
 (358), `pnpm build` and `pnpm test:e2e` (30). The e2e run was against the tree at
@@ -887,8 +1013,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
-| `dev`  | Integration branch. Ahead of `main` by #62 and its records; the release PR is open. |
+| `main` | Production, at `fe730aa` (PR #63, 2026-08-28). Deployed and green.             |
+| `dev`  | Integration branch. Ahead of `main` by the pre-count control and its records; the release PR is open. |
 
 ---
 
@@ -2588,6 +2714,33 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **A disabled control still shows its old value, so assert it is enabled before
+  reading it.** `SpaceSwitcher` disables its trigger for the duration of the
+  server action and the `router.refresh()` after it, and goes on displaying the
+  space being switched *away from*. A Playwright assertion on the label alone
+  therefore polls a stale string and fails on a switch that is merely slow —
+  reported as "expected /E2E Shared/, received Personal", which reads exactly
+  like a switch that went to the wrong place. `toBeEnabled()` then `toHaveText()`
+  distinguishes the two, and it is the general shape for any control that
+  disables itself while working.
+- **A per-test timeout is a budget for the work, not a constant.** Fixing the
+  above pushed a test past the 30s default, which had always been too small for
+  one that switches spaces several times; the failure then moved to a `page.goto`
+  and read as a navigation bug. Where a project's tests are all slow for the same
+  reason, the timeout belongs on the project in `playwright.config.ts`, where
+  there is room to say why.
+
+- **Top-level `await` in a `scripts/` file passes `pnpm typecheck` and fails at
+  runtime.** tsx compiles these to CJS, and esbuild rejects it outright:
+  `Top-level await is currently not supported with the "cjs" output format`.
+  `tsc --noEmit` is configured for a different module target and says nothing.
+  This was written into `migrate-on-deploy.ts` and would have taken a production
+  deploy down at the migrate step — caught only by running the script, which is
+  the same lesson as the splash: **a script is not verified by the checks, it is
+  verified by running it.** These files are sequences of top-level statements, so
+  anything async is either a spawned child process or a `main()` with `.then()`,
+  which is what every other script here already does.
+
 - **`redirect()` in a streaming route is not a 307.** Next's own docs say it:
   used in a streaming context it emits a meta tag for the *client* to act on.
   Every page under `(dashboard)` streams, because the layout flushes its shell
@@ -3010,6 +3163,56 @@ Things already hit, so they are not hit twice.
 ## Known follow-ups
 
 Not blocking, but worth doing.
+
+- [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
+      Done: `scripts/pre-count-destructive.ts`, spawned by
+      `migrate-on-deploy.ts` immediately before `drizzle-kit migrate`, so the
+      numbers land in the Vercel build log directly above the evidence that a
+      migration ran.
+
+      **It works out for itself what is at risk**, which is the whole point — a
+      per-migration hand-written count would need somebody to remember, and
+      forgetting is the failure being fixed. It diffs the migration folder
+      against `drizzle.__drizzle_migrations.name` to find what is pending, scans
+      those files for `DELETE FROM`, `TRUNCATE`, `DROP TABLE` and `DROP COLUMN`,
+      and prints `count(*)` for every table they name.
+
+      **It counts the table, not the statement's `WHERE` clause**, and says so in
+      its own output. An upper bound recorded before the fact beats an exact
+      figure nobody can ever obtain.
+
+      **It cannot fail a deploy.** Its exit status is ignored and it exits 0
+      regardless: a diagnostic taking a release down would be a worse bug than
+      the one it prevents. Comments are stripped before scanning, so a table
+      named in prose is not counted — verified, along with unquoted identifiers,
+      against a trial migration.
+
+      The stricter option — refusing to apply a `DELETE` without an explicit
+      environment variable — is deliberately not taken. It would have stopped a
+      release that turned out to cost nothing, and a gate people learn to set
+      reflexively is a gate that stops being read.
+- [ ] **Run `scripts/backfill-personal-amounts.ts` against production**, or
+      confirm it has nothing to do. It is a no-op unless some shared space and
+      one of its members' personal spaces report in different base currencies.
+      Until then those rows read as their shared-space amount, which is what they
+      read before Feature 22 — so this is a correctness improvement, not a repair.
+- [x] ~~**`fc0dccf` put a demo URL and credentials in a public README**, and the
+      account is in the production database.~~ **Wrong on the part that
+      mattered.** The URL is
+      `…-uicg-git-dev-hasun-nilupuls-projects.vercel.app` — the **`dev` branch
+      preview** deployment, which takes the preview environment and therefore the
+      *development* database. `demo@financeflow.com` is a row in that database,
+      not in production, so a reader of the repo signing in reaches sample data
+      and nothing else. Corrected by the repo owner on 2026-08-28.
+
+      **The lesson is about reading a URL before reasoning from it.** A
+      `*.vercel.app` host was treated as "the production site" when the
+      `-git-<branch>-` segment in the middle is exactly what says it is not. The
+      one real consequence left is worth knowing rather than acting on: that
+      preview shares its database with local development and the browser suite,
+      so a demo visitor and `pnpm test:e2e` write to the same rows — which is why
+      a stray `E2E Shared` space or a half-written test entry can show up in a
+      demo.
 
 - [x] ~~`pnpm-lock.yaml` is git-ignored.~~ Committed, so every build resolves the
       same tree. `drizzle-orm` and `drizzle-kit` are pinned at `1.0.0-rc.4`
