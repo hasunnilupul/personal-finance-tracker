@@ -205,12 +205,12 @@ before anyone thought to look for it — which is why the follow-up below stands
 even though this release cost nothing. **A control that only works when the
 answer is already safe is not a control.**
 
-**The backfill script has not been run against production either.**
-`scripts/backfill-personal-amounts.ts` is a no-op unless some shared space and
-one of its members' personal spaces report in different currencies; whether that
-is true of production is unknown from here. Until it runs, any such rows read as
-their shared-space amount — which is what they read before this release, so
-nothing is worse than it was.
+**The backfill has nothing to do on production**, confirmed by the repo owner.
+`scripts/backfill-personal-amounts.ts` only has work where a shared space and one
+of its members' personal spaces report in different base currencies, and no such
+pair exists there. Reported rather than measured here — this machine has no
+production connection string — but the script is idempotent and reads before it
+writes, so running it to confirm costs one query and cannot do harm.
 
 **This is the first release here that holds a real migration, and it is
 destructive.** Every release since the deploy-time migrate step was added has
@@ -257,10 +257,8 @@ another clean trial, not yet the answer), whether push delivers, whether
 invitation notice reaches the other account, whether the budget warning arrives
 in the bell, and whether the CSV opens in a spreadsheet. **New to the list:**
 whether the personal ledger's cross-space total is right on production data
-rather than on the handful of rows in development, and whether
-`scripts/backfill-personal-amounts.ts` has anything to do there — it is a no-op
-unless a shared space and one of its members' personal spaces report in different
-currencies.
+rather than on the handful of rows in development. The backfill question that sat
+here has been answered — there is nothing for it to do on production.
 
 **Last completed: Feature 22 — one pocket, one ledger**, merged as **PR #62**
 (`93395bf`, squash-merged into `dev`). Reported by the
@@ -3255,11 +3253,12 @@ Not blocking, but worth doing.
       environment variable — is deliberately not taken. It would have stopped a
       release that turned out to cost nothing, and a gate people learn to set
       reflexively is a gate that stops being read.
-- [ ] **Run `scripts/backfill-personal-amounts.ts` against production**, or
-      confirm it has nothing to do. It is a no-op unless some shared space and
-      one of its members' personal spaces report in different base currencies.
-      Until then those rows read as their shared-space amount, which is what they
-      read before Feature 22 — so this is a correctness improvement, not a repair.
+- [x] ~~**Run `scripts/backfill-personal-amounts.ts` against production**, or
+      confirm it has nothing to do.~~ Nothing to do: no shared space and member's
+      personal space report in different base currencies there. Confirmed by the
+      repo owner on 2026-08-29. The script stays for the day one of them changes
+      currency — that is the case it exists for, and it is idempotent, so it can
+      be run then without checking first whether it is needed.
 - [x] ~~**`fc0dccf` put a demo URL and credentials in a public README**, and the
       account is in the production database.~~ **Wrong on the part that
       mattered.** The URL is
