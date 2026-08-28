@@ -39,7 +39,9 @@ const BudgetsPage = async ({ searchParams }: BudgetsPageProps) => {
         <h1 className="text-foreground text-xl font-semibold tracking-tight">Budgets</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Spending limits per category, in {space.baseCurrency}.
-          {space.isPersonal ? "" : ` Shared with everyone in ${space.name}.`}
+          {space.isPersonal
+            ? " Measured against this space's own entries — a shared space's budgets are set there."
+            : ` Shared with everyone in ${space.name}.`}
         </p>
       </div>
 

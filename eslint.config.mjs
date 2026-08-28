@@ -41,11 +41,16 @@ const eslintConfig = defineConfig([
   },
 
   {
-    // Build-time output, read by a human scrolling a Vercel build log. The app
-    // logger's structured JSON is aimed at a log aggregator and would be worse
-    // there, and this runs before the app is built — it should not import from
-    // it either.
-    files: ["scripts/migrate-on-deploy.ts"],
+    // Output read by a human, in a terminal or a Vercel build log, rather than
+    // by a log aggregator — which is what the app logger's structured JSON is
+    // aimed at and what would make these worse. `migrate-on-deploy` also runs
+    // before the app is built and should not import from it at all; the other
+    // two are operator scripts whose entire purpose is the report they print.
+    files: [
+      "scripts/migrate-on-deploy.ts",
+      "scripts/count-shared-income.ts",
+      "scripts/backfill-personal-amounts.ts",
+    ],
     rules: {
       "no-console": "off",
     },

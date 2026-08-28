@@ -55,6 +55,23 @@ export interface CatchUpResult {
 const EMPTY: CatchUpResult = { created: 0, templates: 0, more: false };
 
 export class RecurringTransactionService {
+  /**
+   * Refuses an income template outside a personal space.
+   *
+   * A template is a promise to write an entry every month, so one that a
+   * shared space may not hold is one that would fail on its first catch-up —
+   * silently, in a sweep nobody is watching. Refused when it is written
+   * instead, where somebody is there to read the message.
+   */
+  private assertTypeAllowed(ctx: SpaceContext, type: TransactionKind): void {
+    if (type === "income" && !ctx.isPersonal) {
+      throw new ServiceError(
+        "FORBIDDEN",
+        "Recurring income belongs in your personal space, not in a shared one.",
+      );
+    }
+  }
+
   async getAll(ctx: SpaceContext): Promise<RecurringWithCategory[]> {
     return recurringTransactionRepository.findAllWithCategory(ctx.organizationId);
   }
@@ -72,6 +89,7 @@ export class RecurringTransactionService {
    * January means it to appear since January.
    */
   async create(ctx: SpaceContext, fields: RecurringFields): Promise<RecurringTransaction> {
+    this.assertTypeAllowed(ctx, fields.type);
     await this.assertUsableCategory(ctx, fields.categoryId, fields.type);
     this.assertUsableSchedule(fields);
 
@@ -115,6 +133,7 @@ export class RecurringTransactionService {
       return undefined;
     }
 
+    this.assertTypeAllowed(ctx, fields.type);
     await this.assertUsableCategory(ctx, fields.categoryId, fields.type);
     this.assertUsableSchedule(fields);
 
@@ -205,6 +224,7 @@ export class RecurringTransactionService {
         // The template's author owns what it generates; see the doc comment.
         userId: templates[0].createdBy ?? "",
         baseCurrency: space.baseCurrency,
+        isPersonal: space.isPersonal,
       };
 
       const result = await this.materialiseAll(ctx, templates, now);

@@ -29,40 +29,60 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
   const currency = space.baseCurrency;
   const isNegative = Number(summary.net) < 0;
 
+  // See the dashboard: a shared space records no income, so net and savings
+  // rate would be arithmetic over a zero that means "not applicable" rather
+  // than "nothing came in".
+  const showEarnings = space.isPersonal;
+
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Income"
-          value={formatMoney(summary.income, currency)}
-          accent="var(--viz-income)"
-          hint={range.label}
-        />
+      <div
+        className={
+          showEarnings
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-2"
+        }
+      >
+        {showEarnings && (
+          <StatTile
+            label="Income"
+            value={formatMoney(summary.income, currency)}
+            accent="var(--viz-income)"
+            hint={range.label}
+          />
+        )}
+
         <StatTile
           label="Expenses"
           value={formatMoney(summary.expense, currency)}
           accent="var(--viz-expense)"
-          hint={range.label}
+          hint={showEarnings ? `${range.label} · every space` : range.label}
         />
-        <StatTile
-          label="Net"
-          value={formatMoney(summary.net, currency)}
-          tone={isNegative ? "negative" : "positive"}
-          hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
-        />
-        <StatTile
-          label="Savings rate"
-          value={summary.savingsRate === null ? "—" : `${Math.round(summary.savingsRate * 100)}%`}
-          hint={
-            summary.savingsRate === null ? "No income in this period" : "Net as a share of income"
-          }
-        />
+
+        {showEarnings && (
+          <StatTile
+            label="Net"
+            value={formatMoney(summary.net, currency)}
+            tone={isNegative ? "negative" : "positive"}
+            hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
+          />
+        )}
+
+        {showEarnings && (
+          <StatTile
+            label="Savings rate"
+            value={summary.savingsRate === null ? "—" : `${Math.round(summary.savingsRate * 100)}%`}
+            hint={
+              summary.savingsRate === null ? "No income in this period" : "Net as a share of income"
+            }
+          />
+        )}
       </div>
 
       <Card className="p-4 sm:p-6">
         <div>
           <h2 className="text-foreground text-lg font-semibold tracking-tight">
-            Income and expenses
+            {showEarnings ? "Income and expenses" : "Expenses"}
           </h2>
           <p className="text-muted-foreground mt-0.5 text-xs">By month, {range.label}</p>
         </div>

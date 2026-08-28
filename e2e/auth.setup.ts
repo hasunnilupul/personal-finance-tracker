@@ -1,6 +1,6 @@
 import { test as setup, expect } from "@playwright/test";
 
-import { E2E_EMAIL, E2E_NAME, E2E_PASSWORD, STORAGE_STATE } from "./support";
+import { E2E_EMAIL, E2E_NAME, E2E_PASSWORD, restorePersonalSpace, STORAGE_STATE } from "./support";
 
 /**
  * Gets the suite a signed-in session, and leaves the cookies where the other
@@ -62,6 +62,13 @@ setup("sign in as the suite's own account", async ({ page }) => {
   // failure that landed somewhere else entirely.
   await page.goto("/");
   await expect(page).toHaveURL(/localhost:\d+\/$/);
+
+  // Start every run in the personal space. The active space is server-side
+  // account state that survives between runs, so a run interrupted while the
+  // space-switching spec had the account in a shared space would otherwise
+  // leave the next one asserting against the wrong ledger — and failing
+  // somewhere far from the cause. See `restorePersonalSpace`.
+  await restorePersonalSpace(page);
 
   await page.context().storageState({ path: STORAGE_STATE });
 });

@@ -53,11 +53,37 @@ export default defineConfig({
     {
       name: "chromium",
       dependencies: ["setup"],
+      // The space-switching spec is deliberately not here — see below.
+      testIgnore: /shared-space\.spec\.ts/,
       use: {
         // Playwright's bundled Chromium is a large download, there is no CI
         // here that would need a pinned one, and the app is a PWA worth
         // exercising in the browser people actually install it in. The channel
         // itself is set above, for every project.
+        ...devices["Desktop Chrome"],
+        channel: "chrome",
+      },
+    },
+
+    // Anything that switches the active space runs on its own, after everything
+    // else has finished.
+    //
+    // **This is isolation, not tidiness.** The active space is not in the cookie
+    // jar — it is `activeOrganizationId` on the session row, so it is one piece
+    // of state shared by every spec using this account. Playwright runs *files*
+    // across workers in parallel by default, and it did: the iOS bar spec
+    // measured the pill under "Budgets" while the shared-space spec had the
+    // account in a space with no Income tab, so Budgets was the third column
+    // rather than the fourth. The assertion was right and the state underneath
+    // it had moved.
+    //
+    // A project with a dependency is the mechanism because the constraint is
+    // between *files*, and `describe.serial` only orders tests within one.
+    {
+      name: "space-switching",
+      dependencies: ["chromium"],
+      testMatch: /shared-space\.spec\.ts/,
+      use: {
         ...devices["Desktop Chrome"],
         channel: "chrome",
       },

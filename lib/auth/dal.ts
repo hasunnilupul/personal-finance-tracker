@@ -108,6 +108,7 @@ export const requireActiveSpace = cache(async (): Promise<ActiveSpace> => {
       organizationId: space.id,
       userId: session.user.id,
       baseCurrency: space.baseCurrency,
+      isPersonal: space.isPersonal,
     },
   };
 });

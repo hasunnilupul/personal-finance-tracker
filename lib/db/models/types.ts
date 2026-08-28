@@ -16,6 +16,12 @@ export type ManagedFields =
   // Accepting these from a caller would let a client claim any conversion.
   | "baseAmount"
   | "exchangeRate"
+  // The same figure again, in the creator's own base currency, for an expense
+  // filed in a shared space. Derived exactly like the pair above and for the
+  // same reason kept out of a caller's reach — a client that could set it
+  // could decide what its own spending was worth.
+  | "personalBaseAmount"
+  | "personalExchangeRate"
   // Set only when a recurring template materialises an entry. A caller that
   // could supply it could claim an entry was generated, and — because it is
   // half of the occurrence key — block a real occurrence from ever being

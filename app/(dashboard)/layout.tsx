@@ -25,7 +25,7 @@ const DashboardLayout = async ({
 
   return (
     <div className="bg-background flex h-screen w-screen overflow-hidden">
-      <AppSidebar />
+      <AppSidebar isPersonal={space.isPersonal} />
 
       {/*
         `pb-28` clears the mobile bar, which is fixed and therefore out of the

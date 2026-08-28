@@ -44,6 +44,9 @@ const ctx: SpaceContext = {
   organizationId: "org-mine",
   userId: "user-me",
   baseCurrency: "LKR",
+  // A personal space, so an expense needs no second conversion and these
+  // fixtures stay about the thing each file is testing.
+  isPersonal: true,
 };
 
 const input = {

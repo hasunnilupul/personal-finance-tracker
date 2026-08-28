@@ -11,6 +11,23 @@ import {
 } from "@/constants/default-categories";
 
 export class CategoryService {
+  /**
+   * Refuses an income category in a shared space.
+   *
+   * Income is recorded in a personal space and nowhere else, so an income
+   * category in a shared one is a picker with nothing that can ever be filed
+   * under it. Refusing here rather than only hiding the section means a space
+   * cannot collect them through the API either.
+   */
+  private assertTypeAllowed(ctx: SpaceContext, type: string): void {
+    if (type === "income" && !ctx.isPersonal) {
+      throw new ServiceError(
+        "FORBIDDEN",
+        "A shared space has expense categories only — income is recorded in your personal space.",
+      );
+    }
+  }
+
   async getAllCategories(ctx: SpaceContext): Promise<Category[]> {
     return categoryRepository.findAll(ctx.organizationId);
   }
@@ -65,6 +82,8 @@ export class CategoryService {
   }
 
   async createCategory(ctx: SpaceContext, data: CategoryInput): Promise<Category> {
+    this.assertTypeAllowed(ctx, data.type);
+
     return categoryRepository.create({
       ...data,
       organizationId: ctx.organizationId,
@@ -199,6 +218,8 @@ export class CategoryService {
    * @returns The categories actually created.
    */
   async addMissingDefaults(ctx: SpaceContext, type: "income" | "expense"): Promise<Category[]> {
+    this.assertTypeAllowed(ctx, type);
+
     const existing = await categoryRepository.findByType(ctx.organizationId, type);
     const taken = new Set(existing.map((category) => category.name.toLowerCase()));
 
@@ -218,10 +239,14 @@ export class CategoryService {
   }
 
   /**
-   * Seeds a brand-new space with the default expense categories.
+   * Seeds a brand-new space with its default categories.
    *
    * Called when a space is created — both the personal space made at sign-up
    * and any shared space — so a member never starts with an empty picker.
+   *
+   * **A shared space gets the expense set only.** Income belongs to a personal
+   * space, so income categories in a shared one would be a picker offering
+   * choices for a page that space does not have.
    */
   async seedDefaultCategories(ctx: SpaceContext): Promise<Category[]> {
     const withOwnership = (
@@ -237,7 +262,9 @@ export class CategoryService {
 
     return categoryRepository.createMany([
       ...APP_DEFAULT_CATEGORIES.map((category) => withOwnership(category, "expense")),
-      ...APP_DEFAULT_INCOME_CATEGORIES.map((category) => withOwnership(category, "income")),
+      ...(ctx.isPersonal
+        ? APP_DEFAULT_INCOME_CATEGORIES.map((category) => withOwnership(category, "income"))
+        : []),
     ]);
   }
 }

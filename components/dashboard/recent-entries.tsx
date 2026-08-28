@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import SpaceBadge from "@/components/transactions/space-badge";
 import { RecentEntry } from "@/lib/services/dashboard.service";
 import { formatMoney } from "@/lib/currency/format";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,10 @@ interface RecentEntriesProps {
   baseCurrency: string;
   /** Shared spaces show who added each entry; a personal one has one author. */
   showAuthor: boolean;
+  /** See {@link TransactionList} — badges the rows that live somewhere else. */
+  activeSpaceId: string;
+  /** Only a personal space has an income page to send someone to. */
+  isPersonal: boolean;
 }
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -25,7 +30,13 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
  * rather than that component, which is a client component carrying edit and
  * delete handlers this has no use for.
  */
-const RecentEntries = ({ entries, baseCurrency, showAuthor }: RecentEntriesProps) => {
+const RecentEntries = ({
+  entries,
+  baseCurrency,
+  showAuthor,
+  activeSpaceId,
+  isPersonal,
+}: RecentEntriesProps) => {
   if (entries.length === 0) {
     return (
       <div className="py-8 text-center">
@@ -35,10 +46,14 @@ const RecentEntries = ({ entries, baseCurrency, showAuthor }: RecentEntriesProps
           <Link href="/expenses" className="underline underline-offset-2">
             expense
           </Link>{" "}
-          or some{" "}
-          <Link href="/income" className="underline underline-offset-2">
-            income
-          </Link>{" "}
+          {isPersonal && (
+            <>
+              or some{" "}
+              <Link href="/income" className="underline underline-offset-2">
+                income
+              </Link>{" "}
+            </>
+          )}
           and it will appear here.
         </p>
       </div>
@@ -65,8 +80,11 @@ const RecentEntries = ({ entries, baseCurrency, showAuthor }: RecentEntriesProps
               </span>
 
               <div className="min-w-0">
-                <p className="text-foreground truncate text-sm font-medium">
-                  {entry.description || entry.categoryName || "Untitled"}
+                <p className="text-foreground text-sm font-medium">
+                  <span className="truncate align-middle">
+                    {entry.description || entry.categoryName || "Untitled"}
+                  </span>
+                  {entry.organizationId !== activeSpaceId && <SpaceBadge name={entry.spaceName} />}
                 </p>
                 <p className="text-muted-foreground mt-0.5 truncate text-xs">
                   {dateFormatter.format(entry.date)}

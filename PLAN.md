@@ -10,6 +10,82 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Last completed: Feature 22 — one pocket, one ledger**, on
+`feat/shared-expenses-hit-personal-income` and not yet merged. Reported by the
+repo owner as a bug rather than a feature request, and it was both: *"when I add
+an expense to a shared space, it doesn't deduct from my personal income, and each
+shared space has separate income records but it shouldn't be like that."*
+
+**Two rules, and they are one decision seen from both ends.** Money spent from a
+shared space still leaves the pocket of whoever spent it, so a personal ledger
+now reads its owner's expenses across every space they belong to. Income is not
+joint in the first place, so it is recorded once — in the personal space — and a
+shared space no longer has an income page, income categories, recurring income,
+or income in its reports and export.
+
+**The widening is one type, not a flag threaded through every query.**
+`TransactionScope` is either `{ within: "space" }` or
+`{ within: "personal-ledger" }`, and the second is keyed on `createdBy` and
+bounded by a subquery against current membership — so it can only ever return the
+caller's own rows, and leaving a shared space takes its entries out of the ledger
+with it. Neither half comes from a caller; both come from `SpaceContext`, which
+gained `isPersonal` for exactly this.
+
+**The hard part was currency, and the answer was the one already in the file.**
+A shared expense's `baseAmount` is denominated in the *shared* space's base
+currency, so a personal total that summed it would be adding up figures in
+whatever currencies the household's spaces happen to report in.
+`personalBaseAmount` is the same money in the creator's own base currency,
+computed at the write against the entry's own date, exactly as `baseAmount`
+already was and for exactly the same reason: a total stays one `sum()`, where
+converting on read would be a rate lookup per row of every list, month and
+report. Both columns are null in a personal space, where `baseAmount` is already
+the figure, and readers coalesce.
+
+**Proved against the real database, not only in tests.** A 4,321 expense recorded
+in the shared space raised the personal August total from 28,250.00 to 32,571.00
+— exactly 4,321 — appeared in the personal list badged `Household`, left the
+shared space's own total at 4,321, and income in a shared space was refused. A
+second run with the shared space reporting in USD and the personal one in LKR
+stored `baseAmount` 100.00 and `personalBaseAmount` 32,860.95 at rate 328.61,
+which is the path the SQL backfill deliberately cannot take.
+
+**And in a browser, which is what the smoke suite is for.** Six new assertions,
+30 green in total: a shared space has no Income tab, no income section on the
+categories page, no income or net tile, and says where income went instead of
+listing none — and an expense added to the shared space turns up in the personal
+ledger badged with the space, without edit or delete controls, raising the
+personal total by exactly its own amount.
+
+**The migration deletes shared-space income and there is no way back.** That was
+the repo owner's choice over migrating those rows into their creators'
+personal ledgers. `scripts/count-shared-income.ts` is what makes it a decision
+rather than a surprise: run it first and it prints, per space, what would go.
+Against the development database it printed **0 income entries, 5 income
+categories, 0 templates** — nothing anybody would miss. **It has not been run
+against production, and it must be before that release.**
+
+**One thing to know about budgets, and it is the one part of "everywhere" that
+does not hold.** A personal budget still measures only its own space's entries.
+Budgets are set on categories, categories belong to a space, and a shared
+space's "Groceries" is a different row with a different id — there is no honest
+way to count spending filed under one against a limit set on the other without
+deciding that two categories with matching names are the same thing. So the
+personal dashboard's "spent this month" is deliberately wider than the budget
+bars beside it, and both the page and the service say so. Making them agree
+needs a deliberate link between categories in different spaces, which is a
+feature, not a wider `WHERE`.
+
+**Two stray rows were left in the development database and are the repo owner's
+to clear.** An early version of the browser test fell back to *creating* a space
+when it could not find one in the switcher — and `locator.count()` does not wait,
+so it read zero while the dropdown was still opening and created a **shared**
+space called "Personal", twice: `0ul7Ju9qejnEJz7iEUmxaFVspKCBkGUy` and
+`3TDv7L5gt8zwkU0CxK8Q8qIK395V1SOw`, both empty, both owned by the e2e account.
+The cleanup was refused by the sandbox and is not in this branch. The helper now
+fails instead of creating, and creating is confined to one function — see the
+gotcha.
+
 **Released 2026-08-24** — `58b1865` (PR #61), the iOS glass release. It
 carries **#59** (the capsule got the strip it floats in, and the scrim/bar tints
 were found to multiply) and **#60** (the blur was the curtain, not the tint),
@@ -732,7 +808,7 @@ databases are separate.
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
 | `main` | Production, at `564227f` (PR #58, 2026-08-21). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `fix/ios-bar-scrim` open against it. |
+| `dev`  | Integration branch. Level with `main` in code; ahead by this release record. `feat/shared-expenses-hit-personal-income` open against it. |
 
 ---
 
@@ -858,6 +934,12 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Notification triggers    | At the write that causes them, not swept   | Crossing a budget is caused by an expense; there is nothing to poll for                  |
 | Notification idempotency | Unique `(org, user, dedupeKey)`            | Every later expense re-crosses the same limit; a sweep races page loads                  |
 | Category scoping         | Services assert; the FK is a backstop     | A foreign key enforces existence in _any_ space, so ownership has to be asked separately |
+| Where income is recorded | Personal space only                       | A shared space is a joint record of spending; what each person earns is not joint        |
+| Shared expense ownership | Charged in full to `createdBy`            | Splitting by membership would silently rewrite past months when somebody joins or leaves |
+| Personal ledger reads    | Widen expenses across the owner's spaces  | Money spent from a shared space left one person's pocket; their ledger has to see it     |
+| Second converted amount  | `personalBaseAmount`, written not derived | Same reason as `baseAmount`: a total stays one `sum()` instead of a rate lookup per row   |
+| Budgets vs. shared spend | Budgets stay inside their own space       | A limit is on a category, and categories are space-scoped — matching by name is a trap    |
+| Existing shared income   | Deleted by migration, counted first       | The repo owner's call; `scripts/count-shared-income.ts` prices it before it is paid       |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -951,6 +1033,21 @@ is the exception, because `error.tsx` never wraps the layout in its own segment;
 Every boundary renders `components/error-state.tsx` and takes **`unstable_retry`,
 never `reset`** — see Gotchas. No boundary formats the error itself: what may be
 shown is decided once, in `lib/errors/error-presentation.ts`.
+
+**Space scoping has two shapes now, and the wider one is still narrow.**
+Reads go through a `TransactionScope`: `inSpace(organizationId)` is everything a
+space holds, and `inPersonalLedger(userId)` is one person's own entries wherever
+they filed them. The second is only ever used for **expenses in a personal
+space** — it is keyed on `createdBy` and bounded by a membership subquery, so it
+cannot return somebody else's row and cannot reach a space its owner has left.
+Income never widens: it exists only in a personal space, so asking for the space
+scope says what is expected rather than relying on the wider one being empty.
+
+**Income is personal-space-only, and the services are what enforce it.**
+`TransactionService.assertKindAllowed`, `CategoryService.assertTypeAllowed` and
+`RecurringTransactionService.assertTypeAllowed` each refuse with `FORBIDDEN`. The
+UI hides the tab, the section and the kind picker, but hiding a control is
+presentation — the same rule as `proxy.ts`.
 
 **Testing.** `pnpm test` (Vitest). Unit tests live beside the code they cover as
 `*.test.ts`.
@@ -1529,6 +1626,46 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 22 — One pocket, one ledger ✅ done, PR open
+
+- [x] `TransactionScope`: a personal ledger reads its owner's expenses across
+      every space they belong to, keyed on `createdBy` and bounded by membership
+- [x] `personalBaseAmount` / `personalExchangeRate` on `expenses`, written at the
+      same moment and against the same rate date as `baseAmount`
+- [x] Income refused outside a personal space — entries, categories and recurring
+      templates, in the services rather than only in the UI
+- [x] Income gone from a shared space's tab bar, categories page, recurring form,
+      dashboard tiles, reports and export
+- [x] Shared rows badged with their space in the personal list, and read-only
+      there
+- [x] `changeBaseCurrency` re-converts the owner's shared-space figures too
+- [x] Migration deletes shared-space income, categories and templates, after
+      `scripts/count-shared-income.ts` prices it
+- [x] 16 unit tests, 6 browser assertions, and the behaviour proved against the
+      real database in both the same-currency and cross-currency cases
+
+**Reported as a bug and it was one**, though the fix is a model change rather
+than a patch. Each shared space kept its own income, so a household of three
+spaces had three places to record a salary and no place that added up what one
+person actually had; and spending from a shared space touched nothing personal at
+all, so the personal "net" answered a question nobody had asked.
+
+**The scope type is the whole design.** Everything else follows from
+`inPersonalLedger(userId)` being available to the same query functions the space
+scope uses — the list, the totals, the reports, the monthly trend and the export
+all widen together, because they all take a scope. A boolean threaded through
+each of them would have been five chances to widen four.
+
+**What it deliberately does not do.** Budgets stay inside their own space — see
+the current position for why, and it is the one place a figure on the personal
+dashboard is wider than the one beside it. The category filter on the personal
+expenses page still offers only personal categories, so a shared row cannot be
+filtered to; it can be found by its badge and edited where it lives.
+
+**The migration is destructive and the counting script is the mitigation.** It
+has been run against development (nothing to lose) and **not** against
+production.
 
 ### Feature 21 — The iOS bar gets its own design ✅ merged (PR #57)
 
@@ -2370,6 +2507,48 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **`redirect()` in a streaming route is not a 307.** Next's own docs say it:
+  used in a streaming context it emits a meta tag for the *client* to act on.
+  Every page under `(dashboard)` streams, because the layout flushes its shell
+  before the page resolves — so `redirect()` from one of them is a client-side
+  bounce that can arrive late enough to be seen, and the browser suite caught it
+  as a flake on `/income`. Where a page must not be shown in the current space,
+  render an explanation instead. It is deterministic, and it is the better
+  answer anyway: somebody who followed a bookmark deserves to be told what
+  happened, not moved without a word.
+- **A test helper that repairs what it cannot find turns every timing bug into a
+  write.** `switchTo` fell back to *creating* a space when the switcher had no
+  matching option — and `locator.count()` does not auto-wait, so it read zero
+  while the dropdown was still opening and created a **shared** space called
+  "Personal" in the development database. Twice. Two rules came out of it: wait
+  for the element (`expect(...).toBeVisible()`) before counting anything, and
+  keep creation in one named function that is called deliberately, never on a
+  fallback path.
+- **The active space is account-wide server state, so a spec that switches it
+  cannot run beside one that does not.** `activeOrganizationId` lives on the
+  session row, not in the cookie jar, and Playwright runs *files* across workers
+  in parallel by default. The iOS bar spec measured the pill under "Budgets"
+  while another file had the account in a space with no Income tab, so Budgets
+  was the third column instead of the fourth: the assertion was right and the
+  state underneath it had moved. Fixed with a `space-switching` project that
+  `dependencies: ["chromium"]`, because the constraint is between files and
+  `describe.serial` only orders tests within one. The sign-in fixture also
+  restores the personal space, so an interrupted run cannot poison the next one.
+- **A second converted amount has to be re-converted by whatever changes the
+  currency it is in.** `personalBaseAmount` is denominated in the *personal*
+  space's base currency but lives on rows in *shared* spaces, which
+  `changeBaseCurrency` was not looking at. It re-converts them now, in the same
+  batch — a personal ledger whose space says one currency and whose shared
+  entries are still in another adds up to a number that is not in any currency
+  at all. A shared space switching needs no equivalent: that figure is derived
+  from the entry's own amount, not from the shared base.
+- **A `numeric` column added for one table's sake breaks the union that reads
+  both.** `expenses` and `income` are read through one set of query functions
+  typed as `typeof expenses | typeof income`, so `table.personalBaseAmount` does
+  not compile. `"personalBaseAmount" in table` narrows it, which is a check the
+  compiler can follow — and it documents that income has no such column and
+  needs none, where a cast would just have silenced the question.
 
 - **Blur hides a page far more completely than tint does, and the two are not
   interchangeable.** This bar was reported as "not see-through" twice, and the
