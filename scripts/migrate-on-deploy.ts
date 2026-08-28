@@ -49,6 +49,30 @@ if (!process.env.DATABASE_URL_UNPOOLED) {
   process.exit(1);
 }
 
+/**
+ * Counts what the pending migrations would destroy, before they do.
+ *
+ * **A child process rather than an import, and not for tidiness.** This file is
+ * a sequence of top-level statements, so calling an async function here needs
+ * top-level `await` — which `tsc --noEmit` accepts and tsx rejects at runtime
+ * with "Top-level await is currently not supported with the cjs output format".
+ * The first version of this did exactly that and would have taken the deploy
+ * down. See the gotcha.
+ *
+ * Synchronous, so the numbers land in the log above drizzle-kit's output rather
+ * than interleaved with it. **Its exit status is deliberately ignored**: a
+ * diagnostic must never be the reason a release does not ship, and the script
+ * exits 0 regardless for the same reason.
+ *
+ * It reads the direct connection from the environment itself — the same one
+ * drizzle-kit is about to migrate over, since a count taken against a different
+ * database would be worse than no count at all.
+ */
+spawnSync("tsx", ["./scripts/pre-count-destructive.ts"], {
+  stdio: "inherit",
+  shell: true,
+});
+
 console.log("Applying migrations to the production database...");
 
 /**

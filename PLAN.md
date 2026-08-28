@@ -2665,6 +2665,17 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Top-level `await` in a `scripts/` file passes `pnpm typecheck` and fails at
+  runtime.** tsx compiles these to CJS, and esbuild rejects it outright:
+  `Top-level await is currently not supported with the "cjs" output format`.
+  `tsc --noEmit` is configured for a different module target and says nothing.
+  This was written into `migrate-on-deploy.ts` and would have taken a production
+  deploy down at the migrate step — caught only by running the script, which is
+  the same lesson as the splash: **a script is not verified by the checks, it is
+  verified by running it.** These files are sequences of top-level statements, so
+  anything async is either a spawned child process or a `main()` with `.then()`,
+  which is what every other script here already does.
+
 - **`redirect()` in a streaming route is not a 307.** Next's own docs say it:
   used in a streaming context it emits a meta tag for the *client* to act on.
   Every page under `(dashboard)` streams, because the layout flushes its shell
@@ -3088,18 +3099,33 @@ Things already hit, so they are not hit twice.
 
 Not blocking, but worth doing.
 
-- [ ] **Make a destructive migration's pre-count a blocker, not a request.** The
-      2026-08-28 release asked, in the PR body and in this file, for
-      `scripts/count-shared-income.ts` to be run against production before
-      merging, because the migration deleted rows with no way back. Nothing
-      enforced it. **That release turned out to cost nothing — production held no
-      shared-space income — but it was luck rather than process**, and a number
-      that only exists before the delete is one nobody can go back for. A request
-      in prose is not a control. Options, cheapest first: have the
-      migrate-on-deploy script `SELECT` the counts and print them into the build
-      log *before* applying, so the number survives in Vercel's log whether or not
-      anyone looked; or refuse to apply a migration containing `DELETE` unless an
-      explicit environment variable is set for that deploy.
+- [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
+      Done: `scripts/pre-count-destructive.ts`, spawned by
+      `migrate-on-deploy.ts` immediately before `drizzle-kit migrate`, so the
+      numbers land in the Vercel build log directly above the evidence that a
+      migration ran.
+
+      **It works out for itself what is at risk**, which is the whole point — a
+      per-migration hand-written count would need somebody to remember, and
+      forgetting is the failure being fixed. It diffs the migration folder
+      against `drizzle.__drizzle_migrations.name` to find what is pending, scans
+      those files for `DELETE FROM`, `TRUNCATE`, `DROP TABLE` and `DROP COLUMN`,
+      and prints `count(*)` for every table they name.
+
+      **It counts the table, not the statement's `WHERE` clause**, and says so in
+      its own output. An upper bound recorded before the fact beats an exact
+      figure nobody can ever obtain.
+
+      **It cannot fail a deploy.** Its exit status is ignored and it exits 0
+      regardless: a diagnostic taking a release down would be a worse bug than
+      the one it prevents. Comments are stripped before scanning, so a table
+      named in prose is not counted — verified, along with unquoted identifiers,
+      against a trial migration.
+
+      The stricter option — refusing to apply a `DELETE` without an explicit
+      environment variable — is deliberately not taken. It would have stopped a
+      release that turned out to cost nothing, and a gate people learn to set
+      reflexively is a gate that stops being read.
 - [ ] **Run `scripts/backfill-personal-amounts.ts` against production**, or
       confirm it has nothing to do. It is a no-op unless some shared space and
       one of its members' personal spaces report in different base currencies.
