@@ -10,10 +10,47 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-28 (second)** — `dev` → `main`, carrying the pre-count
-control, the finished record of the release before it, and an e2e fix. **This
-half was written before the merge; the merge SHA and the live-site results are
-added straight to `dev` afterwards.**
+**Released 2026-08-28 (second)** — `ad891c8` (PR #64), carrying the pre-count
+control, the finished record of the release before it, and an e2e fix.
+
+**Merged with a merge commit, and the history is convergent — cleanly, for
+once.** `ad891c8` has two parents (`fe730aa` and `9d3ef3f`), `dev` is an ancestor
+of `main`, and **`git diff main dev` was empty immediately, with nothing to
+repair.** The release before it needed a reconvergence merge because a commit had
+gone straight to `main`; this one did not, which is what the rule looks like when
+it is simply followed.
+
+**The id moved and both sides agree**: `/api/version` and the page's
+`data-dpl-id` both report `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`, which is the
+deployment named in the Vercel status on `ad891c8` itself.
+
+**Checked too early again — and this time the right discriminator was
+obvious.** The first read after the merge returned the old id, exactly as it did
+last release. What settled it in one query was the *commit status*:
+`state: "pending"`, with the deployment already named. So the build was still
+running, and there was nothing to diagnose. **The previous record recommended a
+cache-busting query; that answers "is this response stale?", which is the wrong
+question when the answer is "the build has not finished".** Ask GitHub for the
+commit's status first: `pending` means wait, `success` with an unchanged id means
+suspect the response. It settled fifteen seconds later on the next poll.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and `/offline`
+answer 200 as HTML, `/manifest.webmanifest` as `application/manifest+json`,
+`/sw.js` as `application/javascript`. A signed-out `GET /api/export` answers
+**307 to `/sign-in` with a zero-byte body**. `/sw.js` is byte-identical to the
+repo's, so the worker is untouched and this remains a clean Feature 13 trial —
+still unanswered, and still needing a device that already had the previous build.
+
+**What this release cannot show from outside, and it is the whole of what it
+changed.** The pre-count runs at build time, so the only evidence it worked is a
+`Pre-count:` line in the Vercel build log for
+`dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`, above drizzle-kit's output. With nothing
+pending it should read `no pending migrations`. **Nothing checked from here can
+see it**, and its absence would be silent by design — the exit status is ignored
+so a diagnostic can never take a release down. **Unverified, and it is the one
+line worth a glance**: if it is missing, the control is not armed for the
+migration that needs it, and the next destructive migration would ship with the
+same gap the last one had.
 
 **Nothing in it touches the application.** No `app/`, no `components/`, no `lib/`
 — five files, of which two are `scripts/`, one is `eslint.config.mjs`, one is
@@ -40,14 +77,9 @@ silently** — which is by design, since the pre-count's exit status is ignored 
 diagnostic can never take a release down, but it would mean the control is not
 armed for the migration that needs it.
 
-**The deployment id before the merge is `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**, the
-same one the previous release ended on — so production has not moved in between,
-and this time that is confirmed rather than assumed.
-
-Verified against the live site before the merge: `/` 307s to `/sign-in`;
-`/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js` all answer 200 with
-the right content types; a signed-out `GET /api/export` answers **307 to
-`/sign-in` with a zero-byte body**.
+**The deployment id before the merge was `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**,
+the same one the previous release ended on — so production had not moved in
+between, and that was confirmed rather than assumed.
 
 **Verified on `dev` at `60d2844`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
 (358), `pnpm build`, `pnpm test:e2e` (30) — and the rehearsal above.
@@ -1013,8 +1045,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `fe730aa` (PR #63, 2026-08-28). Deployed and green.             |
-| `dev`  | Integration branch. Ahead of `main` by the pre-count control and its records; the release PR is open. |
+| `main` | Production, at `ad891c8` (PR #64, 2026-08-28). Deployed and green.             |
+| `dev`  | Integration branch. Level with `main` at `ad891c8`; ahead only by this record. |
 
 ---
 
@@ -2714,6 +2746,15 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Before diagnosing an unchanged deployment id, ask whether the build has
+  finished.** Two consecutive releases read the old id straight after the merge.
+  The first was chased with a cache-busting query, which answers "is this
+  response stale?" — the wrong question when the real answer is "the build is
+  still running". The commit status says which:
+  `gh api repos/<owner>/<repo>/commits/<sha>/status` returns `pending` while
+  Vercel is building, and names the deployment it will become, so the expected id
+  is known before it is live. `pending` means wait; `success` with an unchanged
+  id is the case worth suspecting a cached response.
 - **A disabled control still shows its old value, so assert it is enabled before
   reading it.** `SpaceSwitcher` disables its trigger for the duration of the
   server action and the `router.refresh()` after it, and goes on displaying the
