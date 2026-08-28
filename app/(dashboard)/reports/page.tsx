@@ -35,7 +35,9 @@ const ReportsPage = async ({ searchParams }: ReportsPageProps) => {
       <div>
         <h1 className="text-foreground text-xl font-semibold tracking-tight">Reports</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Income and spending over a period, in {space.baseCurrency}.
+          {space.isPersonal
+            ? `Income and spending over a period, in ${space.baseCurrency}, including what you have spent from shared spaces.`
+            : `Spending over a period, in ${space.baseCurrency}.`}
         </p>
       </div>
 

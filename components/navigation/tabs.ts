@@ -8,12 +8,19 @@
  * through "More".
  *
  * A new page is added here and appears in all three.
+ *
+ * **Not every space has every page.** Income is recorded in a personal space
+ * and nowhere else, so its tab is not shown in a shared one — a tab leading to
+ * a page that redirects straight back is worse than no tab. See
+ * {@link tabsFor}.
  */
 export type Tab = {
   href: string;
   label: string;
   icon: string;
   primary?: boolean;
+  /** Hidden in shared spaces, where the page it points at does not exist. */
+  personalOnly?: boolean;
 };
 
 export const tabs: Tab[] = [
@@ -34,6 +41,7 @@ export const tabs: Tab[] = [
     label: "Income",
     icon: "💵",
     primary: true,
+    personalOnly: true,
   },
   {
     href: "/budgets",
@@ -73,5 +81,25 @@ export const tabs: Tab[] = [
   },
 ];
 
-export const primaryTabs = tabs.filter((tab) => tab.primary);
-export const overflowTabs = tabs.filter((tab) => !tab.primary);
+/**
+ * The tabs a space actually has, split the way the bars need them.
+ *
+ * Computed per render rather than exported as three constants, because the
+ * answer now depends on which space is open. The iOS bar sizes its grid and
+ * places its pill from the lengths of these, so a filtered list is all it takes
+ * for the bar to come out one column narrower — nothing about its geometry is
+ * hard-coded to a count.
+ */
+export function tabsFor(isPersonal: boolean): {
+  all: Tab[];
+  primary: Tab[];
+  overflow: Tab[];
+} {
+  const all = isPersonal ? tabs : tabs.filter((tab) => !tab.personalOnly);
+
+  return {
+    all,
+    primary: all.filter((tab) => tab.primary),
+    overflow: all.filter((tab) => !tab.primary),
+  };
+}

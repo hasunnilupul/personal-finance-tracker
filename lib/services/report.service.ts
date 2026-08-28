@@ -1,6 +1,8 @@
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import {
+  inPersonalLedger,
+  inSpace,
   sumByCategoryWithNames,
   sumByMonth,
   sumTransactions,
@@ -63,13 +65,25 @@ export class ReportService {
   async getReport(ctx: SpaceContext, range: DateRange): Promise<ReportData> {
     const filters = { from: range.from, to: range.to };
 
+    // A personal report covers its owner's spending wherever they filed it,
+    // including the shared spaces they spend from — that is the whole point of
+    // a personal ledger, and a report that left it out would disagree with the
+    // dashboard beside it. A shared space's report stays inside the space.
+    //
+    // The category breakdown therefore names categories from more than one
+    // space, and two spaces may each have a "Groceries". They stay separate
+    // rows: they are separate categories, and folding them together on a name
+    // match would be a coupling nobody could see when they renamed one.
+    const spending = ctx.isPersonal ? inPersonalLedger(ctx.userId) : inSpace(ctx.organizationId);
+    const earning = inSpace(ctx.organizationId);
+
     const [incomeTotal, expenseTotal, categoryRows, expenseByMonth, incomeByMonth] =
       await Promise.all([
-        sumTransactions(income, ctx.organizationId, filters),
-        sumTransactions(expenses, ctx.organizationId, filters),
-        sumByCategoryWithNames(expenses, ctx.organizationId, filters),
-        sumByMonth(expenses, ctx.organizationId, filters),
-        sumByMonth(income, ctx.organizationId, filters),
+        sumTransactions(income, earning, filters),
+        sumTransactions(expenses, spending, filters),
+        sumByCategoryWithNames(expenses, spending, filters),
+        sumByMonth(expenses, spending, filters),
+        sumByMonth(income, earning, filters),
       ]);
 
     return {

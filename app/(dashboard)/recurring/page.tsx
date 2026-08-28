@@ -24,7 +24,8 @@ const RecurringPage = async () => {
   const [templates, expenseCategories, incomeCategories] = await Promise.all([
     recurringTransactionService.getAll(ctx),
     categoryService.getCategoriesByType(ctx, "expense"),
-    categoryService.getCategoriesByType(ctx, "income"),
+    // A shared space holds none, and the form does not offer the kind there.
+    space.isPersonal ? categoryService.getCategoriesByType(ctx, "income") : Promise.resolve([]),
   ]);
 
   return (
@@ -41,6 +42,7 @@ const RecurringPage = async () => {
         templates={templates}
         expenseCategories={expenseCategories}
         incomeCategories={incomeCategories}
+        allowIncome={space.isPersonal}
         baseCurrency={space.baseCurrency}
       />
     </div>

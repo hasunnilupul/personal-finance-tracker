@@ -61,8 +61,12 @@ test.describe("signed in", () => {
 
     const header = body.replace("\ufeff", "").split("\r\n")[0];
 
+    // `Space` is here because a personal export is no longer one space's rows:
+    // it carries the owner's shared-space expenses too, since that is money out
+    // of the same pocket. Without the column those rows are indistinguishable
+    // from the personal ones once the file is open.
     expect(header).toBe(
-      "Date,Type,Description,Category,Amount,Currency,Exchange rate,Amount (base),Base currency,Entered by",
+      "Date,Type,Space,Description,Category,Amount,Currency,Exchange rate,Amount (base),Base currency,Entered by",
     );
   });
 

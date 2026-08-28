@@ -2,7 +2,10 @@ import { spaceRepository } from "@/lib/repositories/space.repository";
 import { invitationRepository } from "@/lib/repositories/invitation.repository";
 import { expenseRepository } from "@/lib/repositories/expense.repository";
 import { incomeRepository } from "@/lib/repositories/income.repository";
-import { reconvertEntriesStatement } from "@/lib/repositories/transaction-query";
+import {
+  reconvertEntriesStatement,
+  reconvertPersonalAmountsStatement,
+} from "@/lib/repositories/transaction-query";
 import { runBatch, statements } from "@/lib/db/batch";
 // Aliased because `changeBaseCurrency` binds the fetched rows to `expenses`.
 import { expenses as expenseTable } from "@/lib/db/schema/expenses";
@@ -75,6 +78,7 @@ export class SpaceService {
       organizationId: space.id,
       userId: user.id,
       baseCurrency: space.baseCurrency,
+      isPersonal: true,
     });
 
     logger.info("Personal space created", { userId: user.id, organizationId: space.id });
@@ -98,14 +102,25 @@ export class SpaceService {
    * `ctx.baseCurrency` is the currency being left behind — the budgets are
    * converted out of it — and `ctx.userId` is stamped on the rows it touches.
    *
-   * @returns How many entries and how many budgets were re-converted.
+   * **Switching a personal space reaches outside it**, which is the one thing
+   * here that is not obvious from the name. Its owner's expenses in shared
+   * spaces each hold a second figure denominated in this currency, so those are
+   * re-converted too — in the same transaction, since a personal ledger whose
+   * space says one currency and whose shared entries are still in another adds
+   * up to a number that is not in any currency at all. Switching a *shared*
+   * space needs no equivalent: that second figure is derived from the entry's
+   * own amount, not from the shared space's base.
+   *
+   * @returns How many entries and how many budgets were re-converted. Shared
+   * entries touched on a personal switch are counted among the entries.
    */
   async changeBaseCurrency(ctx: SpaceContext, baseCurrency: string): Promise<ReconversionCount> {
     const organizationId = ctx.organizationId;
 
-    const [expenses, incomeEntries] = await Promise.all([
+    const [expenses, incomeEntries, sharedExpenses] = await Promise.all([
       expenseRepository.findAll(organizationId),
       incomeRepository.findAll(organizationId),
+      ctx.isPersonal ? expenseRepository.findSharedByCreator(ctx.userId) : Promise.resolve([]),
     ]);
 
     // Every conversion is computed before anything is written. A missing rate
@@ -128,19 +143,21 @@ export class SpaceService {
       )),
     });
 
-    const [expenseConversions, incomeConversions, budgetReconversion] = await Promise.all([
-      Promise.all(expenses.map(convert)),
-      Promise.all(incomeEntries.map(convert)),
-      budgetService.reconvertStatement(organizationId, ctx.userId, async (amount) => {
-        const { baseAmount } = await exchangeRateService.convert(
-          amount,
-          ctx.baseCurrency,
-          baseCurrency,
-        );
+    const [expenseConversions, incomeConversions, sharedConversions, budgetReconversion] =
+      await Promise.all([
+        Promise.all(expenses.map(convert)),
+        Promise.all(incomeEntries.map(convert)),
+        Promise.all(sharedExpenses.map(convert)),
+        budgetService.reconvertStatement(organizationId, ctx.userId, async (amount) => {
+          const { baseAmount } = await exchangeRateService.convert(
+            amount,
+            ctx.baseCurrency,
+            baseCurrency,
+          );
 
-        return baseAmount;
-      }),
-    ]);
+          return baseAmount;
+        }),
+      ]);
 
     // One transaction, so the space's `baseCurrency` and every amount held in
     // it move together. Written as separate statements this was the worst of
@@ -153,12 +170,13 @@ export class SpaceService {
         spaceRepository.updateBaseCurrencyStatement(organizationId, baseCurrency),
         reconvertEntriesStatement(expenseTable, organizationId, expenseConversions),
         reconvertEntriesStatement(incomeTable, organizationId, incomeConversions),
+        reconvertPersonalAmountsStatement(ctx.userId, sharedConversions),
         budgetReconversion.statement,
       ),
     );
 
     const budgetsReconverted = budgetReconversion.count;
-    const entries = expenseConversions.length + incomeConversions.length;
+    const entries = expenseConversions.length + incomeConversions.length + sharedConversions.length;
 
     logger.info("Base currency changed", {
       organizationId,

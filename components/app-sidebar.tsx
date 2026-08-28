@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BrandMark from "@/components/brand-mark";
 import MobileNav from "@/components/navigation/mobile-nav";
-import { tabs } from "@/components/navigation/tabs";
+import { tabsFor } from "@/components/navigation/tabs";
 
 /**
  * The desktop sidebar, and the mobile bar that stands in for it.
@@ -16,9 +16,15 @@ import { tabs } from "@/components/navigation/tabs";
  * two bars — one per platform. This file keeps the sidebar and renders whichever
  * bar `MobileNav` chooses; the two never appear together, since one is `md:flex`
  * and the other `md:hidden`.
+ *
+ * `isPersonal` decides which pages exist to link to. It arrives as a prop from
+ * the dashboard layout, which has already resolved the space to authorise the
+ * request — asking again from a client component would be a round trip for
+ * something the server knew before it rendered.
  */
-export default function AppSidebar() {
+export default function AppSidebar({ isPersonal }: { isPersonal: boolean }) {
   const pathname = usePathname();
+  const { all: tabs } = tabsFor(isPersonal);
 
   return (
     <>
@@ -61,7 +67,7 @@ export default function AppSidebar() {
         </div>
       </aside>
 
-      <MobileNav />
+      <MobileNav isPersonal={isPersonal} />
     </>
   );
 }

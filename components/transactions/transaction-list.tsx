@@ -3,6 +3,7 @@
 import { PencilIcon, Trash2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import SpaceBadge from "@/components/transactions/space-badge";
 import { formatMoney } from "@/lib/currency/format";
 import { TransactionKind, TransactionListItem } from "@/lib/db/models/transaction.model";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,16 @@ interface TransactionListProps {
   baseCurrency: string;
   /** Shared spaces show who added each entry; a personal one has one author. */
   showAuthor: boolean;
+  /**
+   * The space the page is scoped to.
+   *
+   * A personal ledger's expense list reaches across into the shared spaces its
+   * owner spends in, so some rows here belong elsewhere. Comparing against this
+   * is what tells those apart — they are badged with the space they came from,
+   * and they carry no edit or delete control, because those act on the active
+   * space and would refuse.
+   */
+  activeSpaceId: string;
   busyId: number | null;
   onEdit: (transaction: TransactionListItem) => void;
   onDelete: (transaction: TransactionListItem) => void;
@@ -35,6 +46,7 @@ const TransactionList = ({
   items,
   baseCurrency,
   showAuthor,
+  activeSpaceId,
   busyId,
   onEdit,
   onDelete,
@@ -43,6 +55,7 @@ const TransactionList = ({
     <ul className="divide-border divide-y">
       {items.map((item) => {
         const isConverted = item.currency !== baseCurrency;
+        const elsewhere = item.organizationId !== activeSpaceId;
         const busy = busyId === item.id;
 
         return (
@@ -63,8 +76,11 @@ const TransactionList = ({
               </span>
 
               <div className="min-w-0">
-                <p className="text-foreground truncate text-sm font-medium">
-                  {item.description || item.categoryName || "Untitled"}
+                <p className="text-foreground text-sm font-medium">
+                  <span className="truncate align-middle">
+                    {item.description || item.categoryName || "Untitled"}
+                  </span>
+                  {elsewhere && <SpaceBadge name={item.spaceName} />}
                 </p>
 
                 <p className="text-muted-foreground mt-0.5 truncate text-xs">
@@ -94,25 +110,36 @@ const TransactionList = ({
                 )}
               </div>
 
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Edit"
-                disabled={busy}
-                onClick={() => onEdit(item)}
-              >
-                <PencilIcon />
-              </Button>
+              {/*
+                An entry filed in another space is read-only here. The action
+                would be refused anyway — every write is scoped to the active
+                space — so the choice is between a button that fails and no
+                button. The badge beside the description says where to go to
+                change it.
+              */}
+              {!elsewhere && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Edit"
+                    disabled={busy}
+                    onClick={() => onEdit(item)}
+                  >
+                    <PencilIcon />
+                  </Button>
 
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete"
-                disabled={busy}
-                onClick={() => onDelete(item)}
-              >
-                <Trash2Icon />
-              </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Delete"
+                    disabled={busy}
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </>
+              )}
             </div>
           </li>
         );

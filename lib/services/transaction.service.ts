@@ -2,8 +2,11 @@ import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import {
   findTransactionPage,
+  inPersonalLedger,
+  inSpace,
   listTransactionAuthors,
   sumTransactions,
+  TransactionScope,
   TransactionTable,
 } from "@/lib/repositories/transaction-query";
 import { budgetService } from "@/lib/services/budget.service";
@@ -19,6 +22,7 @@ import {
   TransactionPage,
 } from "@/lib/db/models/transaction.model";
 import type { NotificationInput } from "@/lib/db/models/notification.model";
+import { ServiceError } from "@/lib/services/errors";
 
 /**
  * What a caller may set on a transaction. Conversion fields are derived.
@@ -44,23 +48,61 @@ const TABLES: Record<TransactionKind, TransactionTable> = {
  * still own the conversion and attribution rules.
  */
 export class TransactionService {
+  /**
+   * Which rows a `kind` is read over, given whose page is being drawn.
+   *
+   * **Expenses in a personal space widen; nothing else does.** Money spent out
+   * of a shared space still leaves the pocket of whoever spent it, so a
+   * personal ledger reads its owner's expenses wherever they were filed. A
+   * shared space reads only its own, because that is the joint account and
+   * what somebody spent privately is none of it.
+   *
+   * Income never widens, and does not need to: it can only be recorded in a
+   * personal space, so the two scopes would select the same rows anyway.
+   * Asking for the space scope says which rows are expected rather than
+   * relying on the wider one being empty.
+   */
+  private scopeFor(ctx: SpaceContext, kind: TransactionKind): TransactionScope {
+    return ctx.isPersonal && kind === "expense"
+      ? inPersonalLedger(ctx.userId)
+      : inSpace(ctx.organizationId);
+  }
+
+  /**
+   * Refuses to record income anywhere but a personal space.
+   *
+   * A shared space is a joint ledger of what a household *spends*; what each
+   * member earns is their own, and splitting it across as many copies as
+   * somebody happens to have spaces was how this app used to lose track of it.
+   * The UI does not offer income in a shared space; this is the check that
+   * holds when something else asks anyway.
+   */
+  private assertKindAllowed(ctx: SpaceContext, kind: TransactionKind): void {
+    if (kind === "income" && !ctx.isPersonal) {
+      throw new ServiceError(
+        "FORBIDDEN",
+        "Income is recorded in your personal space, not in a shared one.",
+      );
+    }
+  }
+
   async list(
     ctx: SpaceContext,
     kind: TransactionKind,
     filters: TransactionFilters = {},
   ): Promise<TransactionPage> {
-    return findTransactionPage(TABLES[kind], ctx.organizationId, filters);
+    return findTransactionPage(TABLES[kind], this.scopeFor(ctx, kind), filters);
   }
 
   /**
-   * Total for the filtered set, in the space's base currency.
+   * Total for the filtered set, in the reader's base currency.
    */
   async total(
     ctx: SpaceContext,
     kind: TransactionKind,
     filters: TransactionFilters = {},
   ): Promise<string> {
-    return sumTransactions(TABLES[kind], ctx.organizationId, filters);
+    return sumTransactions(TABLES[kind], this.scopeFor(ctx, kind), filters);
   }
 
   async listAuthors(ctx: SpaceContext, kind: TransactionKind) {
@@ -77,6 +119,8 @@ export class TransactionService {
     data: TransactionInput,
     options: { recurringId?: number; ifAbsent?: boolean } = {},
   ) {
+    this.assertKindAllowed(ctx, kind);
+
     // A materialised occurrence carries the template's own category, which was
     // checked when the template was saved and cannot have been deleted since —
     // `deleteCategory` refuses while a template still points at it. Re-checking
@@ -104,6 +148,8 @@ export class TransactionService {
     id: number,
     data: Partial<TransactionInput>,
   ) {
+    this.assertKindAllowed(ctx, kind);
+
     // `undefined` means the edit does not touch the category; `null` means it
     // is being cleared. Neither needs a lookup, and `assertUsable` says so.
     await categoryService.assertUsable(ctx, data.categoryId, kind);

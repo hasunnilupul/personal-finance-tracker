@@ -6,6 +6,8 @@ import { buttonVariants } from "@/components/ui/button";
 interface ExportCardProps {
   spaceName: string;
   baseCurrency: string;
+  /** A shared space has no income to export, and one extra thing to explain. */
+  isPersonal: boolean;
 }
 
 /**
@@ -22,16 +24,27 @@ interface ExportCardProps {
  * markup override the `Content-Disposition` — two places deciding one thing,
  * which is how a file ends up called `route.csv`.
  */
-const ExportCard = ({ spaceName, baseCurrency }: ExportCardProps) => {
+const ExportCard = ({ spaceName, baseCurrency, isPersonal }: ExportCardProps) => {
   return (
     <Card className="p-6">
       <h2 className="text-foreground text-base font-semibold">Export</h2>
 
       <p className="text-muted-foreground mt-1 text-sm">
-        Every expense and income entry in{" "}
-        <span className="text-foreground font-medium">{spaceName}</span> as a CSV file — the amount
-        as it was entered, the rate used, and the converted {baseCurrency} figure, so the file
-        reconciles against a statement rather than only summing.
+        {isPersonal ? (
+          <>
+            Every entry in <span className="text-foreground font-medium">{spaceName}</span>, plus
+            what you have spent from shared spaces, as a CSV file — the amount as it was entered,
+            the rate used, and the converted {baseCurrency} figure, so the file reconciles against a
+            statement rather than only summing. A <span className="font-medium">Space</span> column
+            says where each entry was filed.
+          </>
+        ) : (
+          <>
+            Every expense in <span className="text-foreground font-medium">{spaceName}</span> as a
+            CSV file — the amount as it was entered, the rate used, and the converted {baseCurrency}{" "}
+            figure, so the file reconciles against a statement rather than only summing.
+          </>
+        )}
       </p>
 
       <a

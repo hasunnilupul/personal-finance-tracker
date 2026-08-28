@@ -1,9 +1,15 @@
 import "server-only";
 
-import { findTransactionChunk, type TransactionCursor } from "@/lib/repositories/transaction-query";
+import {
+  findTransactionChunk,
+  inPersonalLedger,
+  inSpace,
+  type TransactionCursor,
+} from "@/lib/repositories/transaction-query";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import type { TransactionFilters, TransactionKind } from "@/lib/db/models/transaction.model";
+import type { SpaceContext } from "@/lib/services/types";
 import { CSV_BOM, csvRow } from "@/lib/export/csv";
 
 /**
@@ -34,6 +40,7 @@ const CHUNK_SIZE = 500;
 const HEADER = [
   "Date",
   "Type",
+  "Space",
   "Description",
   "Category",
   "Amount",
@@ -50,8 +57,8 @@ function isoDate(value: Date): string {
 }
 
 export interface ExportOptions {
-  organizationId: string;
-  baseCurrency: string;
+  /** Who is exporting, and from which space. Decides the scope of every walk. */
+  ctx: SpaceContext;
   /** Absent means both. */
   kind?: TransactionKind;
   filters: TransactionFilters;
@@ -65,9 +72,17 @@ export interface ExportOptions {
  * row from each and comparing as it goes — real complexity for an ordering any
  * spreadsheet can reproduce with one click on the Date column. The `Type`
  * column is what makes the two halves separable.
+ *
+ * **A shared space has no income to walk.** Asking for it would be one round
+ * trip to be handed nothing, and — worse for a file somebody files away — the
+ * export would carry an income section that is empty because the concept does
+ * not exist here, which reads exactly like an income section that is empty
+ * because the export broke.
  */
-function kindsFor(kind?: TransactionKind): TransactionKind[] {
-  return kind ? [kind] : ["expense", "income"];
+function kindsFor(ctx: SpaceContext, kind?: TransactionKind): TransactionKind[] {
+  const requested: TransactionKind[] = kind ? [kind] : ["expense", "income"];
+
+  return ctx.isPersonal ? requested : requested.filter((each) => each !== "income");
 }
 
 /**
@@ -78,15 +93,27 @@ function kindsFor(kind?: TransactionKind): TransactionKind[] {
  * on a path that did not emit the row it came from.
  */
 export async function* streamTransactionCsv(options: ExportOptions): AsyncGenerator<string> {
+  const { ctx } = options;
+
   yield CSV_BOM + csvRow([...HEADER]);
 
-  for (const kind of kindsFor(options.kind)) {
+  for (const kind of kindsFor(ctx, options.kind)) {
+    // The same widening the pages use: a personal export is the owner's own
+    // spending wherever they filed it, so it carries their shared-space
+    // expenses too — converted into *their* base currency, which is what the
+    // "Amount (base)" column claims to be. The `Space` column is what keeps
+    // those rows tellable apart once the file is open.
+    const scope =
+      ctx.isPersonal && kind === "expense"
+        ? inPersonalLedger(ctx.userId)
+        : inSpace(ctx.organizationId);
+
     let cursor: TransactionCursor | null = null;
 
     for (;;) {
       const rows = await findTransactionChunk(
         TABLES[kind],
-        options.organizationId,
+        scope,
         options.filters,
         cursor,
         CHUNK_SIZE,
@@ -101,13 +128,14 @@ export async function* streamTransactionCsv(options: ExportOptions): AsyncGenera
           csvRow([
             isoDate(row.date),
             kind,
+            row.spaceName,
             row.description,
             row.categoryName,
             row.amount,
             row.currency,
             row.exchangeRate,
             row.baseAmount,
-            options.baseCurrency,
+            ctx.baseCurrency,
             row.createdByName,
           ]),
         )

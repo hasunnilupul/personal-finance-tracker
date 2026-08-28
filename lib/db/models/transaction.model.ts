@@ -3,6 +3,10 @@
  * opposite sign in a report. The UI and the action layer treat them as one
  * concept keyed by this, so there is one list, one form and one set of
  * actions rather than two of each.
+ *
+ * They are no longer interchangeable about *where* they may be recorded:
+ * income belongs to a personal space and nowhere else. See
+ * `TransactionService.assertKindAllowed`.
  */
 export type TransactionKind = "expense" | "income";
 
@@ -23,6 +27,17 @@ export interface TransactionListItem {
   categoryColor: string | null;
   createdBy: string | null;
   createdByName: string | null;
+  /**
+   * The space the entry is filed in.
+   *
+   * Usually the space being looked at, and worth carrying anyway: a personal
+   * ledger lists its owner's shared-space spending alongside its own, and
+   * those rows belong to somebody else's page. Comparing this against the
+   * active space is what tells a row apart from the ones it sits with — it is
+   * shown with the space's name, and it cannot be edited from here.
+   */
+  organizationId: string;
+  spaceName: string | null;
   updatedAt: Date;
 }
 

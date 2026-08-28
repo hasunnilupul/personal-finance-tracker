@@ -31,6 +31,8 @@ interface RecurringManagerProps {
   templates: RecurringWithCategory[];
   expenseCategories: Category[];
   incomeCategories: Category[];
+  /** See {@link RecurringFormProps.allowIncome}. */
+  allowIncome: boolean;
   baseCurrency: string;
 }
 
@@ -83,6 +85,7 @@ const RecurringManager = ({
   templates,
   expenseCategories,
   incomeCategories,
+  allowIncome,
   baseCurrency,
 }: RecurringManagerProps) => {
   const router = useRouter();
@@ -282,6 +285,7 @@ const RecurringManager = ({
         template={editing}
         expenseCategories={expenseCategories}
         incomeCategories={incomeCategories}
+        allowIncome={allowIncome}
         baseCurrency={baseCurrency}
         open={formOpen}
         onOpenChange={setFormOpen}

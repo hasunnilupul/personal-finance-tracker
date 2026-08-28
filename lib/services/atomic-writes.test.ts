@@ -33,6 +33,9 @@ const budgetFindAll = vi.fn();
 const budgetReconvertStatement = vi.fn();
 const updateBaseCurrencyStatement = vi.fn();
 const reconvertEntriesStatement = vi.fn();
+const reconvertPersonalAmountsStatement = vi.fn();
+const expenseFindSharedByCreator = vi.fn();
+
 const convert = vi.fn();
 
 const categoryFindById = vi.fn();
@@ -48,7 +51,10 @@ vi.mock("@/lib/db/batch", async (importOriginal) => ({
 }));
 
 vi.mock("@/lib/repositories/expense.repository", () => ({
-  expenseRepository: { findAll: (...args: unknown[]) => expenseFindAll(...args) },
+  expenseRepository: {
+    findAll: (...args: unknown[]) => expenseFindAll(...args),
+    findSharedByCreator: (...args: unknown[]) => expenseFindSharedByCreator(...args),
+  },
 }));
 
 vi.mock("@/lib/repositories/income.repository", () => ({
@@ -70,6 +76,8 @@ vi.mock("@/lib/repositories/space.repository", () => ({
 
 vi.mock("@/lib/repositories/transaction-query", () => ({
   reconvertEntriesStatement: (...args: unknown[]) => reconvertEntriesStatement(...args),
+  reconvertPersonalAmountsStatement: (...args: unknown[]) =>
+    reconvertPersonalAmountsStatement(...args),
   sumBaseAmountByCategory: vi.fn(),
 }));
 
@@ -107,6 +115,9 @@ const ctx: SpaceContext = {
   organizationId: "org-mine",
   userId: "user-me",
   baseCurrency: "LKR",
+  // A personal space, so an expense needs no second conversion and these
+  // fixtures stay about the thing each file is testing.
+  isPersonal: true,
 };
 
 const DATE = new Date("2026-08-13T12:00:00.000Z");
@@ -114,6 +125,7 @@ const DATE = new Date("2026-08-13T12:00:00.000Z");
 /** Statement stand-ins, so the batch's contents can be identified by value. */
 const SWITCH = { statement: "switch" };
 const EXPENSE_UPDATE = { statement: "expenses" };
+const SHARED_UPDATE = { statement: "shared-personal-amounts" };
 const INCOME_UPDATE = { statement: "income" };
 const BUDGET_UPDATE = { statement: "budgets" };
 const DELETE_CATEGORY = { statement: "delete-category" };
@@ -138,8 +150,11 @@ beforeEach(() => {
   incomeFindAll.mockResolvedValue([{ id: 2, amount: "6000.00", currency: "LKR", date: DATE }]);
   budgetFindAll.mockResolvedValue([{ id: 3, amount: "500.00" }]);
 
+  expenseFindSharedByCreator.mockResolvedValue([]);
+
   updateBaseCurrencyStatement.mockReturnValue(SWITCH);
   budgetReconvertStatement.mockReturnValue(BUDGET_UPDATE);
+  reconvertPersonalAmountsStatement.mockReturnValue(null);
 });
 
 describe("changeBaseCurrency", () => {
@@ -216,6 +231,38 @@ describe("changeBaseCurrency", () => {
     expect(convert).toHaveBeenCalledWith("3000.00", "LKR", "USD", DATE);
     // Budgets: out of the space's outgoing base currency, with no date.
     expect(convert).toHaveBeenCalledWith("500.00", "LKR", "USD");
+  });
+
+  it("re-converts the owner's shared-space expenses in the same batch", async () => {
+    // Those rows live in spaces this switch does not touch, and they each hold
+    // a figure denominated in the currency being left behind. Left out of the
+    // batch, a personal ledger would go on adding them up in the old currency.
+    expenseFindSharedByCreator.mockResolvedValue([
+      { id: 9, amount: "1500.00", currency: "LKR", date: DATE },
+    ]);
+    reconvertPersonalAmountsStatement.mockReturnValue(SHARED_UPDATE);
+
+    const result = await spaceService.changeBaseCurrency(ctx, "USD");
+
+    expect(reconvertPersonalAmountsStatement).toHaveBeenCalledWith("user-me", [
+      { id: 9, baseAmount: "10.00", rate: "0.033" },
+    ]);
+    expect(runBatch).toHaveBeenCalledWith([
+      SWITCH,
+      EXPENSE_UPDATE,
+      INCOME_UPDATE,
+      SHARED_UPDATE,
+      BUDGET_UPDATE,
+    ]);
+    expect(result.entries).toBe(3);
+  });
+
+  it("does not go looking for them when a shared space is the one switching", async () => {
+    // The personal figure is derived from the entry's own amount, not from the
+    // shared space's base, so a shared switch leaves it alone.
+    await spaceService.changeBaseCurrency({ ...ctx, isPersonal: false }, "USD");
+
+    expect(expenseFindSharedByCreator).not.toHaveBeenCalled();
   });
 });
 

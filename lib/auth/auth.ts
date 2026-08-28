@@ -148,6 +148,12 @@ export const auth = betterAuth({
               organizationId: space.id,
               userId: user.id,
               baseCurrency: space.baseCurrency ?? DEFAULT_CURRENCY,
+              // Every space this hook fires for is a shared one — the personal
+              // space is written directly by `createPersonalSpace`, before the
+              // user has a session for the plugin's endpoint to authorise. So
+              // it is seeded with expense categories only: income is recorded
+              // in a personal space and nowhere else.
+              isPersonal: false,
             });
           } catch (error) {
             logger.error("Failed to seed categories for new space", error, {

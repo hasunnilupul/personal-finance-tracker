@@ -1,9 +1,43 @@
 import { db } from "@/lib/db";
 import { expenses } from "@/lib/db/schema/expenses";
+import { organization } from "@/lib/db/schema/organization";
 import { Expense, NewExpense } from "@/lib/db/models/expense.model";
 import { eq, and, desc } from "drizzle-orm";
 
+/** The fields a re-conversion needs, and nothing else. */
+export interface ConvertibleEntry {
+  id: number;
+  amount: string;
+  currency: string;
+  date: Date;
+}
+
 export class ExpenseRepository {
+  /**
+   * One person's expenses in the shared spaces they belong to.
+   *
+   * Read when their **personal** space changes its base currency: those rows
+   * hold a second converted figure denominated in the currency being left
+   * behind, and it lives in a space the switch does not otherwise touch. Left
+   * alone, a personal ledger would go on adding its owner's shared spending in
+   * the old currency and say nothing about it.
+   *
+   * Joined against `organization` rather than filtered on a list of space ids,
+   * so the caller does not have to fetch the memberships first.
+   */
+  async findSharedByCreator(userId: string): Promise<ConvertibleEntry[]> {
+    return db
+      .select({
+        id: expenses.id,
+        amount: expenses.amount,
+        currency: expenses.currency,
+        date: expenses.date,
+      })
+      .from(expenses)
+      .innerJoin(organization, eq(expenses.organizationId, organization.id))
+      .where(and(eq(expenses.createdBy, userId), eq(organization.isPersonal, false)));
+  }
+
   async findAll(organizationId: string): Promise<Expense[]> {
     return db
       .select()

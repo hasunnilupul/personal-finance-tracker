@@ -27,32 +27,46 @@ const DashboardPage = async () => {
   const currency = space.baseCurrency;
   const isNegative = Number(data.totals.net) < 0;
 
+  // A shared space has no income of its own to weigh spending against, so it
+  // shows what it is: what the household spent. Printing an income of zero and
+  // a net that is the expense total negated would be three tiles making one
+  // claim, and the claim would be wrong — the money did come from somewhere.
+  const showEarnings = space.isPersonal;
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-foreground text-xl font-semibold tracking-tight">{data.monthLabel}</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           {space.isPersonal ? "Your personal space" : space.name}, in {currency}.
+          {space.isPersonal && " Includes what you have spent from shared spaces."}
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile
-          label="Income this month"
-          value={formatMoney(data.totals.income, currency)}
-          accent="var(--viz-income)"
-        />
+      <div className={showEarnings ? "grid gap-3 sm:grid-cols-3" : "grid gap-3"}>
+        {showEarnings && (
+          <StatTile
+            label="Income this month"
+            value={formatMoney(data.totals.income, currency)}
+            accent="var(--viz-income)"
+          />
+        )}
+
         <StatTile
           label="Spent this month"
           value={formatMoney(data.totals.expense, currency)}
           accent="var(--viz-expense)"
+          hint={showEarnings ? "Yours, across every space" : undefined}
         />
-        <StatTile
-          label="Net"
-          value={formatMoney(data.totals.net, currency)}
-          tone={isNegative ? "negative" : "positive"}
-          hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
-        />
+
+        {showEarnings && (
+          <StatTile
+            label="Net"
+            value={formatMoney(data.totals.net, currency)}
+            tone={isNegative ? "negative" : "positive"}
+            hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
+          />
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -73,6 +87,8 @@ const DashboardPage = async () => {
             entries={data.recent}
             baseCurrency={currency}
             showAuthor={!space.isPersonal}
+            activeSpaceId={space.id}
+            isPersonal={space.isPersonal}
           />
         </Card>
 
