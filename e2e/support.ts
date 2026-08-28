@@ -72,6 +72,13 @@ export async function restorePersonalSpace(page: import("@playwright/test").Page
   await expect(option).toBeVisible({ timeout: 10_000 });
   await option.click();
 
+  // **Wait for the control to come back before reading it.** `SpaceSwitcher`
+  // disables the trigger for the duration of the server action and the
+  // `router.refresh()` after it, and while disabled it still shows the *old*
+  // space. Asserting the text alone raced that: the assertion polled a stale
+  // label until it timed out, on a switch that had not finished rather than one
+  // that had failed. Enabled-then-text is the order that cannot lie.
+  await expect(switcher).toBeEnabled({ timeout: 30_000 });
   await expect(switcher).toHaveText(/Personal/, { timeout: 15_000 });
 }
 

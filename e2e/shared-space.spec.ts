@@ -53,6 +53,10 @@ async function switchTo(page: import("@playwright/test").Page, name: string) {
   await expect(option).toBeVisible({ timeout: 10_000 });
   await option.click();
 
+  // Enabled before text — see `restorePersonalSpace` in `support.ts` for the
+  // race this closes. The switcher is disabled while the server action runs and
+  // goes on showing the old space until it finishes.
+  await expect(switcher).toBeEnabled({ timeout: 30_000 });
   await expect(switcher).toHaveText(new RegExp(name), { timeout: 15_000 });
 }
 

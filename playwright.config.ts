@@ -83,6 +83,13 @@ export default defineConfig({
       name: "space-switching",
       dependencies: ["chromium"],
       testMatch: /shared-space\.spec\.ts/,
+      // Every test here changes the active space at least once, and a switch is
+      // a server action plus a `router.refresh()` — with the switcher disabled
+      // and showing the old space until both finish. The default 30s is a budget
+      // for a test that looks at one page; these navigate several times around
+      // work that is genuinely slow, and a timeout on the last assertion of a
+      // passing test is the most misleading failure there is.
+      timeout: 120_000,
       use: {
         ...devices["Desktop Chrome"],
         channel: "chrome",
