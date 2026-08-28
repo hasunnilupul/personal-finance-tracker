@@ -76,15 +76,19 @@ bars beside it, and both the page and the service say so. Making them agree
 needs a deliberate link between categories in different spaces, which is a
 feature, not a wider `WHERE`.
 
-**Two stray rows were left in the development database and are the repo owner's
-to clear.** An early version of the browser test fell back to *creating* a space
-when it could not find one in the switcher — and `locator.count()` does not wait,
-so it read zero while the dropdown was still opening and created a **shared**
-space called "Personal", twice: `0ul7Ju9qejnEJz7iEUmxaFVspKCBkGUy` and
+**Two stray rows were made in the development database and have been cleared.**
+An early version of the browser test fell back to *creating* a space when it
+could not find one in the switcher — and `locator.count()` does not wait, so it
+read zero while the dropdown was still opening and created a **shared** space
+called "Personal", twice: `0ul7Ju9qejnEJz7iEUmxaFVspKCBkGUy` and
 `3TDv7L5gt8zwkU0CxK8Q8qIK395V1SOw`, both empty, both owned by the e2e account.
-The cleanup was refused by the sandbox and is not in this branch. The helper now
-fails instead of creating, and creating is confined to one function — see the
-gotcha.
+Deleted on the repo owner's instruction by a throwaway script that checked each
+row was **not** personal and held no entries before touching it — the guard
+mattering precisely because the mess being cleaned up was a script writing
+without looking. The development database now holds three personal spaces,
+`Household` and `E2E Shared`, and the suite is green at 30 afterwards. The
+helper fails instead of creating now, and creating is confined to one function
+— see the gotcha.
 
 **Released 2026-08-24** — `58b1865` (PR #61), the iOS glass release. It
 carries **#59** (the capsule got the strip it floats in, and the scrim/bar tints
