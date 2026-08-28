@@ -8,6 +8,10 @@ import { categoryService } from "@/lib/services/category.service";
  * Both types are fetched in one pass, with their usage counts, so the page
  * knows what deleting any given category would cost without a round-trip per
  * row.
+ *
+ * **A shared space has expense categories only.** Income is recorded in a
+ * personal space, so an income section here would be a list nothing can ever be
+ * filed under — and an "Add" button that the service refuses.
  */
 const CategoriesPage = async () => {
   const { ctx, space } = await requireActiveSpace();
@@ -30,10 +34,12 @@ const CategoriesPage = async () => {
         categories={categories.filter((category) => category.type === "expense")}
       />
 
-      <CategorySection
-        type="income"
-        categories={categories.filter((category) => category.type === "income")}
-      />
+      {space.isPersonal && (
+        <CategorySection
+          type="income"
+          categories={categories.filter((category) => category.type === "income")}
+        />
+      )}
     </div>
   );
 };

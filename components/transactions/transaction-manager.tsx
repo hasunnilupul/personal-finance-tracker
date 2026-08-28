@@ -26,6 +26,8 @@ interface TransactionManagerProps {
   categories: Category[];
   baseCurrency: string;
   showAuthor: boolean;
+  /** See {@link TransactionList} — decides which rows are read-only here. */
+  activeSpaceId: string;
   basePath: string;
   query: string;
   hasFilters: boolean;
@@ -45,6 +47,7 @@ const TransactionManager = ({
   categories,
   baseCurrency,
   showAuthor,
+  activeSpaceId,
   basePath,
   query,
   hasFilters,
@@ -155,6 +158,7 @@ const TransactionManager = ({
               items={page.items}
               baseCurrency={baseCurrency}
               showAuthor={showAuthor}
+              activeSpaceId={activeSpaceId}
               busyId={busyId}
               onEdit={openEdit}
               onDelete={handleDelete}

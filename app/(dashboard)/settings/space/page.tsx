@@ -42,7 +42,11 @@ const SpaceSettingsPage = async () => {
         permission because there is nothing here a member cannot already see one
         page at a time — an export changes the convenience, not the access.
       */}
-      <ExportCard spaceName={space.name} baseCurrency={space.baseCurrency} />
+      <ExportCard
+        spaceName={space.name}
+        baseCurrency={space.baseCurrency}
+        isPersonal={space.isPersonal}
+      />
 
       {/*
         Push belongs to the device rather than to the space, but this is the

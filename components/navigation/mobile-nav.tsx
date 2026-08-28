@@ -16,8 +16,12 @@ import { useMobilePlatform } from "@/components/navigation/use-mobile-platform";
  * Both are `md:hidden`, so a desktop browser renders a bar it never shows and
  * the sidebar in `components/app-sidebar.tsx` is what is actually on screen.
  */
-export default function MobileNav() {
+export default function MobileNav({ isPersonal }: { isPersonal: boolean }) {
   const platform = useMobilePlatform();
 
-  return platform === "ios" ? <MobileNavIos /> : <MobileNavAndroid />;
+  return platform === "ios" ? (
+    <MobileNavIos isPersonal={isPersonal} />
+  ) : (
+    <MobileNavAndroid isPersonal={isPersonal} />
+  );
 }

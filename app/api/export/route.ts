@@ -52,8 +52,7 @@ export async function GET(request: Request) {
   };
 
   const rows = streamTransactionCsv({
-    organizationId: active.ctx.organizationId,
-    baseCurrency: active.ctx.baseCurrency,
+    ctx: active.ctx,
     kind: kindParam(params.get("kind")),
     filters,
   });

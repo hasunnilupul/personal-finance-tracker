@@ -1,10 +1,11 @@
-import { and, asc, count, desc, eq, gte, lte, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, lte, sql, SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
 import { categories } from "@/lib/db/schema/categories";
+import { member, organization } from "@/lib/db/schema/organization";
 import { user } from "@/lib/db/schema/better-auth";
 import {
   DEFAULT_PAGE_SIZE,
@@ -21,6 +22,37 @@ import {
  * fixing every future filter twice.
  */
 export type TransactionTable = typeof expenses | typeof income;
+
+/**
+ * Which rows a read is allowed to see.
+ *
+ * Two shapes, and the second one is why this type exists at all:
+ *
+ * - **`space`** — everything filed in one space, whoever added it. This is
+ *   what a shared space shows, and it is what every read here used to be.
+ * - **`personal-ledger`** — one person's own spending, *across every space they
+ *   belong to*. A personal space is not just another tenant: money spent from a
+ *   shared space still comes out of the person who spent it, so their own
+ *   ledger has to be able to see past the space boundary to add it up.
+ *
+ * The widened read is still narrow in the way that matters. It is keyed on
+ * `createdBy`, so it can only ever return the caller's own rows, and it is
+ * bounded by current membership, so leaving a shared space takes its entries
+ * out of the ledger with it. Neither half is a filter the caller supplies —
+ * both come from the session, via `SpaceContext`.
+ */
+export type TransactionScope =
+  { within: "space"; organizationId: string } | { within: "personal-ledger"; userId: string };
+
+/** Everything one space holds. */
+export function inSpace(organizationId: string): TransactionScope {
+  return { within: "space", organizationId };
+}
+
+/** One person's own entries, wherever they filed them. */
+export function inPersonalLedger(userId: string): TransactionScope {
+  return { within: "personal-ledger", userId };
+}
 
 /**
  * Date-range bounds, in UTC.
@@ -42,12 +74,73 @@ function endOfDay(value: string): Date {
   return new Date(`${value}T23:59:59.999Z`);
 }
 
+/**
+ * The `WHERE` clause that a scope is.
+ *
+ * The personal-ledger branch restricts on membership with a subquery rather
+ * than by passing a list of space ids in: the list would have to be fetched
+ * first, on every read, and would be a moment out of date by the time the
+ * query ran. One correlated subquery against `member`, which is indexed on
+ * `user_id`, is cheaper and cannot go stale between the two.
+ */
+function scopeCondition(table: TransactionTable, scope: TransactionScope): SQL | undefined {
+  if (scope.within === "space") {
+    return eq(table.organizationId, scope.organizationId);
+  }
+
+  return and(
+    eq(table.createdBy, scope.userId),
+    inArray(
+      table.organizationId,
+      db
+        .select({ organizationId: member.organizationId })
+        .from(member)
+        .where(eq(member.userId, scope.userId)),
+    ),
+  );
+}
+
+/**
+ * The column a total should sum, given who is asking.
+ *
+ * A shared-space expense holds two converted figures — one in the shared
+ * space's base currency, one in the creator's personal base currency — and
+ * which is right depends entirely on whose page is being drawn. Summing
+ * `baseAmount` into a personal ledger would add up figures denominated in
+ * whatever currencies the shared spaces happen to report in.
+ *
+ * `income` has no second figure and needs none: income is only ever recorded
+ * in a personal space, so its `baseAmount` is already in the only currency
+ * anyone will read it in. The `in` check is what says so in a way the compiler
+ * can check, rather than a cast.
+ *
+ * The `coalesce` covers rows written before this existed and rows whose
+ * creator has since been deleted; both fall back to the figure that was always
+ * there.
+ */
+function effectiveBaseAmount(table: TransactionTable, scope: TransactionScope) {
+  if (scope.within === "space" || !("personalBaseAmount" in table)) {
+    return table.baseAmount;
+  }
+
+  return sql<string>`coalesce(${table.personalBaseAmount}, ${table.baseAmount})`;
+}
+
+/** The rate that explains {@link effectiveBaseAmount}. */
+function effectiveExchangeRate(table: TransactionTable, scope: TransactionScope) {
+  if (scope.within === "space" || !("personalExchangeRate" in table)) {
+    return table.exchangeRate;
+  }
+
+  return sql<string>`coalesce(${table.personalExchangeRate}, ${table.exchangeRate})`;
+}
+
 function buildConditions(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters,
 ): SQL | undefined {
-  const conditions: (SQL | undefined)[] = [eq(table.organizationId, organizationId)];
+  const conditions: (SQL | undefined)[] = [scopeCondition(table, scope)];
 
   if (filters.from) {
     conditions.push(gte(table.date, startOfDay(filters.from)));
@@ -69,42 +162,61 @@ function buildConditions(
 }
 
 /**
+ * The columns a list row is built from.
+ *
+ * Written once because two readers need exactly the same shape — the page and
+ * the export walk — and a row that differs between them is a column somebody
+ * forgets to add in one place.
+ *
+ * `spaceName` and `organizationId` come along on every read, not only the
+ * widened one. A personal ledger showing a shared expense has to be able to
+ * say which space it came from, and a reader that had to ask separately would
+ * ask once per row.
+ */
+function listColumns(table: TransactionTable, scope: TransactionScope) {
+  return {
+    id: table.id,
+    amount: table.amount,
+    currency: table.currency,
+    baseAmount: effectiveBaseAmount(table, scope),
+    exchangeRate: effectiveExchangeRate(table, scope),
+    description: table.description,
+    date: table.date,
+    categoryId: table.categoryId,
+    categoryName: categories.name,
+    categoryIcon: categories.icon,
+    categoryColor: categories.color,
+    createdBy: table.createdBy,
+    createdByName: user.name,
+    organizationId: table.organizationId,
+    spaceName: organization.name,
+    updatedAt: table.updatedAt,
+  };
+}
+
+/**
  * Reads one page of transactions with the names needed to display them.
  *
- * Always scoped by `organizationId` — the filters narrow within a space, they
- * never widen beyond it.
+ * Scoped by {@link TransactionScope} — the filters narrow within the scope,
+ * they never widen it.
  */
 export async function findTransactionPage(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters = {},
 ): Promise<TransactionPage> {
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? DEFAULT_PAGE_SIZE));
 
-  const where = buildConditions(table, organizationId, filters);
+  const where = buildConditions(table, scope, filters);
 
   const [items, [totals]] = await Promise.all([
     db
-      .select({
-        id: table.id,
-        amount: table.amount,
-        currency: table.currency,
-        baseAmount: table.baseAmount,
-        exchangeRate: table.exchangeRate,
-        description: table.description,
-        date: table.date,
-        categoryId: table.categoryId,
-        categoryName: categories.name,
-        categoryIcon: categories.icon,
-        categoryColor: categories.color,
-        createdBy: table.createdBy,
-        createdByName: user.name,
-        updatedAt: table.updatedAt,
-      })
+      .select(listColumns(table, scope))
       .from(table)
       .leftJoin(categories, eq(table.categoryId, categories.id))
       .leftJoin(user, eq(table.createdBy, user.id))
+      .innerJoin(organization, eq(table.organizationId, organization.id))
       .where(where)
       .orderBy(desc(table.date), desc(table.id))
       .limit(pageSize)
@@ -122,27 +234,29 @@ export async function findTransactionPage(
 }
 
 /**
- * Sum of a filtered set, in the space's base currency.
+ * Sum of a filtered set, in the reader's base currency.
  *
- * Sums `baseAmount` rather than `amount` — the amounts may be in several
- * currencies, and only the converted figure is comparable.
+ * Sums a converted figure rather than `amount` — the amounts may be in several
+ * currencies, and only the converted one is comparable. *Which* converted
+ * figure is {@link effectiveBaseAmount}'s answer, and it differs between a
+ * shared space's total and its members' own.
  */
 export async function sumTransactions(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters = {},
 ): Promise<string> {
   const [row] = await db
-    .select({ total: sumBaseAmount(table) })
+    .select({ total: sumBaseAmount(table, scope) })
     .from(table)
-    .where(buildConditions(table, organizationId, filters));
+    .where(buildConditions(table, scope, filters));
 
   return row?.total ?? "0.00";
 }
 
-function sumBaseAmount(table: TransactionTable) {
+function sumBaseAmount(table: TransactionTable, scope: TransactionScope) {
   // COALESCE so an empty set reads as zero rather than null.
-  return sql<string>`coalesce(sum(${table.baseAmount}), 0)::text`;
+  return sql<string>`coalesce(sum(${effectiveBaseAmount(table, scope)}), 0)::text`;
 }
 
 /**
@@ -166,8 +280,10 @@ export async function sumBaseAmountByCategory(
   from: Date,
   to: Date,
 ): Promise<Map<number, string>> {
+  const scope = inSpace(organizationId);
+
   const rows = await db
-    .select({ categoryId: table.categoryId, total: sumBaseAmount(table) })
+    .select({ categoryId: table.categoryId, total: sumBaseAmount(table, scope) })
     .from(table)
     .where(
       and(eq(table.organizationId, organizationId), gte(table.date, from), lte(table.date, to)),
@@ -200,7 +316,7 @@ export async function sumBaseAmountByCategory(
  */
 export async function sumByCategoryWithNames(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters = {},
 ): Promise<
   {
@@ -211,7 +327,7 @@ export async function sumByCategoryWithNames(
     total: string;
   }[]
 > {
-  const total = sumBaseAmount(table);
+  const total = sumBaseAmount(table, scope);
 
   return db
     .select({
@@ -223,7 +339,7 @@ export async function sumByCategoryWithNames(
     })
     .from(table)
     .leftJoin(categories, eq(table.categoryId, categories.id))
-    .where(buildConditions(table, organizationId, filters))
+    .where(buildConditions(table, scope, filters))
     .groupBy(table.categoryId, categories.name, categories.icon, categories.color)
     .orderBy(desc(total));
 }
@@ -242,15 +358,15 @@ export async function sumByCategoryWithNames(
  */
 export async function sumByMonth(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters = {},
 ): Promise<Map<string, string>> {
   const month = sql<string>`to_char(${table.date}, 'YYYY-MM')`;
 
   const rows = await db
-    .select({ month, total: sumBaseAmount(table) })
+    .select({ month, total: sumBaseAmount(table, scope) })
     .from(table)
-    .where(buildConditions(table, organizationId, filters))
+    .where(buildConditions(table, scope, filters))
     .groupBy(month);
 
   return new Map(rows.map((row) => [row.month, row.total]));
@@ -301,37 +417,23 @@ export interface TransactionCursor {
  */
 export async function findTransactionChunk(
   table: TransactionTable,
-  organizationId: string,
+  scope: TransactionScope,
   filters: TransactionFilters,
   cursor: TransactionCursor | null,
   limit: number,
 ): Promise<TransactionListItem[]> {
-  const conditions: (SQL | undefined)[] = [buildConditions(table, organizationId, filters)];
+  const conditions: (SQL | undefined)[] = [buildConditions(table, scope, filters)];
 
   if (cursor) {
     conditions.push(sql`(${table.date}, ${table.id}) < (${cursor.date}, ${cursor.id})`);
   }
 
   const rows = await db
-    .select({
-      id: table.id,
-      amount: table.amount,
-      currency: table.currency,
-      baseAmount: table.baseAmount,
-      exchangeRate: table.exchangeRate,
-      description: table.description,
-      date: table.date,
-      categoryId: table.categoryId,
-      categoryName: categories.name,
-      categoryIcon: categories.icon,
-      categoryColor: categories.color,
-      createdBy: table.createdBy,
-      createdByName: user.name,
-      updatedAt: table.updatedAt,
-    })
+    .select(listColumns(table, scope))
     .from(table)
     .leftJoin(categories, eq(table.categoryId, categories.id))
     .leftJoin(user, eq(table.createdBy, user.id))
+    .innerJoin(organization, eq(table.organizationId, organization.id))
     .where(and(...conditions))
     .orderBy(desc(table.date), desc(table.id))
     .limit(limit);
@@ -344,6 +446,49 @@ export interface Reconversion {
   id: number;
   baseAmount: string;
   rate: string;
+}
+
+/**
+ * Rewrites the **personal** converted figures on somebody's shared-space
+ * expenses, in one statement.
+ *
+ * The mirror of {@link reconvertEntriesStatement}, and it exists separately
+ * because it is scoped by person rather than by space: these rows live in
+ * spaces the currency switch is not touching, and the only thing that makes
+ * them the switcher's to rewrite is that they created them.
+ *
+ * `createdBy` is matched for that reason and not only for tidiness — it is
+ * what stops a crafted id from reaching a housemate's entry in the same shared
+ * space.
+ *
+ * Not `async`, for the reason on {@link reconvertEntriesStatement}.
+ */
+export function reconvertPersonalAmountsStatement(
+  userId: string,
+  conversions: Reconversion[],
+): BatchStatement | null {
+  if (conversions.length === 0) {
+    return null;
+  }
+
+  const [first, ...rest] = conversions;
+
+  const values = sql.join(
+    [
+      sql`(${first.id}::integer, ${first.baseAmount}::numeric, ${first.rate}::numeric)`,
+      ...rest.map((row) => sql`(${row.id}, ${row.baseAmount}, ${row.rate})`),
+    ],
+    sql`, `,
+  );
+
+  return db
+    .update(expenses)
+    .set({
+      personalBaseAmount: sql`v."baseAmount"`,
+      personalExchangeRate: sql`v."exchangeRate"`,
+    })
+    .from(sql`(values ${values}) as v(id, "baseAmount", "exchangeRate")`)
+    .where(and(eq(expenses.id, sql`v.id`), eq(expenses.createdBy, userId)));
 }
 
 /**

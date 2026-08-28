@@ -154,6 +154,17 @@ export class BudgetService {
    *
    * Budgets that started after the window are left out: showing next month's
    * limit against this month's spending would be a figure about nothing.
+   *
+   * **A budget counts its own space's spending and no more, including in a
+   * personal space** — which is the one place in the app where a total is
+   * deliberately narrower than the dashboard's beside it. A limit is set on a
+   * category, categories belong to a space, and a shared space's "Groceries" is
+   * a different row from the personal one with a different id. There is no
+   * honest way to add spending filed under one to a limit set on the other
+   * without deciding that two categories with matching names are the same
+   * thing, which is a coupling nobody would see when they renamed one. If
+   * shared spending should count against personal limits, what that needs is a
+   * deliberate link between the two categories, not a wider `WHERE`.
    */
   async getOverview(ctx: SpaceContext, month: MonthKey): Promise<BudgetOverview> {
     const monthly = windowFor("monthly", month);

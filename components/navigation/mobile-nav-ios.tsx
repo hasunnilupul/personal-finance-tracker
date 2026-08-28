@@ -12,13 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { overflowTabs, primaryTabs } from "@/components/navigation/tabs";
-
-/** Every primary tab, plus the "More" column. */
-const COLUMNS = primaryTabs.length + 1;
-
-/** The index "More" occupies, which is always the last column. */
-const MORE_INDEX = primaryTabs.length;
+import { tabsFor } from "@/components/navigation/tabs";
 
 /**
  * The bottom bar on iOS and iPadOS.
@@ -35,8 +29,16 @@ const MORE_INDEX = primaryTabs.length;
  * The duplication between the two files is the point: this design can grow
  * without a single Android phone seeing a pixel move.
  */
-export default function MobileNavIos() {
+export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
   const pathname = usePathname();
+
+  const { primary: primaryTabs, overflow: overflowTabs } = tabsFor(isPersonal);
+
+  /** Every primary tab, plus the "More" column. */
+  const columns = primaryTabs.length + 1;
+
+  /** The index "More" occupies, which is always the last column. */
+  const moreIndex = primaryTabs.length;
 
   const primaryIndex = primaryTabs.findIndex((tab) => tab.href === pathname);
   const inOverflow = overflowTabs.some((tab) => tab.href === pathname);
@@ -45,7 +47,7 @@ export default function MobileNavIos() {
   // nested page such as a future `/expenses/123` — parks it nowhere rather
   // than on Dashboard, because a pill under the wrong tab is a confident lie
   // about where you are.
-  const activeIndex = primaryIndex >= 0 ? primaryIndex : inOverflow ? MORE_INDEX : null;
+  const activeIndex = primaryIndex >= 0 ? primaryIndex : inOverflow ? moreIndex : null;
 
   return (
     <>
@@ -119,7 +121,7 @@ export default function MobileNavIos() {
       <nav
         data-platform="ios"
         className="ff-iosbar md:hidden"
-        style={{ "--ff-count": COLUMNS } as CSSProperties}
+        style={{ "--ff-count": columns } as CSSProperties}
       >
         {/*
           Decorative. The current tab is announced by `aria-current` on the link

@@ -41,6 +41,15 @@ interface RecurringFormProps {
   template?: RecurringWithCategory;
   expenseCategories: Category[];
   incomeCategories: Category[];
+  /**
+   * Whether this space can hold recurring income at all.
+   *
+   * False in a shared space, where the kind picker is not shown and every
+   * template is an expense. The service refuses an income template there
+   * regardless — this is what keeps the form from offering one and then being
+   * told no.
+   */
+  allowIncome: boolean;
   baseCurrency: string;
   onDone: () => void;
 }
@@ -55,6 +64,7 @@ const RecurringForm = ({
   template,
   expenseCategories,
   incomeCategories,
+  allowIncome,
   baseCurrency,
   onDone,
 }: RecurringFormProps) => {
@@ -140,25 +150,27 @@ const RecurringForm = ({
         <input type="hidden" name="isActive" value={String(template?.isActive ?? true)} />
 
         <div className="flex gap-2">
-          <div className="flex flex-1 flex-col gap-2">
-            <Label htmlFor="recurring-type">Kind</Label>
-            <Select
-              items={typeItems}
-              value={type}
-              onValueChange={(value) => setType(String(value) as TransactionKind)}
-            >
-              <SelectTrigger id="recurring-type" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {typeItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {allowIncome && (
+            <div className="flex flex-1 flex-col gap-2">
+              <Label htmlFor="recurring-type">Kind</Label>
+              <Select
+                items={typeItems}
+                value={type}
+                onValueChange={(value) => setType(String(value) as TransactionKind)}
+              >
+                <SelectTrigger id="recurring-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {typeItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex flex-1 flex-col gap-2">
             <Label htmlFor="recurring-frequency">Repeats</Label>
@@ -300,6 +312,8 @@ interface RecurringFormDialogProps {
   template?: RecurringWithCategory;
   expenseCategories: Category[];
   incomeCategories: Category[];
+  /** See {@link RecurringFormProps.allowIncome}. */
+  allowIncome: boolean;
   baseCurrency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -309,6 +323,7 @@ const RecurringFormDialog = ({
   template,
   expenseCategories,
   incomeCategories,
+  allowIncome,
   baseCurrency,
   open,
   onOpenChange,
@@ -321,6 +336,7 @@ const RecurringFormDialog = ({
           template={template}
           expenseCategories={expenseCategories}
           incomeCategories={incomeCategories}
+          allowIncome={allowIncome}
           baseCurrency={baseCurrency}
           onDone={() => onOpenChange(false)}
         />

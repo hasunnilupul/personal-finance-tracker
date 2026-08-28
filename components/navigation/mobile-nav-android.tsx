@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { overflowTabs, primaryTabs } from "@/components/navigation/tabs";
+import { tabsFor } from "@/components/navigation/tabs";
 
 // One column per primary tab plus one for More, so the bar divides the width it
 // has rather than growing past it.
@@ -36,8 +36,10 @@ const barItem =
  * install hint's `bottom-*` with it — nothing computes those, they are matched
  * by hand.
  */
-export default function MobileNavAndroid() {
+export default function MobileNavAndroid({ isPersonal }: { isPersonal: boolean }) {
   const pathname = usePathname();
+
+  const { primary: primaryTabs, overflow: overflowTabs } = tabsFor(isPersonal);
   const inOverflow = overflowTabs.some((tab) => tab.href === pathname);
 
   return (
