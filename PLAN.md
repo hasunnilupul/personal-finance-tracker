@@ -72,15 +72,19 @@ down instead of promoting it. The production build is green, therefore the
 migrate step exited 0. **What that does not show is the columns existing**, which
 needs a signed-in session or the database, and neither is reachable from here.
 
-**Nothing here recorded what the deletes removed from production, and it is no
-longer recoverable.** `scripts/count-shared-income.ts` was written to be run
-against production before this merge, and the release PR asked for it in as many
-words. Whether it was run is not known to this record; no number was reported
-back and none is written down. The three `DELETE`s have now executed against
-production. **If there was shared-space income in there, it is gone and there is
-no way to say how much.** That is the cost of the shape this release had, and it
-is recorded rather than glossed because the next destructive migration should
-make the count a merge blocker rather than a request in a PR body.
+**The deletes removed nothing from production: there was no shared-space income
+there.** Confirmed by the repo owner after the merge. So the destructive half of
+this migration was a no-op in practice, and the same is now true of it for ever —
+`DELETE`s that match no rows cannot be run again to any effect.
+
+**Reported rather than measured here, and the distinction is the whole point.**
+`scripts/count-shared-income.ts` was written to produce that number *before* the
+merge, and the release PR asked for it in as many words; this machine has no
+production connection string, so nothing in this record could check it either
+way. It happened to be zero. Had it not been, the number would have been gone
+before anyone thought to look for it — which is why the follow-up below stands
+even though this release cost nothing. **A control that only works when the
+answer is already safe is not a control.**
 
 **The backfill script has not been run against production either.**
 `scripts/backfill-personal-amounts.ts` is a no-op unless some shared space and
@@ -107,8 +111,8 @@ pnpm-lock.yaml` is empty, so the install is the tree that was tested.
 irreversible, and `scripts/count-shared-income.ts` exists to print, per shared
 space, what they would remove. Against development the answer was **0 entries, 5
 categories, 0 templates**. Production is a separate database with separate
-history and this machine has no connection string for it — see above for how that
-ended.
+history and this machine has no connection string for it; the owner confirmed
+afterwards that it held no shared-space income either — see above.
 
 **The deployment id before the merge was `dpl_P7w6r3vGgbz1ohsqFUoWecoVfN5d`**,
 recorded in advance so a slow deploy could not fool the comparison afterwards.
@@ -3068,13 +3072,14 @@ Not blocking, but worth doing.
       2026-08-28 release asked, in the PR body and in this file, for
       `scripts/count-shared-income.ts` to be run against production before
       merging, because the migration deleted rows with no way back. Nothing
-      enforced it and no number was ever written down, so what that release
-      removed from production is now unknowable. A request in prose is not a
-      control. Options, cheapest first: have the migrate-on-deploy script
-      `SELECT` the counts and print them into the build log *before* applying, so
-      the number survives in Vercel's log whether or not anyone looked; or refuse
-      to apply a migration containing `DELETE` unless an explicit environment
-      variable is set for that deploy.
+      enforced it. **That release turned out to cost nothing — production held no
+      shared-space income — but it was luck rather than process**, and a number
+      that only exists before the delete is one nobody can go back for. A request
+      in prose is not a control. Options, cheapest first: have the
+      migrate-on-deploy script `SELECT` the counts and print them into the build
+      log *before* applying, so the number survives in Vercel's log whether or not
+      anyone looked; or refuse to apply a migration containing `DELETE` unless an
+      explicit environment variable is set for that deploy.
 - [ ] **Run `scripts/backfill-personal-amounts.ts` against production**, or
       confirm it has nothing to do. It is a no-op unless some shared space and
       one of its members' personal spaces report in different base currencies.
