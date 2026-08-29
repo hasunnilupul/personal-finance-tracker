@@ -10,10 +10,99 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-28 (second)** — `dev` → `main`, carrying the pre-count
-control, the finished record of the release before it, and an e2e fix. **This
-half was written before the merge; the merge SHA and the live-site results are
-added straight to `dev` afterwards.**
+**Releasing 2026-08-29** — `dev` → `main`, carrying **only this file**. Asked for
+directly rather than arrived at by the usual route, and worth two notes.
+
+**It was not required.** `dev` sitting ahead of `main` by exactly its release
+record is the normal resting state here — the branch table has said so after
+every release, and the next feature carries the record along with it. Nothing was
+waiting on this.
+
+**But it is the purest Feature 13 trial this repo can run**, and that is not a
+justification invented afterwards — it falls out of the diff. One Markdown file
+changes, so **the build output is byte-for-byte what production is already
+serving**: same chunks, same `sw.js`, same everything a browser fetches. The only
+thing that differs is the deployment id, and therefore the `?v=<id>` on the
+worker's registration URL.
+
+**Every previous "clean trial" was weaker than this one.** Each still changed app
+code, so a device picking up the new build could always be explained by something
+else having changed. Here there is nothing else. **If an installed device
+installs a new worker after this deploy, the versioned registration URL is the
+only thing that can have caused it — and if it does not, the registration URL is
+where the fault is, not the cache code.** Seven records have been waiting on a
+device that already had the previous build; this is the cleanest question that
+can be put to one.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (358). The browser suite
+and the build were not re-run and deliberately so — the diff is one Markdown file
+against a tree already verified green at `9d3ef3f` and released as `ad891c8`, and
+`PLAN.md` is in `.prettierignore`, so nothing in the build can have moved. Saying
+that plainly is better than re-running a suite to produce a number that would
+mean nothing new.
+
+**The deployment id before the merge is `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**, and
+`/sw.js` is byte-identical to the repo's.
+
+**Released 2026-08-28 (second)** — `ad891c8` (PR #64), carrying the pre-count
+control, the finished record of the release before it, and an e2e fix.
+
+**Merged with a merge commit, and the history is convergent — cleanly, for
+once.** `ad891c8` has two parents (`fe730aa` and `9d3ef3f`), `dev` is an ancestor
+of `main`, and **`git diff main dev` was empty immediately, with nothing to
+repair.** The release before it needed a reconvergence merge because a commit had
+gone straight to `main`; this one did not, which is what the rule looks like when
+it is simply followed.
+
+**The id moved and both sides agree**: `/api/version` and the page's
+`data-dpl-id` both report `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`, which is the
+deployment named in the Vercel status on `ad891c8` itself.
+
+**Checked too early again — and this time the right discriminator was
+obvious.** The first read after the merge returned the old id, exactly as it did
+last release. What settled it in one query was the *commit status*:
+`state: "pending"`, with the deployment already named. So the build was still
+running, and there was nothing to diagnose. **The previous record recommended a
+cache-busting query; that answers "is this response stale?", which is the wrong
+question when the answer is "the build has not finished".** Ask GitHub for the
+commit's status first: `pending` means wait, `success` with an unchanged id means
+suspect the response. It settled fifteen seconds later on the next poll.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and `/offline`
+answer 200 as HTML, `/manifest.webmanifest` as `application/manifest+json`,
+`/sw.js` as `application/javascript`. A signed-out `GET /api/export` answers
+**307 to `/sign-in` with a zero-byte body**. `/sw.js` is byte-identical to the
+repo's, so the worker is untouched and this remains a clean Feature 13 trial —
+still unanswered, and still needing a device that already had the previous build.
+
+**The pre-count ran on production, and the build log says so.** Above
+drizzle-kit's output, for `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`:
+
+```
+Pre-count: no pending migrations.
+Applying migrations to the production database...
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/vercel/path0/drizzle.config.ts'
+```
+
+**That one line proves more than that the script exists.** Three things had to
+work to produce it, and each was a real doubt: `tsx` resolved through
+`spawnSync` on Vercel's build image, not just on Windows with pnpm's PATH; it ran
+*before* drizzle-kit rather than alongside it; and it connected to the production
+database and read `drizzle.__drizzle_migrations` — because `no pending
+migrations` is only reachable **after** that `SELECT` succeeds. Had the query
+failed, the catch prints `no migration history in this database; nothing to
+count` instead. The two messages are different on purpose, and this is the one
+that means the connection worked.
+
+**What is still unexercised in production is the branch that matters most.** The
+scan-and-count path needs a *pending* migration containing a `DELETE`, and this
+release had none. It has been trialled against the development database with
+quoted and unquoted identifiers, a missing table and a `DELETE FROM` inside a
+comment — but the first destructive migration to reach production will be the
+first real run. **When one is next written, read the build log rather than
+assuming**: the numbers should appear above drizzle-kit's output, and their
+absence is silent by design.
 
 **Nothing in it touches the application.** No `app/`, no `components/`, no `lib/`
 — five files, of which two are `scripts/`, one is `eslint.config.mjs`, one is
@@ -40,14 +129,9 @@ silently** — which is by design, since the pre-count's exit status is ignored 
 diagnostic can never take a release down, but it would mean the control is not
 armed for the migration that needs it.
 
-**The deployment id before the merge is `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**, the
-same one the previous release ended on — so production has not moved in between,
-and this time that is confirmed rather than assumed.
-
-Verified against the live site before the merge: `/` 307s to `/sign-in`;
-`/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js` all answer 200 with
-the right content types; a signed-out `GET /api/export` answers **307 to
-`/sign-in` with a zero-byte body**.
+**The deployment id before the merge was `dpl_AdT6GCiPDGrpT1UmZXKUGvxhFvXn`**,
+the same one the previous release ended on — so production had not moved in
+between, and that was confirmed rather than assumed.
 
 **Verified on `dev` at `60d2844`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
 (358), `pnpm build`, `pnpm test:e2e` (30) — and the rehearsal above.
@@ -155,12 +239,12 @@ before anyone thought to look for it — which is why the follow-up below stands
 even though this release cost nothing. **A control that only works when the
 answer is already safe is not a control.**
 
-**The backfill script has not been run against production either.**
-`scripts/backfill-personal-amounts.ts` is a no-op unless some shared space and
-one of its members' personal spaces report in different currencies; whether that
-is true of production is unknown from here. Until it runs, any such rows read as
-their shared-space amount — which is what they read before this release, so
-nothing is worse than it was.
+**The backfill has nothing to do on production**, confirmed by the repo owner.
+`scripts/backfill-personal-amounts.ts` only has work where a shared space and one
+of its members' personal spaces report in different base currencies, and no such
+pair exists there. Reported rather than measured here — this machine has no
+production connection string — but the script is idempotent and reads before it
+writes, so running it to confirm costs one query and cannot do harm.
 
 **This is the first release here that holds a real migration, and it is
 destructive.** Every release since the deploy-time migrate step was added has
@@ -207,10 +291,8 @@ another clean trial, not yet the answer), whether push delivers, whether
 invitation notice reaches the other account, whether the budget warning arrives
 in the bell, and whether the CSV opens in a spreadsheet. **New to the list:**
 whether the personal ledger's cross-space total is right on production data
-rather than on the handful of rows in development, and whether
-`scripts/backfill-personal-amounts.ts` has anything to do there — it is a no-op
-unless a shared space and one of its members' personal spaces report in different
-currencies.
+rather than on the handful of rows in development. The backfill question that sat
+here has been answered — there is nothing for it to do on production.
 
 **Last completed: Feature 22 — one pocket, one ledger**, merged as **PR #62**
 (`93395bf`, squash-merged into `dev`). Reported by the
@@ -1013,8 +1095,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `fe730aa` (PR #63, 2026-08-28). Deployed and green.             |
-| `dev`  | Integration branch. Ahead of `main` by the pre-count control and its records; the release PR is open. |
+| `main` | Production, at `ad891c8` (PR #64, 2026-08-28). Deployed and green.             |
+| `dev`  | Integration branch. Level with `main` at `ad891c8`; ahead only by this record. |
 
 ---
 
@@ -2714,6 +2796,15 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **Before diagnosing an unchanged deployment id, ask whether the build has
+  finished.** Two consecutive releases read the old id straight after the merge.
+  The first was chased with a cache-busting query, which answers "is this
+  response stale?" — the wrong question when the real answer is "the build is
+  still running". The commit status says which:
+  `gh api repos/<owner>/<repo>/commits/<sha>/status` returns `pending` while
+  Vercel is building, and names the deployment it will become, so the expected id
+  is known before it is live. `pending` means wait; `success` with an unchanged
+  id is the case worth suspecting a cached response.
 - **A disabled control still shows its old value, so assert it is enabled before
   reading it.** `SpaceSwitcher` disables its trigger for the duration of the
   server action and the `router.refresh()` after it, and goes on displaying the
@@ -3187,15 +3278,21 @@ Not blocking, but worth doing.
       named in prose is not counted — verified, along with unquoted identifiers,
       against a trial migration.
 
+      **Confirmed running on production** in the 2026-08-28 (second) release's
+      build log, which also proves it reaches the production database rather than
+      merely being spawned — see the record above. The counting branch itself
+      awaits the first destructive migration to reach production.
+
       The stricter option — refusing to apply a `DELETE` without an explicit
       environment variable — is deliberately not taken. It would have stopped a
       release that turned out to cost nothing, and a gate people learn to set
       reflexively is a gate that stops being read.
-- [ ] **Run `scripts/backfill-personal-amounts.ts` against production**, or
-      confirm it has nothing to do. It is a no-op unless some shared space and
-      one of its members' personal spaces report in different base currencies.
-      Until then those rows read as their shared-space amount, which is what they
-      read before Feature 22 — so this is a correctness improvement, not a repair.
+- [x] ~~**Run `scripts/backfill-personal-amounts.ts` against production**, or
+      confirm it has nothing to do.~~ Nothing to do: no shared space and member's
+      personal space report in different base currencies there. Confirmed by the
+      repo owner on 2026-08-29. The script stays for the day one of them changes
+      currency — that is the case it exists for, and it is idempotent, so it can
+      be run then without checking first whether it is needed.
 - [x] ~~**`fc0dccf` put a demo URL and credentials in a public README**, and the
       account is in the production database.~~ **Wrong on the part that
       mattered.** The URL is
