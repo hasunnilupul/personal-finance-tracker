@@ -10,8 +10,47 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-29** — `dev` → `main`, carrying **only this file**. Asked for
-directly rather than arrived at by the usual route, and worth two notes.
+**Released 2026-08-29** — `59aee0e` (PR #65), carrying **only this file**, and
+**tagged `v1.1.0` — the first GitHub release since `v1.0.0`**.
+
+**The tag covers three merges, not one.** `v1.0.0` was `58b1865` (PR #61, the iOS
+glass release); `#63`, `#64` and `#65` have landed since, so `v1.1.0` is the
+whole of Feature 22, the pre-count control, and these records. **Tagging lagged
+releasing by three merges**, which is worth noticing rather than repeating: the
+tag is what anybody outside this file reads as "what shipped", and it was silent
+through the largest feature this app has had.
+
+**Minor rather than major, decided deliberately.** Feature 22 removes a
+capability — income can no longer be recorded in a shared space — and its
+migration deleted rows, which is a defensible major on the data model alone. It
+was tagged minor because **production held no shared-space income**, so nothing
+anyone used went away, and what a user actually sees is additive: a personal
+ledger that now counts what they spend from shared spaces. If a deployment ever
+did hold that data, the same change would be a major for them.
+
+**Merged with a merge commit.** `59aee0e` has two parents (`ad891c8` and
+`1a62273`), `dev` is an ancestor of `main`, and `git diff main dev` is empty
+apart from this record.
+
+**The id moved to `dpl_AvHF4QtTwkaGyVc8D76jpQv66sKr`**, matching the deployment
+named in the Vercel status on `59aee0e`, and the page's `data-dpl-id` agrees.
+**The status was already `success` on the first check this time** — no waiting
+and nothing to diagnose, which is what the gotcha above is for.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200; a signed-out
+`GET /api/export` answers 307 with a zero-byte body; and `/sw.js` is
+byte-identical to the repo's.
+
+**Merging it needed the repo owner, and that is new.** A ruleset on `main`
+requires one approving review, so `gh pr merge` refused with "the base branch
+policy prohibits the merge". `--admin` would have overridden it and was
+deliberately not used — a merge guard that an agent routes around is not a guard.
+**Worth knowing before the next release**: the PR can be opened and prepared
+without help, and the merge cannot.
+
+**Asked for directly rather than arrived at by the usual route, and worth two
+notes.**
 
 **It was not required.** `dev` sitting ahead of `main` by exactly its release
 record is the normal resting state here — the branch table has said so after
@@ -41,8 +80,8 @@ against a tree already verified green at `9d3ef3f` and released as `ad891c8`, an
 that plainly is better than re-running a suite to produce a number that would
 mean nothing new.
 
-**The deployment id before the merge is `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**, and
-`/sw.js` is byte-identical to the repo's.
+**The deployment id before the merge was `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**,
+and `/sw.js` was byte-identical to the repo's.
 
 **Released 2026-08-28 (second)** — `ad891c8` (PR #64), carrying the pre-count
 control, the finished record of the release before it, and an e2e fix.
@@ -1095,8 +1134,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `ad891c8` (PR #64, 2026-08-28). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` at `ad891c8`; ahead only by this record. |
+| `main` | Production, at `59aee0e` (PR #65, 2026-08-29), tagged `v1.1.0`. Deployed and green. |
+| `dev`  | Integration branch. Level with `main` at `59aee0e`; ahead only by this record. |
 
 ---
 
