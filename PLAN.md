@@ -10,6 +10,40 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Releasing 2026-08-29** — `dev` → `main`, carrying **only this file**. Asked for
+directly rather than arrived at by the usual route, and worth two notes.
+
+**It was not required.** `dev` sitting ahead of `main` by exactly its release
+record is the normal resting state here — the branch table has said so after
+every release, and the next feature carries the record along with it. Nothing was
+waiting on this.
+
+**But it is the purest Feature 13 trial this repo can run**, and that is not a
+justification invented afterwards — it falls out of the diff. One Markdown file
+changes, so **the build output is byte-for-byte what production is already
+serving**: same chunks, same `sw.js`, same everything a browser fetches. The only
+thing that differs is the deployment id, and therefore the `?v=<id>` on the
+worker's registration URL.
+
+**Every previous "clean trial" was weaker than this one.** Each still changed app
+code, so a device picking up the new build could always be explained by something
+else having changed. Here there is nothing else. **If an installed device
+installs a new worker after this deploy, the versioned registration URL is the
+only thing that can have caused it — and if it does not, the registration URL is
+where the fault is, not the cache code.** Seven records have been waiting on a
+device that already had the previous build; this is the cleanest question that
+can be put to one.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (358). The browser suite
+and the build were not re-run and deliberately so — the diff is one Markdown file
+against a tree already verified green at `9d3ef3f` and released as `ad891c8`, and
+`PLAN.md` is in `.prettierignore`, so nothing in the build can have moved. Saying
+that plainly is better than re-running a suite to produce a number that would
+mean nothing new.
+
+**The deployment id before the merge is `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**, and
+`/sw.js` is byte-identical to the repo's.
+
 **Released 2026-08-28 (second)** — `ad891c8` (PR #64), carrying the pre-count
 control, the finished record of the release before it, and an e2e fix.
 
