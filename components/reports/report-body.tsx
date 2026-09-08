@@ -39,7 +39,7 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
       <div
         className={
           showEarnings
-            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
             : "grid gap-3 sm:grid-cols-2 lg:grid-cols-2"
         }
       >
@@ -75,6 +75,15 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
             hint={
               summary.savingsRate === null ? "No income in this period" : "Net as a share of income"
             }
+          />
+        )}
+
+        {showEarnings && (
+          <StatTile
+            label="Balance"
+            value={formatMoney(summary.balance, currency)}
+            tone={Number(summary.balance) < 0 ? "negative" : "positive"}
+            hint={`${formatMoney(summary.carriedBalance, currency)} brought forward`}
           />
         )}
       </div>
