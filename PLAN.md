@@ -10,7 +10,49 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**On `fix/theme-switcher-hydration`, not yet merged.** Found while checking the
+**Release PR open — `dev` → `main`, not yet merged.** Carries four merges since
+the last release: **#66** and **#67** (the running balance, on the dashboard and
+on `/reports`), **#68** (the no-AI-attribution rule), and **#69** (the
+`ThemeSwitcher` hydration fix) — plus this record.
+
+**No migrations and no dependency changes.** `git diff origin/main origin/dev --
+lib/db/` touches only `report.model.ts`, a TypeScript interface rather than a
+migration file; `package.json` and `pnpm-lock.yaml` are untouched. The
+deploy-time migrate step will be a no-op — the lowest-risk shape a release can
+have here.
+
+**Minor bump: `v1.1.0` → `v1.2.0`.** Purely additive from where a user stands —
+a new Balance figure on two pages, personal space only, nothing removed — plus
+a bug fix and a process rule. Nothing here changes what a shared space shows.
+
+**What each PR still leaves unverified, going in:**
+
+- **#66 / #67 (the running balance).** Verified in an actual signed-in browser
+  this session, not only by a read-only script: the dashboard shows Balance
+  `Rs 69,750.00` with "`Rs 69,750.00` brought forward"; `/reports` agrees at
+  both "This month" and "Last 6 months" — same ending balance either way, which
+  is the invariant that has to hold. Deliberately not shown for a shared space
+  — see the "leave shared spaces as they are" decision above.
+- **#69 (the hydration fix).** Verified live: a reload with console tracking on
+  shows no hydration warning and no dev-overlay badge, and the toggle still
+  swaps the whole app correctly.
+- **#68** is docs-only — nothing beyond `npx prettier --check AGENTS.md`.
+
+**Verified on `dev` at `73b9ccd`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(366), `pnpm build`, `pnpm test:e2e` (30 — one flake and a clean retry, not a
+regression: `shared-space.spec.ts`'s personal-space test timed out waiting for
+the space switcher to re-enable on the full 3-worker run and passed in 14.7s
+run alone; nothing in this release touches space-switching).
+
+**The deployment id before the merge was `dpl_AvHF4QtTwkaGyVc8D76jpQv66sKr`**,
+confirmed unchanged since the 2026-08-29 release by asking `/api/version`
+directly — recorded in advance per the established habit, so a slow deploy
+cannot be mistaken for a stale one.
+
+**`public/sw.js` is untouched, so this is another clean Feature 13 trial** —
+still unanswered, still needing a device that already had the previous build.
+
+**Before that: the `ThemeSwitcher` hydration fix merged.** Found while checking the
 running-balance tiles in an actual browser for the first time — the dev overlay
 flagged a pre-existing, unrelated "1 Issue": `ThemeSwitcher` throws a hydration
 mismatch, and the repo owner asked to fix it once it was pointed out.
