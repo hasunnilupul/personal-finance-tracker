@@ -10,8 +10,219 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Releasing 2026-08-29** — `dev` → `main`, carrying **only this file**. Asked for
-directly rather than arrived at by the usual route, and worth two notes.
+**Release PR open — `dev` → `main`, not yet merged.** Carries four merges since
+the last release: **#66** and **#67** (the running balance, on the dashboard and
+on `/reports`), **#68** (the no-AI-attribution rule), and **#69** (the
+`ThemeSwitcher` hydration fix) — plus this record.
+
+**No migrations and no dependency changes.** `git diff origin/main origin/dev --
+lib/db/` touches only `report.model.ts`, a TypeScript interface rather than a
+migration file; `package.json` and `pnpm-lock.yaml` are untouched. The
+deploy-time migrate step will be a no-op — the lowest-risk shape a release can
+have here.
+
+**Minor bump: `v1.1.0` → `v1.2.0`.** Purely additive from where a user stands —
+a new Balance figure on two pages, personal space only, nothing removed — plus
+a bug fix and a process rule. Nothing here changes what a shared space shows.
+
+**What each PR still leaves unverified, going in:**
+
+- **#66 / #67 (the running balance).** Verified in an actual signed-in browser
+  this session, not only by a read-only script: the dashboard shows Balance
+  `Rs 69,750.00` with "`Rs 69,750.00` brought forward"; `/reports` agrees at
+  both "This month" and "Last 6 months" — same ending balance either way, which
+  is the invariant that has to hold. Deliberately not shown for a shared space
+  — see the "leave shared spaces as they are" decision above.
+- **#69 (the hydration fix).** Verified live: a reload with console tracking on
+  shows no hydration warning and no dev-overlay badge, and the toggle still
+  swaps the whole app correctly.
+- **#68** is docs-only — nothing beyond `npx prettier --check AGENTS.md`.
+
+**Verified on `dev` at `73b9ccd`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(366), `pnpm build`, `pnpm test:e2e` (30 — one flake and a clean retry, not a
+regression: `shared-space.spec.ts`'s personal-space test timed out waiting for
+the space switcher to re-enable on the full 3-worker run and passed in 14.7s
+run alone; nothing in this release touches space-switching).
+
+**The deployment id before the merge was `dpl_AvHF4QtTwkaGyVc8D76jpQv66sKr`**,
+confirmed unchanged since the 2026-08-29 release by asking `/api/version`
+directly — recorded in advance per the established habit, so a slow deploy
+cannot be mistaken for a stale one.
+
+**`public/sw.js` is untouched, so this is another clean Feature 13 trial** —
+still unanswered, still needing a device that already had the previous build.
+
+**Before that: the `ThemeSwitcher` hydration fix merged.** Found while checking the
+running-balance tiles in an actual browser for the first time — the dev overlay
+flagged a pre-existing, unrelated "1 Issue": `ThemeSwitcher` throws a hydration
+mismatch, and the repo owner asked to fix it once it was pointed out.
+
+**The standard `next-themes` trap, exactly as its own README describes it.**
+`useTheme()`'s `theme` is `undefined` on the server and stays that way until an
+effect reads `localStorage` on the client. `theme === "light"` was driving both
+the icon and the `title` text directly, so whichever theme actually resolved,
+the very first client render disagreed with what the server had already
+painted — the overlay showed `+ title="Switch to dark mode" / - title="Switch
+to light mode"`, i.e. the client resolved light and the server's guess (via the
+`undefined` branch) had rendered as if it were dark.
+
+**The fix follows this repo's own convention for exactly this shape of
+problem, not `useState` + `useEffect`.** That was the first attempt and
+`react-hooks/set-state-in-effect` refused it outright. `useMobilePlatform` and
+`OfflineBanner` already solve "the server can't know this, the client can"
+through `useSyncExternalStore` — a no-op `subscribe` (nothing to listen for,
+this never changes after mount), `getSnapshot` returning `true`, and
+`getServerSnapshot` returning `false`. React treats that disagreement as the
+expected post-hydration swap this hook exists to produce, not a mismatch to
+warn about. Before `mounted` flips, the button renders disabled with an empty
+icon at the same size — no theme guess, no layout shift.
+
+**Verified in the browser, not just by the overlay going quiet.** Reloaded with
+console tracking on: no hydration warning of any kind, only HMR/dev-tooling
+noise. Clicked the toggle — instantly swapped the whole app to dark, no error,
+no overlay badge. The accessible name read "Switch to dark mode" beforehand,
+confirming the client had resolved light correctly rather than merely hiding a
+still-wrong guess.
+
+**Verified:** `pnpm typecheck`, `pnpm lint` (this is what caught the first
+attempt), `pnpm test` (366, unchanged — no test exercised this component),
+`pnpm build`.
+
+**Before that: the reports running balance merged.** `feat/reports-running-balance`
+became PR #67, and `docs/no-ai-attribution` (PR #68, prompted by an attribution
+line that slipped into #67's first commit — see AGENTS.md) merged right after
+it. `dev` moved `261107d..d75914d`. The two records below are what shipped in
+each.
+
+**The reports running balance.** The same running balance,
+asked for on `/reports`: the repo owner asked to check the reports page for the
+identical bug once the dashboard fix landed, and it had it. `ReportSummary.net`
+was income minus expense **within the selected range only** — pick "This month"
+as the range and it showed exactly what the dashboard used to, nothing carried
+in from before the range started.
+
+**One tile, not a change to the trend chart.** `report-body.tsx` gains a
+"Balance" stat tile beside Income/Net/Savings rate, built the same way as the
+dashboard's: `carriedBalance` (everything before `range.from`) plus the range's
+own net, added to `ReportSummary` rather than a new top-level field —
+`ReportSummary` already is "the headline figures for a range". The monthly
+trend chart (`trend-chart.tsx`) is untouched on purpose: its "Net" column is a
+trend of *monthly* net, which is a different question from a running balance,
+and folding the two together would be a second feature nobody asked for.
+
+**The query is `report.service.ts`'s own version of the dashboard's trick.**
+`sumTransactions` already treats a missing `from` as no lower bound, so `{ to:
+<the day before range.from> }` sums the whole history for free — one new
+`dayBefore()` helper, two more calls in the same `Promise.all`, personal space
+only for the reason the dashboard's is: income can only ever be recorded there.
+
+**Verified against real dev data, and it agrees with the dashboard's own
+number.** A temporary read-only script (run and deleted, never committed) asked
+the demo account's report for two ranges ending on the same day. "This month"
+(1–30 Sep, nothing recorded yet) showed `carriedBalance` and `balance` both
+`"69750.00"`; "Last 6 months" (1 Apr–30 Sep, which is where the data actually
+is) showed `carriedBalance: "0.00"` and `net`/`balance` both `"69750.00"`. Two
+different ranges, same end date, same balance — which is the invariant that has
+to hold for this to be correct, and it does.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` — 366
+(362 plus four new cases in `lib/services/report.service.test.ts`, the same
+four shapes the dashboard's own test file covers: the running total, the
+all-history `to`-only query landing on the right day, the shared-space no-op,
+and a balance that goes negative).
+
+**Unseen in an actual browser, same as the dashboard fix before it.** The
+Chrome extension still was not connected this session.
+
+**Before that: the dashboard running balance merged.** `feat/dashboard-running-balance`
+became PR #66 and was merged into `dev` as `261107d`, a two-parent merge commit
+— `dev` moved `93dc1db..261107d`. The record below is what shipped in it.
+
+**The dashboard running balance.** Reported by the repo
+owner as a bug: a month with money left over showed that as nothing at all once
+the calendar turned over — the dashboard's "Net" was always this month's income
+minus this month's expense, with no notion that last month ended above or below
+zero.
+
+**The fix is a running balance, not a change to income or expense themselves.**
+Those stay actual transactions for their own month. What is new is `balance` —
+everything ever earned minus everything ever spent, up to and including this
+month — split into `carriedBalance` (before this month) and this month's own
+net, so the page can say how much of today's balance is new. Confirmed with the
+repo owner before building: carrying last month in as extra "income" was
+explicitly rejected in favour of this.
+
+**Personal space only, deliberately.** A shared space has no income of its own
+— Feature 22 moved that into the personal ledger — so a shared space's dashboard
+still shows no `Net` tile and now shows no `Balance` tile either, both `"0.00"`
+and neither queried for.
+
+**The carried figure is one call each to `transactionService.total`, not a new
+query.** `sumTransactions` already treats a missing `from` as no lower bound —
+built for the transactions list's own open-ended filters — so asking for `{ to:
+<day before this month> }` sums the whole history for free. `dashboard.service.ts`
+now fires two extra totals alongside the existing four, still one `Promise.all`.
+
+**Verified against real dev data, not only against mocks.** A temporary
+read-only script (run and deleted, never committed) called
+`dashboardService.getDashboard` for the demo account: September 2026 showed
+`totals` of all zeros — nothing recorded yet this month — and `carriedBalance` /
+`balance` both `"69750.00"`, which is exactly what every prior month's entries
+should sum to. Before this fix, the same account would have shown `"0.00"`
+everywhere despite that history existing.
+
+**Unseen in an actual browser this session.** The Chrome extension was not
+connected, so the new "Balance" tile's layout and copy have been computed and
+checked against real numbers but never eyeballed. Worth a look before the PR
+merges: `app/(dashboard)/page.tsx` now renders four stat tiles across
+`sm:grid-cols-4` for a personal space instead of three.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` — 362
+(358 plus four new cases in `lib/services/dashboard.service.test.ts`, covering
+the running total, the all-history `to`-only query, the shared-space no-op, and
+a balance that goes negative when more was ever spent than earned).
+
+**Released 2026-08-29** — `59aee0e` (PR #65), carrying **only this file**, and
+**tagged `v1.1.0` — the first GitHub release since `v1.0.0`**.
+
+**The tag covers three merges, not one.** `v1.0.0` was `58b1865` (PR #61, the iOS
+glass release); `#63`, `#64` and `#65` have landed since, so `v1.1.0` is the
+whole of Feature 22, the pre-count control, and these records. **Tagging lagged
+releasing by three merges**, which is worth noticing rather than repeating: the
+tag is what anybody outside this file reads as "what shipped", and it was silent
+through the largest feature this app has had.
+
+**Minor rather than major, decided deliberately.** Feature 22 removes a
+capability — income can no longer be recorded in a shared space — and its
+migration deleted rows, which is a defensible major on the data model alone. It
+was tagged minor because **production held no shared-space income**, so nothing
+anyone used went away, and what a user actually sees is additive: a personal
+ledger that now counts what they spend from shared spaces. If a deployment ever
+did hold that data, the same change would be a major for them.
+
+**Merged with a merge commit.** `59aee0e` has two parents (`ad891c8` and
+`1a62273`), `dev` is an ancestor of `main`, and `git diff main dev` is empty
+apart from this record.
+
+**The id moved to `dpl_AvHF4QtTwkaGyVc8D76jpQv66sKr`**, matching the deployment
+named in the Vercel status on `59aee0e`, and the page's `data-dpl-id` agrees.
+**The status was already `success` on the first check this time** — no waiting
+and nothing to diagnose, which is what the gotcha above is for.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in`, `/offline`,
+`/manifest.webmanifest` and `/sw.js` all answer 200; a signed-out
+`GET /api/export` answers 307 with a zero-byte body; and `/sw.js` is
+byte-identical to the repo's.
+
+**Merging it needed the repo owner, and that is new.** A ruleset on `main`
+requires one approving review, so `gh pr merge` refused with "the base branch
+policy prohibits the merge". `--admin` would have overridden it and was
+deliberately not used — a merge guard that an agent routes around is not a guard.
+**Worth knowing before the next release**: the PR can be opened and prepared
+without help, and the merge cannot.
+
+**Asked for directly rather than arrived at by the usual route, and worth two
+notes.**
 
 **It was not required.** `dev` sitting ahead of `main` by exactly its release
 record is the normal resting state here — the branch table has said so after
@@ -41,8 +252,8 @@ against a tree already verified green at `9d3ef3f` and released as `ad891c8`, an
 that plainly is better than re-running a suite to produce a number that would
 mean nothing new.
 
-**The deployment id before the merge is `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**, and
-`/sw.js` is byte-identical to the repo's.
+**The deployment id before the merge was `dpl_F1vy6TBk81efX6Rkq7LxdGeTrcoc`**,
+and `/sw.js` was byte-identical to the repo's.
 
 **Released 2026-08-28 (second)** — `ad891c8` (PR #64), carrying the pre-count
 control, the finished record of the release before it, and an e2e fix.
@@ -1095,8 +1306,8 @@ databases are separate.
 
 | Branch | State                                                                          |
 | ------ | ------------------------------------------------------------------------------ |
-| `main` | Production, at `ad891c8` (PR #64, 2026-08-28). Deployed and green.             |
-| `dev`  | Integration branch. Level with `main` at `ad891c8`; ahead only by this record. |
+| `main` | Production, at `59aee0e` (PR #65, 2026-08-29), tagged `v1.1.0`. Deployed and green. |
+| `dev`  | Integration branch. Level with `main` at `59aee0e`; ahead only by this record. |
 
 ---
 

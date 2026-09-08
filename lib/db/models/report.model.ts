@@ -46,6 +46,15 @@ export interface ReportSummary {
    * printing "0%" would read as a real measurement.
    */
   savingsRate: number | null;
+  /**
+   * Personal space only: everything earned minus everything spent *before*
+   * `range.from`. `"0.00"` in a shared space, which has no income of its own to
+   * run a balance against — see the dashboard's `carriedBalance`, the same idea
+   * anchored to a range instead of a calendar month.
+   */
+  carriedBalance: string;
+  /** `carriedBalance` plus this range's own net — the balance as of `range.to`. */
+  balance: string;
 }
 
 /**

@@ -2,14 +2,61 @@
 
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
-import { useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+
+/**
+ * Whether this render is happening after hydration.
+ *
+ * Read through `useSyncExternalStore` rather than set from an effect, the same
+ * call `useMobilePlatform` and `OfflineBanner` make: there is nothing to
+ * subscribe to — a page does not un-hydrate — so `subscribe` is a no-op, but
+ * the *pair* of snapshots is the point. The server snapshot is `false`; the
+ * client snapshot is `true`. React treats that disagreement as the expected
+ * post-hydration swap this hook exists to produce, rather than warning about
+ * it the way it would over a mismatched first render, and it keeps
+ * `react-hooks/set-state-in-effect` satisfied.
+ */
+function subscribe(): () => void {
+  return () => {};
+}
+
+function getSnapshot(): boolean {
+  return true;
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+function useMounted(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
 
 export function ThemeSwitcher() {
+  // `theme` is undefined on the server and on the client's first render —
+  // next-themes only knows it after reading localStorage. Rendering the
+  // icon/title from `theme` before `mounted` flips would have the server and
+  // the client disagree on which one they're looking at, which is exactly the
+  // mismatch this guards against: not "theme unknown", but "client's later
+  // answer differs from what was already painted".
+  const mounted = useMounted();
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = useCallback(() => {
     setTheme((prevState) => (prevState === "light" ? "dark" : "light"));
   }, [setTheme]);
+
+  // Same size and position as the real button, so mounting doesn't shift the
+  // topbar — there is just nothing theme-dependent in it yet to disagree
+  // about.
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" disabled className="rounded-full">
+        <span className="h-5 w-5" />
+        <span className="sr-only">Toggle theme</span>
+      </Button>
+    );
+  }
 
   return (
     <Button
