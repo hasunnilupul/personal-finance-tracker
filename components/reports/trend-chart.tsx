@@ -33,6 +33,7 @@ function niceMax(value: number): number {
 const SERIES = [
   { key: "income", label: "Income", color: "var(--viz-income)" },
   { key: "expense", label: "Expenses", color: "var(--viz-expense)" },
+  { key: "savings", label: "Savings", color: "var(--chart-3)" },
 ] as const;
 
 /**
@@ -56,7 +57,13 @@ const TrendChart = ({ months, baseCurrency }: TrendChartProps) => {
   }
 
   const max = niceMax(
-    Math.max(...months.flatMap((month) => [Number(month.income), Number(month.expense)])),
+    Math.max(
+      ...months.flatMap((month) => [
+        Number(month.income),
+        Number(month.expense),
+        Number(month.savings),
+      ]),
+    ),
   );
 
   const height = (amount: string) => `${Math.max(0, (Number(amount) / max) * 100)}%`;
@@ -111,7 +118,7 @@ const TrendChart = ({ months, baseCurrency }: TrendChartProps) => {
               key={month.month}
               tabIndex={0}
               role="img"
-              aria-label={`${month.label} ${month.month.slice(0, 4)}: income ${formatMoney(month.income, baseCurrency)}, expenses ${formatMoney(month.expense, baseCurrency)}`}
+              aria-label={`${month.label} ${month.month.slice(0, 4)}: income ${formatMoney(month.income, baseCurrency)}, expenses ${formatMoney(month.expense, baseCurrency)}, savings ${formatMoney(month.savings, baseCurrency)}`}
               className={cn(
                 "focus-visible:ring-ring relative flex flex-1 items-end justify-center gap-[2px] rounded-sm outline-none focus-visible:ring-2",
                 active === index && "bg-muted/50",
@@ -171,11 +178,12 @@ const TrendChart = ({ months, baseCurrency }: TrendChartProps) => {
 
       <ChartTable
         summary="Show the figures"
-        columns={["Month", "Income", "Expenses", "Net"]}
+        columns={["Month", "Income", "Expenses", "Savings", "Net"]}
         rows={months.map((month) => [
           `${month.label} ${month.month.slice(0, 4)}`,
           formatMoney(month.income, baseCurrency),
           formatMoney(month.expense, baseCurrency),
+          formatMoney(month.savings, baseCurrency),
           formatMoney(month.net, baseCurrency),
         ])}
       />

@@ -55,6 +55,7 @@ function template(overrides: Partial<RecurringTransaction> = {}): RecurringTrans
     amount: "50000.00",
     currency: "LKR",
     description: "Rent",
+    liquidity: null,
     frequency: "monthly",
     startDate: on("2026-06-01"),
     nextDate: on("2026-06-01"),

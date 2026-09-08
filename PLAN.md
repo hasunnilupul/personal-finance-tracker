@@ -10,6 +10,16 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**In progress: Feature 23 — savings, tracked separately from goals**, on
+`feat/savings-tracking`, branched from `origin/dev` at `9b0f8f5`. Asked for by
+the repo owner directly ("users should be able to record their savings
+separately, and show them in the monthly reports"), clarified into a concrete
+design over three rounds of questions before any code was written — see the
+feature's own record below for what was confirmed and why. Built and verified
+against the real development database in a signed-in browser; `pnpm
+typecheck && pnpm lint && pnpm test && pnpm build` all green at 374 tests. Not
+yet a PR — that is the next step, into `dev`, per the workflow.
+
 **Released 2026-09-08** — `c9cc614` (PR #70), carrying **#66** and **#67** (the
 running balance, on the dashboard and on `/reports`), **#68** (the
 no-AI-attribution rule), and **#69** (the `ThemeSwitcher` hydration fix), plus
@@ -1495,6 +1505,10 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Second converted amount  | `personalBaseAmount`, written not derived | Same reason as `baseAmount`: a total stays one `sum()` instead of a rate lookup per row   |
 | Budgets vs. shared spend | Budgets stay inside their own space       | A limit is on a category, and categories are space-scoped — matching by name is a trap    |
 | Existing shared income   | Deleted by migration, counted first       | The repo owner's call; `scripts/count-shared-income.ts` prices it before it is paid       |
+| Savings entries          | Personal-space-only third `TransactionKind`, deducted from net like an expense | Reuses the expense/income query layer rather than a parallel stack — the "third kind" this repo's own follow-ups anticipated |
+| Savings liquidity        | `liquid`/`locked` is informational only; both deduct identically | Keeps the model to one new column instead of two account types                          |
+| Savings vs. savings goals | Kept fully separate; no link between a saving and a goal | Confirmed with the repo owner rather than assumed — a goal is a target, a saving is real money |
+| Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -2181,6 +2195,88 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 23 — Savings, tracked separately from goals ✅ done, PR not yet open
+
+- [x] A third `TransactionKind`, `savings` — real money, entered like an
+      expense, personal-space only
+- [x] Tagged `liquid` or `locked` (`components/transactions/transaction-form-dialog.tsx`),
+      informational only — both deduct from net/balance identically
+- [x] Deducted from `net`/`carriedBalance`/`balance` on the dashboard and
+      reports, the same way an expense is
+- [x] `/savings` — list, filters (no category filter — savings is never
+      categorised), add/edit/delete, reusing the shared transaction page,
+      list and form components expense/income already use
+- [x] A withdrawal is a negative-amount saving (a `Direction` picker in the
+      form: "Add to savings" / "Take out of savings"), the same signed-delta
+      convention a savings goal's contribution already uses — no separate
+      withdrawal flow
+- [x] Recurring savings templates — `/recurring`'s `Kind` picker gains
+      "Saving", with a liquidity picker in place of the category picker;
+      `endDate` was already nullable, so the open-ended investment-plan case
+      needed no schema change
+- [x] Dashboard "Saved this month" tile, reports "Saved" tile and a third
+      trend-chart series; the recent-activity lists on both merge in savings
+      rows alongside expenses and income
+- [x] CSV export gains a `Liquidity` column and walks the `savings` table
+      the same way it already walks `income`
+- [x] 8 new unit tests (personal-space refusal, the default liquidity, and a
+      fifth running-balance case each on the dashboard and reports suites)
+
+**Asked for by the repo owner, and confirmed before building rather than
+assumed** (three rounds of clarifying questions): a saving is real money,
+not a target — the existing `savingsGoals` feature already covers "a target,
+no money moves," and this is deliberately the opposite of that, kept fully
+separate with no link between the two. Deducted from net "like an expense."
+Liquid vs. locked is a label, not two account types. A later withdrawal is a
+signed entry, not a new flow — the same convention goal contributions
+already established.
+
+**Reuses the expense/income machinery rather than forking it.** This
+repo's own "Known follow-ups" section had flagged the two-table,
+one-query-layer shape as "only worth revisiting if a third kind ever
+appears" — one has. `savings` slots into the existing `TransactionTable`
+union, `TransactionService`'s `TABLES` dispatch map, the shared
+`transaction-query.ts` functions, `transaction.actions.ts`, and the shared
+page/list/form components — one new table, one new service/repository pair,
+and small `kind === "savings"` branches through the UI, rather than a
+parallel `/goals`-shaped stack.
+
+**`categoryId` is carried on the `savings` table but never populated.** The
+shared query functions (`buildConditions`, `listColumns`,
+`sumByCategoryWithNames`) read `table.categoryId` directly across the
+`TransactionTable` union; dropping the column from `savings` would have
+forced every one of them into per-table branching. The UI never renders a
+category picker for a saving, and `categoryService.assertUsable` safely
+refuses a crafted id anyway (no category is ever created with
+`type: "savings"`) — the same trade-off already on record for
+`personalBaseAmount`'s "in table" narrowing.
+
+**Verified against the real (development) database in an actual signed-in
+browser**, not just compiled: added a liquid saving and a withdrawal
+(confirmed the withdrawal renders `+Rs` in green, the same direction income
+moves in, and the total recalculates correctly); confirmed `/savings`
+explains itself rather than redirecting when visited from a shared space;
+created a monthly recurring `locked` saving with no end date and confirmed
+`catchUp` materialised one entry immediately (`created: 1, templates: 1` in
+the server log) with the right liquidity; checked the dashboard's "Saved
+this month" tile and the reports page's "Saved" tile, trend-chart series and
+accessible table for both "This month" and "Last 6 months".
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` — 374 (366 plus 8
+new: the personal-space refusal and default-liquidity cases in
+`personal-ledger.test.ts`, and a fifth running-balance case each in
+`dashboard.service.test.ts` and `report.service.test.ts` covering savings
+being deducted from net/balance), `pnpm build`.
+
+**Migration is purely additive** — one `CREATE TABLE savings`, one nullable
+`ALTER TABLE recurringTransactions ADD COLUMN liquidity` — no data migration,
+no pre-count needed.
+
+**Not done**: a liquidity filter on the `/savings` list (the badge shows it
+per-row; filtering by it was left out to keep the diff to what was asked
+for) and a category breakdown for savings (there are no savings categories
+to break down by). Both are easy follow-ups if wanted.
 
 ### Feature 22 — One pocket, one ledger ✅ merged (PR #62)
 

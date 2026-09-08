@@ -70,14 +70,20 @@ beforeEach(() => {
   getOverview.mockResolvedValue(EMPTY_OVERVIEW);
 });
 
+type Kind = "income" | "expense" | "savings";
+
 describe("the running balance", () => {
   it("carries every prior month's net into this month's balance", async () => {
     total.mockImplementation(
-      async (_ctx: SpaceContext, kind: "income" | "expense", filters?: { from?: string }) => {
+      async (_ctx: SpaceContext, kind: Kind, filters?: { from?: string }) => {
         const thisMonth = filters?.from !== undefined;
 
         if (kind === "income") {
           return thisMonth ? "1000.00" : "5000.00";
+        }
+
+        if (kind === "savings") {
+          return thisMonth ? "100.00" : "500.00";
         }
 
         return thisMonth ? "400.00" : "3000.00";
@@ -88,11 +94,13 @@ describe("the running balance", () => {
 
     expect(data.totals.income).toBe("1000.00");
     expect(data.totals.expense).toBe("400.00");
-    expect(data.totals.net).toBe("600.00");
-    // Carried in from before this month: 5000.00 earned - 3000.00 spent.
-    expect(data.carriedBalance).toBe("2000.00");
+    expect(data.totals.savings).toBe("100.00");
+    // Income minus expense minus savings — savings is deducted like an expense.
+    expect(data.totals.net).toBe("500.00");
+    // Carried in from before this month: 5000.00 earned - 3000.00 spent - 500.00 saved.
+    expect(data.carriedBalance).toBe("1500.00");
     // Carried balance plus this month's own net.
-    expect(data.balance).toBe("2600.00");
+    expect(data.balance).toBe("2000.00");
   });
 
   it("asks for the carried figure with no lower bound, so it sums all of history", async () => {
@@ -102,7 +110,7 @@ describe("the running balance", () => {
 
     const carriedCalls = total.mock.calls.filter(([, , filters]) => isCarriedCall(filters));
 
-    expect(carriedCalls).toHaveLength(2); // income and expense
+    expect(carriedCalls).toHaveLength(3); // income, expense and savings
     expect(carriedCalls.every(([, , filters]) => filters.from === undefined)).toBe(true);
   });
 
@@ -111,18 +119,25 @@ describe("the running balance", () => {
 
     const data = await dashboardService.getDashboard(shared);
 
+    expect(data.totals.savings).toBe("0.00");
     expect(data.carriedBalance).toBe("0.00");
     expect(data.balance).toBe("0.00");
     expect(total.mock.calls.some(([, , filters]) => isCarriedCall(filters))).toBe(false);
+    // A shared space cannot hold savings at all, so it is never even asked for.
+    expect(total.mock.calls.some(([, kind]) => kind === "savings")).toBe(false);
   });
 
   it("can be negative, when more was spent than was ever earned", async () => {
     total.mockImplementation(
-      async (_ctx: SpaceContext, kind: "income" | "expense", filters?: { from?: string }) => {
+      async (_ctx: SpaceContext, kind: Kind, filters?: { from?: string }) => {
         const thisMonth = filters?.from !== undefined;
 
         if (kind === "income") {
           return thisMonth ? "0.00" : "100.00";
+        }
+
+        if (kind === "savings") {
+          return "0.00";
         }
 
         return thisMonth ? "50.00" : "300.00";
@@ -133,5 +148,29 @@ describe("the running balance", () => {
 
     expect(data.carriedBalance).toBe("-200.00");
     expect(data.balance).toBe("-250.00");
+  });
+
+  it("deducts savings from net and balance, the same way an expense does", async () => {
+    total.mockImplementation(
+      async (_ctx: SpaceContext, kind: Kind, filters?: { from?: string }) => {
+        const thisMonth = filters?.from !== undefined;
+
+        if (kind === "income") {
+          return thisMonth ? "1000.00" : "0.00";
+        }
+
+        if (kind === "expense") {
+          return "0.00";
+        }
+
+        // Savings only — no expense this month, so the whole drop is savings.
+        return thisMonth ? "300.00" : "0.00";
+      },
+    );
+
+    const data = await dashboardService.getDashboard(personal);
+
+    expect(data.totals.net).toBe("700.00");
+    expect(data.balance).toBe("700.00");
   });
 });

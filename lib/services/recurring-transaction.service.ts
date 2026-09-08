@@ -6,7 +6,7 @@ import { categoryService } from "@/lib/services/category.service";
 import { spaceRepository } from "@/lib/repositories/space.repository";
 import { transactionService } from "@/lib/services/transaction.service";
 import { RecurringTransaction } from "@/lib/db/models/recurring-transaction.model";
-import { TransactionKind } from "@/lib/db/models/transaction.model";
+import { SavingsLiquidity, TransactionKind } from "@/lib/db/models/transaction.model";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
 import {
@@ -33,6 +33,8 @@ export interface RecurringFields {
   currency: string;
   categoryId: number | null;
   description: string | null;
+  /** Set only when `type` is `"savings"`. */
+  liquidity: SavingsLiquidity | null;
   frequency: Frequency;
   /** The first occurrence, and the anchor for every later one. */
   startDate: Date;
@@ -54,9 +56,26 @@ export interface CatchUpResult {
 
 const EMPTY: CatchUpResult = { created: 0, templates: 0, more: false };
 
+/** What the "materialised" notification says, keyed by the template's `type`. */
+const RECURRING_VERB: Record<TransactionKind, string> = {
+  expense: "spent",
+  income: "received",
+  savings: "saved",
+};
+const RECURRING_DEFAULT_NAME: Record<TransactionKind, string> = {
+  expense: "A recurring expense",
+  income: "Recurring income",
+  savings: "A recurring saving",
+};
+const RECURRING_HREF: Record<TransactionKind, string> = {
+  expense: "/expenses",
+  income: "/income",
+  savings: "/savings",
+};
+
 export class RecurringTransactionService {
   /**
-   * Refuses an income template outside a personal space.
+   * Refuses an income or savings template outside a personal space.
    *
    * A template is a promise to write an entry every month, so one that a
    * shared space may not hold is one that would fail on its first catch-up —
@@ -64,10 +83,12 @@ export class RecurringTransactionService {
    * instead, where somebody is there to read the message.
    */
   private assertTypeAllowed(ctx: SpaceContext, type: TransactionKind): void {
-    if (type === "income" && !ctx.isPersonal) {
+    if (type !== "expense" && !ctx.isPersonal) {
+      const noun = type === "income" ? "income" : "saving";
+
       throw new ServiceError(
         "FORBIDDEN",
-        "Recurring income belongs in your personal space, not in a shared one.",
+        `Recurring ${noun} belongs in your personal space, not in a shared one.`,
       );
     }
   }
@@ -283,15 +304,18 @@ export class RecurringTransactionService {
       touched += 1;
 
       for (const date of dates) {
+        const type = template.type as TransactionKind;
+
         const entry = await transactionService.create(
           ctx,
-          template.type as TransactionKind,
+          type,
           {
             amount: template.amount,
             currency: template.currency,
             date,
             categoryId: template.categoryId,
             description: template.description,
+            liquidity: (template.liquidity as SavingsLiquidity | null) ?? undefined,
           },
           { recurringId: template.id, ifAbsent: true },
         );
@@ -304,17 +328,13 @@ export class RecurringTransactionService {
           // Keyed to the occurrence, not to the run, so the cron sweep and a
           // page load racing each other still leave one notification — the
           // same guarantee the occurrence key gives the entry itself.
-          const isExpense = template.type === "expense";
-          const name =
-            template.description ?? (isExpense ? "A recurring expense" : "Recurring income");
+          const name = template.description ?? RECURRING_DEFAULT_NAME[type];
 
           await notificationService.notifySpace(ctx.organizationId, {
             type: "recurring_created",
             title: `${name} was recorded`,
-            body: `${formatMoney(template.amount, template.currency)} ${
-              isExpense ? "spent" : "received"
-            }, from your ${FREQUENCY_LABEL[template.frequency as Frequency].toLowerCase()} schedule.`,
-            href: isExpense ? "/expenses" : "/income",
+            body: `${formatMoney(template.amount, template.currency)} ${RECURRING_VERB[type]}, from your ${FREQUENCY_LABEL[template.frequency as Frequency].toLowerCase()} schedule.`,
+            href: RECURRING_HREF[type],
             dedupeKey: `recurring:${template.id}:${date.toISOString().slice(0, 10)}`,
           });
         }

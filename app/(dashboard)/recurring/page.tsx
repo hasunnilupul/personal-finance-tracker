@@ -43,6 +43,7 @@ const RecurringPage = async () => {
         expenseCategories={expenseCategories}
         incomeCategories={incomeCategories}
         allowIncome={space.isPersonal}
+        allowSavings={space.isPersonal}
         baseCurrency={space.baseCurrency}
       />
     </div>

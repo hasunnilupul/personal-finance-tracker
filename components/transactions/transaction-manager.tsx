@@ -58,7 +58,7 @@ const TransactionManager = ({
   const [busyId, setBusyId] = useState<number | null>(null);
   const [, startTransition] = useTransition();
 
-  const noun = kind === "expense" ? "expense" : "income";
+  const noun = kind === "expense" ? "expense" : kind === "income" ? "income" : "saving";
   const pageCount = Math.max(1, Math.ceil(page.total / page.pageSize));
 
   const openAdd = () => {

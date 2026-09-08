@@ -28,7 +28,7 @@ function isoDateParam(value: string | null): string | undefined {
 }
 
 function kindParam(value: string | null): TransactionKind | undefined {
-  return value === "expense" || value === "income" ? value : undefined;
+  return value === "expense" || value === "income" || value === "savings" ? value : undefined;
 }
 
 export async function GET(request: Request) {

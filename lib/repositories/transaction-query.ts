@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import type { BatchStatement } from "@/lib/db/batch";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
+import { savings } from "@/lib/db/schema/savings";
 import { categories } from "@/lib/db/schema/categories";
 import { member, organization } from "@/lib/db/schema/organization";
 import { user } from "@/lib/db/schema/better-auth";
@@ -15,13 +16,15 @@ import {
 } from "@/lib/db/models/transaction.model";
 
 /**
- * The two tables this works over.
+ * The three tables this works over.
  *
- * Expenses and income have identical columns, so the list query is written
- * once and pointed at whichever table is being read. Duplicating it would mean
- * fixing every future filter twice.
+ * Expenses, income and savings have near-identical columns, so the list query
+ * is written once and pointed at whichever table is being read. Duplicating it
+ * would mean fixing every future filter three times over. `savings` carries a
+ * `categoryId` it never populates through the UI, kept purely so it fits this
+ * union without every function below branching on which table it got.
  */
-export type TransactionTable = typeof expenses | typeof income;
+export type TransactionTable = typeof expenses | typeof income | typeof savings;
 
 /**
  * Which rows a read is allowed to see.
@@ -186,6 +189,7 @@ function listColumns(table: TransactionTable, scope: TransactionScope) {
     categoryName: categories.name,
     categoryIcon: categories.icon,
     categoryColor: categories.color,
+    liquidity: "liquidity" in table ? table.liquidity : sql<string | null>`null`,
     createdBy: table.createdBy,
     createdByName: user.name,
     organizationId: table.organizationId,

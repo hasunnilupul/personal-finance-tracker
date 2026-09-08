@@ -29,7 +29,12 @@ export interface MonthlyTotals {
   label: string;
   income: string;
   expense: string;
-  /** Income minus expense. Negative in a month that spent more than it earned. */
+  /** Personal space only — `"0.00"` in a shared space. */
+  savings: string;
+  /**
+   * Income minus expense minus savings. Negative in a month that spent or
+   * saved more than it earned.
+   */
   net: string;
 }
 
@@ -39,11 +44,18 @@ export interface MonthlyTotals {
 export interface ReportSummary {
   income: string;
   expense: string;
+  /**
+   * Real money set aside over the range, personal space only — `"0.00"` in a
+   * shared space. Distinct from `savingsRate` below: this is what was
+   * actually recorded as a saving, not a computed ratio.
+   */
+  savings: string;
   net: string;
   /**
    * Net as a share of income, 0–1, or `null` when there was no income to save
    * out of. A rate against zero income is not zero — it is undefined, and
-   * printing "0%" would read as a real measurement.
+   * printing "0%" would read as a real measurement. `net` already has
+   * `savings` deducted, so this reflects what was left over after saving too.
    */
   savingsRate: number | null;
   /**

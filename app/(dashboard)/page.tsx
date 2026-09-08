@@ -43,7 +43,7 @@ const DashboardPage = async () => {
         </p>
       </div>
 
-      <div className={showEarnings ? "grid gap-3 sm:grid-cols-4" : "grid gap-3"}>
+      <div className={showEarnings ? "grid gap-3 sm:grid-cols-5" : "grid gap-3"}>
         {showEarnings && (
           <StatTile
             label="Income this month"
@@ -61,10 +61,18 @@ const DashboardPage = async () => {
 
         {showEarnings && (
           <StatTile
+            label="Saved this month"
+            value={formatMoney(data.totals.savings, currency)}
+            accent="var(--chart-3)"
+          />
+        )}
+
+        {showEarnings && (
+          <StatTile
             label="Net"
             value={formatMoney(data.totals.net, currency)}
             tone={isNegative ? "negative" : "positive"}
-            hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
+            hint={isNegative ? "Spent more than was earned" : "Kept out of income and savings"}
           />
         )}
 
