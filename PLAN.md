@@ -23,8 +23,19 @@ one PLAN.md already prescribes for exactly this: merge `main` back into `dev`,
 which is `b23531c` — a clean three-way merge, no conflicts, verified green
 again afterwards. **Worth naming plainly: asking in the PR body is not a
 control.** It didn't stop this the first time either (#38), and it didn't here.
-The only thing that actually catches it is checking parent count after every
-release merge, which is now part of doing this step at all — not a follow-up.
+
+**So it is a control now, not a convention.** The repo's `main` ruleset
+("Protected Default", id `21286275`) allowed `merge`, `squash` and `rebase` on
+every PR into `main` — nothing in it ever restricted *how* a release PR could
+be merged, which is exactly the gap that let this happen twice. Its
+`pull_request` rule's `allowed_merge_methods` is now `["merge"]` only, set via
+`gh api --method PUT repos/.../rulesets/21286275`. GitHub itself refuses a
+squash or rebase into `main` from here on, rather than the fix living in this
+paragraph waiting to be read again next release. **Scoped to `main` alone** —
+the ruleset's condition is `~DEFAULT_BRANCH`, so a feature PR into `dev` can
+still be squashed exactly as before; nothing about that half of the workflow
+changed. Everything else on the ruleset — the required approving review,
+force-push and deletion protection — was left untouched.
 
 **The id moved and both sides agree.** `/api/version` reports
 `dpl_4NuuURR5oXaF5ZMNPakRK1u3C7an` and the page's `data-dpl-id` is the same
