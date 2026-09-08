@@ -48,6 +48,11 @@ function subtract(a: string, b: string): string {
   return (Number(a) - Number(b)).toFixed(2);
 }
 
+/** The day before a `YYYY-MM-DD` string, itself `YYYY-MM-DD`. */
+function dayBefore(date: string): string {
+  return new Date(new Date(`${date}T00:00:00.000Z`).getTime() - 1).toISOString().slice(0, 10);
+}
+
 /**
  * Reports over a date range: what was earned, what was spent, where it went,
  * and how that moved month to month.
@@ -77,17 +82,33 @@ export class ReportService {
     const spending = ctx.isPersonal ? inPersonalLedger(ctx.userId) : inSpace(ctx.organizationId);
     const earning = inSpace(ctx.organizationId);
 
-    const [incomeTotal, expenseTotal, categoryRows, expenseByMonth, incomeByMonth] =
-      await Promise.all([
-        sumTransactions(income, earning, filters),
-        sumTransactions(expenses, spending, filters),
-        sumByCategoryWithNames(expenses, spending, filters),
-        sumByMonth(expenses, spending, filters),
-        sumByMonth(income, earning, filters),
-      ]);
+    // Everything before the range, with no lower bound — an open-ended `to`
+    // sums the whole history up to (and including) the day before it starts.
+    // Only a personal space has income to carry: income can only ever be
+    // recorded there, so a shared space's figures would just be two empty
+    // queries. See the dashboard's identical `carriedTo`.
+    const carriedFilters = { to: dayBefore(range.from) };
+
+    const [
+      incomeTotal,
+      expenseTotal,
+      categoryRows,
+      expenseByMonth,
+      incomeByMonth,
+      carriedIncome,
+      carriedExpense,
+    ] = await Promise.all([
+      sumTransactions(income, earning, filters),
+      sumTransactions(expenses, spending, filters),
+      sumByCategoryWithNames(expenses, spending, filters),
+      sumByMonth(expenses, spending, filters),
+      sumByMonth(income, earning, filters),
+      ctx.isPersonal ? sumTransactions(income, earning, carriedFilters) : "0",
+      ctx.isPersonal ? sumTransactions(expenses, spending, carriedFilters) : "0",
+    ]);
 
     return {
-      summary: this.toSummary(incomeTotal, expenseTotal),
+      summary: this.toSummary(incomeTotal, expenseTotal, carriedIncome, carriedExpense),
       byCategory: this.toBreakdown(categoryRows, expenseTotal),
       byMonth: monthsIn(range).map((month) => {
         const earned = incomeByMonth.get(month) ?? "0.00";
@@ -104,10 +125,16 @@ export class ReportService {
     };
   }
 
-  private toSummary(incomeTotal: string, expenseTotal: string): ReportSummary {
+  private toSummary(
+    incomeTotal: string,
+    expenseTotal: string,
+    carriedIncome: string,
+    carriedExpense: string,
+  ): ReportSummary {
     const earned = Number(incomeTotal);
     const spent = Number(expenseTotal);
     const net = earned - spent;
+    const carriedBalance = Number(carriedIncome) - Number(carriedExpense);
 
     return {
       income: earned.toFixed(2),
@@ -115,6 +142,8 @@ export class ReportService {
       net: net.toFixed(2),
       // Undefined rather than zero when nothing was earned — see the model.
       savingsRate: earned > 0 ? net / earned : null,
+      carriedBalance: carriedBalance.toFixed(2),
+      balance: (carriedBalance + net).toFixed(2),
     };
   }
 

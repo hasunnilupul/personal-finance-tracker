@@ -10,7 +10,51 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**On `feat/dashboard-running-balance`, not yet merged.** Reported by the repo
+**On `feat/reports-running-balance`, not yet merged.** The same running balance,
+asked for on `/reports`: the repo owner asked to check the reports page for the
+identical bug once the dashboard fix landed, and it had it. `ReportSummary.net`
+was income minus expense **within the selected range only** — pick "This month"
+as the range and it showed exactly what the dashboard used to, nothing carried
+in from before the range started.
+
+**One tile, not a change to the trend chart.** `report-body.tsx` gains a
+"Balance" stat tile beside Income/Net/Savings rate, built the same way as the
+dashboard's: `carriedBalance` (everything before `range.from`) plus the range's
+own net, added to `ReportSummary` rather than a new top-level field —
+`ReportSummary` already is "the headline figures for a range". The monthly
+trend chart (`trend-chart.tsx`) is untouched on purpose: its "Net" column is a
+trend of *monthly* net, which is a different question from a running balance,
+and folding the two together would be a second feature nobody asked for.
+
+**The query is `report.service.ts`'s own version of the dashboard's trick.**
+`sumTransactions` already treats a missing `from` as no lower bound, so `{ to:
+<the day before range.from> }` sums the whole history for free — one new
+`dayBefore()` helper, two more calls in the same `Promise.all`, personal space
+only for the reason the dashboard's is: income can only ever be recorded there.
+
+**Verified against real dev data, and it agrees with the dashboard's own
+number.** A temporary read-only script (run and deleted, never committed) asked
+the demo account's report for two ranges ending on the same day. "This month"
+(1–30 Sep, nothing recorded yet) showed `carriedBalance` and `balance` both
+`"69750.00"`; "Last 6 months" (1 Apr–30 Sep, which is where the data actually
+is) showed `carriedBalance: "0.00"` and `net`/`balance` both `"69750.00"`. Two
+different ranges, same end date, same balance — which is the invariant that has
+to hold for this to be correct, and it does.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` — 366
+(362 plus four new cases in `lib/services/report.service.test.ts`, the same
+four shapes the dashboard's own test file covers: the running total, the
+all-history `to`-only query landing on the right day, the shared-space no-op,
+and a balance that goes negative).
+
+**Unseen in an actual browser, same as the dashboard fix before it.** The
+Chrome extension still was not connected this session.
+
+**Before that: the dashboard running balance merged.** `feat/dashboard-running-balance`
+became PR #66 and was merged into `dev` as `261107d`, a two-parent merge commit
+— `dev` moved `93dc1db..261107d`. The record below is what shipped in it.
+
+**The dashboard running balance.** Reported by the repo
 owner as a bug: a month with money left over showed that as nothing at all once
 the calendar turned over — the dashboard's "Net" was always this month's income
 minus this month's expense, with no notion that last month ended above or below
