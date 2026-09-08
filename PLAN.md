@@ -10,7 +10,49 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**On `feat/reports-running-balance`, not yet merged.** The same running balance,
+**On `fix/theme-switcher-hydration`, not yet merged.** Found while checking the
+running-balance tiles in an actual browser for the first time — the dev overlay
+flagged a pre-existing, unrelated "1 Issue": `ThemeSwitcher` throws a hydration
+mismatch, and the repo owner asked to fix it once it was pointed out.
+
+**The standard `next-themes` trap, exactly as its own README describes it.**
+`useTheme()`'s `theme` is `undefined` on the server and stays that way until an
+effect reads `localStorage` on the client. `theme === "light"` was driving both
+the icon and the `title` text directly, so whichever theme actually resolved,
+the very first client render disagreed with what the server had already
+painted — the overlay showed `+ title="Switch to dark mode" / - title="Switch
+to light mode"`, i.e. the client resolved light and the server's guess (via the
+`undefined` branch) had rendered as if it were dark.
+
+**The fix follows this repo's own convention for exactly this shape of
+problem, not `useState` + `useEffect`.** That was the first attempt and
+`react-hooks/set-state-in-effect` refused it outright. `useMobilePlatform` and
+`OfflineBanner` already solve "the server can't know this, the client can"
+through `useSyncExternalStore` — a no-op `subscribe` (nothing to listen for,
+this never changes after mount), `getSnapshot` returning `true`, and
+`getServerSnapshot` returning `false`. React treats that disagreement as the
+expected post-hydration swap this hook exists to produce, not a mismatch to
+warn about. Before `mounted` flips, the button renders disabled with an empty
+icon at the same size — no theme guess, no layout shift.
+
+**Verified in the browser, not just by the overlay going quiet.** Reloaded with
+console tracking on: no hydration warning of any kind, only HMR/dev-tooling
+noise. Clicked the toggle — instantly swapped the whole app to dark, no error,
+no overlay badge. The accessible name read "Switch to dark mode" beforehand,
+confirming the client had resolved light correctly rather than merely hiding a
+still-wrong guess.
+
+**Verified:** `pnpm typecheck`, `pnpm lint` (this is what caught the first
+attempt), `pnpm test` (366, unchanged — no test exercised this component),
+`pnpm build`.
+
+**Before that: the reports running balance merged.** `feat/reports-running-balance`
+became PR #67, and `docs/no-ai-attribution` (PR #68, prompted by an attribution
+line that slipped into #67's first commit — see AGENTS.md) merged right after
+it. `dev` moved `261107d..d75914d`. The two records below are what shipped in
+each.
+
+**The reports running balance.** The same running balance,
 asked for on `/reports`: the repo owner asked to check the reports page for the
 identical bug once the dashboard fix landed, and it had it. `ReportSummary.net`
 was income minus expense **within the selected range only** — pick "This month"
