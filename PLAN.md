@@ -10,10 +10,55 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries four merges since
-the last release: **#66** and **#67** (the running balance, on the dashboard and
-on `/reports`), **#68** (the no-AI-attribution rule), and **#69** (the
-`ThemeSwitcher` hydration fix) — plus this record.
+**Released 2026-09-08** — `c9cc614` (PR #70), carrying **#66** and **#67** (the
+running balance, on the dashboard and on `/reports`), **#68** (the
+no-AI-attribution rule), and **#69** (the `ThemeSwitcher` hydration fix), plus
+this record. **Tagged `v1.2.0`.**
+
+**Squash-merged despite asking for a merge commit, and repaired the same way
+#38 was.** `c9cc614` has **one parent** (`59aee0e`), not two — GitHub squashed
+it regardless of the PR description's explicit request. `git diff main dev` was
+empty (the content was never in doubt, only the ancestry), so the fix was the
+one PLAN.md already prescribes for exactly this: merge `main` back into `dev`,
+which is `b23531c` — a clean three-way merge, no conflicts, verified green
+again afterwards. **Worth naming plainly: asking in the PR body is not a
+control.** It didn't stop this the first time either (#38), and it didn't here.
+The only thing that actually catches it is checking parent count after every
+release merge, which is now part of doing this step at all — not a follow-up.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_4NuuURR5oXaF5ZMNPakRK1u3C7an` and the page's `data-dpl-id` is the same
+string — checked against the commit's own status (`success`) rather than
+guessed from a plain request, so this isn't a stale response from before the
+build finished.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers
+**307 to `/sign-in` with a zero-byte body** — still the check worth making from
+outside, since every other endpoint leaks one page at a time and that one would
+hand over the entire ledger.
+
+**`public/sw.js` is untouched and byte-identical to the live file** (ignoring
+line endings), so this stays a clean Feature 13 trial — still unanswered, still
+needing a device that already had the previous build.
+
+**What is still unverified is the same gap the PR left**: the running balance
+and the hydration fix were both checked live in a browser *before* this merge,
+against `dev` rather than against this production build — a stronger check than
+most releases get, but not the same claim as "confirmed on the live site with
+the owner's own account," which no release here has closed for either feature
+yet.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (366) on `b23531c`
+after the reconvergence merge, plus every check above against the live site.
+`pnpm build` and `pnpm test:e2e` were not re-run past the merge — the tree is
+identical to what was already green on `dev` before the squash, and the
+reconvergence changed no file.
+
+**Before this release, the release PR was opened as follows** (kept for the
+detail on what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main origin/dev --
 lib/db/` touches only `report.model.ts`, a TypeScript interface rather than a
