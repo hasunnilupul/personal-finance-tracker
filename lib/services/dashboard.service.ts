@@ -47,6 +47,14 @@ export interface DashboardData {
   /** "August 2026". */
   monthLabel: string;
   totals: MonthTotals;
+  /**
+   * The running balance, personal space only: `carriedBalance` is everything
+   * earned minus everything spent *before* this month, and `balance` adds this
+   * month's own net on top. A shared space has no income of its own to run a
+   * balance against, so both are `"0.00"` there and the page does not show them.
+   */
+  carriedBalance: string;
+  balance: string;
   recent: RecentEntry[];
   budgets: BudgetWithProgress[];
   /** Budgets in effect this month, of which `budgets` is the worst few. */
@@ -85,15 +93,35 @@ export class DashboardService {
       to: window.end.toISOString().slice(0, 10),
     };
 
-    const [incomeTotal, expenseTotal, recentExpenses, recentIncome, overview] = await Promise.all([
+    // Everything before this month's window, with no lower bound — an
+    // open-ended `to` sums the whole history up to (and including) the day
+    // before the window starts. Only a personal space has income to carry:
+    // income can only ever be recorded there, so a shared space's carried
+    // figures would just cost two empty queries.
+    const carriedTo = new Date(window.start.getTime() - 1).toISOString().slice(0, 10);
+    const carriedFilters = { to: carriedTo };
+
+    const [
+      incomeTotal,
+      expenseTotal,
+      recentExpenses,
+      recentIncome,
+      overview,
+      carriedIncome,
+      carriedExpense,
+    ] = await Promise.all([
       transactionService.total(ctx, "income", filters),
       transactionService.total(ctx, "expense", filters),
       transactionService.list(ctx, "expense", { page: 1, pageSize: RECENT_LIMIT }),
       transactionService.list(ctx, "income", { page: 1, pageSize: RECENT_LIMIT }),
       budgetService.getOverview(ctx, month),
+      ctx.isPersonal ? transactionService.total(ctx, "income", carriedFilters) : "0",
+      ctx.isPersonal ? transactionService.total(ctx, "expense", carriedFilters) : "0",
     ]);
 
     const monthly = overview.monthly.budgets;
+    const net = Number(incomeTotal) - Number(expenseTotal);
+    const carriedBalance = Number(carriedIncome) - Number(carriedExpense);
 
     return {
       monthLabel: window.label,
@@ -103,8 +131,10 @@ export class DashboardService {
         // that are already fixed to two.
         income: Number(incomeTotal).toFixed(2),
         expense: Number(expenseTotal).toFixed(2),
-        net: (Number(incomeTotal) - Number(expenseTotal)).toFixed(2),
+        net: net.toFixed(2),
       },
+      carriedBalance: carriedBalance.toFixed(2),
+      balance: (carriedBalance + net).toFixed(2),
       recent: mergeRecent(recentExpenses.items, recentIncome.items),
       budgets: worstFirst(monthly).slice(0, BUDGET_HEALTH_LIMIT),
       budgetCount: monthly.length,

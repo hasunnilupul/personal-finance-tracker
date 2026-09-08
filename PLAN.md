@@ -10,6 +10,50 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**On `feat/dashboard-running-balance`, not yet merged.** Reported by the repo
+owner as a bug: a month with money left over showed that as nothing at all once
+the calendar turned over — the dashboard's "Net" was always this month's income
+minus this month's expense, with no notion that last month ended above or below
+zero.
+
+**The fix is a running balance, not a change to income or expense themselves.**
+Those stay actual transactions for their own month. What is new is `balance` —
+everything ever earned minus everything ever spent, up to and including this
+month — split into `carriedBalance` (before this month) and this month's own
+net, so the page can say how much of today's balance is new. Confirmed with the
+repo owner before building: carrying last month in as extra "income" was
+explicitly rejected in favour of this.
+
+**Personal space only, deliberately.** A shared space has no income of its own
+— Feature 22 moved that into the personal ledger — so a shared space's dashboard
+still shows no `Net` tile and now shows no `Balance` tile either, both `"0.00"`
+and neither queried for.
+
+**The carried figure is one call each to `transactionService.total`, not a new
+query.** `sumTransactions` already treats a missing `from` as no lower bound —
+built for the transactions list's own open-ended filters — so asking for `{ to:
+<day before this month> }` sums the whole history for free. `dashboard.service.ts`
+now fires two extra totals alongside the existing four, still one `Promise.all`.
+
+**Verified against real dev data, not only against mocks.** A temporary
+read-only script (run and deleted, never committed) called
+`dashboardService.getDashboard` for the demo account: September 2026 showed
+`totals` of all zeros — nothing recorded yet this month — and `carriedBalance` /
+`balance` both `"69750.00"`, which is exactly what every prior month's entries
+should sum to. Before this fix, the same account would have shown `"0.00"`
+everywhere despite that history existing.
+
+**Unseen in an actual browser this session.** The Chrome extension was not
+connected, so the new "Balance" tile's layout and copy have been computed and
+checked against real numbers but never eyeballed. Worth a look before the PR
+merges: `app/(dashboard)/page.tsx` now renders four stat tiles across
+`sm:grid-cols-4` for a personal space instead of three.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` — 362
+(358 plus four new cases in `lib/services/dashboard.service.test.ts`, covering
+the running total, the all-history `to`-only query, the shared-space no-op, and
+a balance that goes negative when more was ever spent than earned).
+
 **Released 2026-08-29** — `59aee0e` (PR #65), carrying **only this file**, and
 **tagged `v1.1.0` — the first GitHub release since `v1.0.0`**.
 
