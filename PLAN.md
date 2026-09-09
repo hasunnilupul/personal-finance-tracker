@@ -10,19 +10,20 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**In progress: Feature 23 — savings, tracked separately from goals**, on
-`feat/savings-tracking`, branched from `origin/dev` at `9b0f8f5`. Asked for by
-the repo owner directly ("users should be able to record their savings
-separately, and show them in the monthly reports"), clarified into a concrete
-design over three rounds of questions before any code was written — see the
-feature's own record below for what was confirmed and why. Built and verified
-against the real development database in a signed-in browser; `pnpm
-typecheck && pnpm lint && pnpm test && pnpm build` all green at 374 tests.
+**Last completed: Feature 23 — savings, tracked separately from goals**,
+merged as **PR #71** (`c7950d8`, a two-parent merge commit into `dev` —
+`dev` moved `9b0f8f5..c7950d8`). Asked for by the repo owner directly ("users
+should be able to record their savings separately, and show them in the
+monthly reports"), clarified into a concrete design over three rounds of
+questions before any code was written — see the feature's own record below
+for what was confirmed and why.
 
-**PR #71 opened into `dev`.** `origin/dev` had not moved past `9b0f8f5` since
-branching, so there was nothing to pull in and no need to re-run the checks
-before opening it. Per the workflow: stopping here to ask the repo owner to
-merge.
+**Built and verified against the real development database in a signed-in
+browser before the PR, and re-verified on `dev` after the merge.**
+`origin/dev` had not moved past `9b0f8f5` since branching, so there was
+nothing to pull in before opening the PR. After the merge, `pnpm typecheck
+&& pnpm lint && pnpm test` were re-run on `dev` at `c7950d8` itself — still
+green at 374 tests, 28 files.
 
 **Released 2026-09-08** — `c9cc614` (PR #70), carrying **#66** and **#67** (the
 running balance, on the dashboard and on `/reports`), **#68** (the
@@ -2200,7 +2201,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 23 — Savings, tracked separately from goals ✅ done, PR #71 open
+### Feature 23 — Savings, tracked separately from goals ✅ merged (PR #71)
 
 - [x] A third `TransactionKind`, `savings` — real money, entered like an
       expense, personal-space only
