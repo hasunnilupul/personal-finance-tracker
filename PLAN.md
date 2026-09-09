@@ -17,8 +17,12 @@ separately, and show them in the monthly reports"), clarified into a concrete
 design over three rounds of questions before any code was written — see the
 feature's own record below for what was confirmed and why. Built and verified
 against the real development database in a signed-in browser; `pnpm
-typecheck && pnpm lint && pnpm test && pnpm build` all green at 374 tests. Not
-yet a PR — that is the next step, into `dev`, per the workflow.
+typecheck && pnpm lint && pnpm test && pnpm build` all green at 374 tests.
+
+**PR #71 opened into `dev`.** `origin/dev` had not moved past `9b0f8f5` since
+branching, so there was nothing to pull in and no need to re-run the checks
+before opening it. Per the workflow: stopping here to ask the repo owner to
+merge.
 
 **Released 2026-09-08** — `c9cc614` (PR #70), carrying **#66** and **#67** (the
 running balance, on the dashboard and on `/reports`), **#68** (the
@@ -2196,7 +2200,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 23 — Savings, tracked separately from goals ✅ done, PR not yet open
+### Feature 23 — Savings, tracked separately from goals ✅ done, PR #71 open
 
 - [x] A third `TransactionKind`, `savings` — real money, entered like an
       expense, personal-space only
