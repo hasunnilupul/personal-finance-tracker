@@ -33,8 +33,19 @@ interface RecurringManagerProps {
   incomeCategories: Category[];
   /** See {@link RecurringFormProps.allowIncome}. */
   allowIncome: boolean;
+  /** See {@link RecurringFormProps.allowSavings}. */
+  allowSavings: boolean;
   baseCurrency: string;
 }
+
+/** Amount colour and sign, by template type. */
+const AMOUNT_STYLE: Record<string, { sign: string; className: string }> = {
+  income: { sign: "+", className: "text-emerald-600 dark:text-emerald-500" },
+  savings: { sign: "−", className: "text-amber-600 dark:text-amber-500" },
+  expense: { sign: "−", className: "text-foreground" },
+};
+
+const LIQUIDITY_ICON: Record<string, string> = { liquid: "💧", locked: "🔒" };
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -86,6 +97,7 @@ const RecurringManager = ({
   expenseCategories,
   incomeCategories,
   allowIncome,
+  allowSavings,
   baseCurrency,
 }: RecurringManagerProps) => {
   const router = useRouter();
@@ -193,7 +205,11 @@ const RecurringManager = ({
         <ul className="flex flex-col gap-3">
           {templates.map((template) => {
             const busy = busyId === template.id;
-            const isIncome = template.type === "income";
+            const amountStyle = AMOUNT_STYLE[template.type] ?? AMOUNT_STYLE.expense;
+            const fallbackIcon =
+              template.type === "savings"
+                ? (LIQUIDITY_ICON[template.liquidity ?? "liquid"] ?? "•")
+                : "•";
 
             return (
               <li key={template.id}>
@@ -205,7 +221,7 @@ const RecurringManager = ({
                         className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full text-base"
                         style={{ backgroundColor: `${template.categoryColor ?? "#94a3b8"}33` }}
                       >
-                        {template.categoryIcon ?? "•"}
+                        {template.categoryIcon ?? fallbackIcon}
                       </span>
 
                       <div className="min-w-0">
@@ -225,10 +241,10 @@ const RecurringManager = ({
                         <p
                           className={cn(
                             "text-sm font-semibold tabular-nums",
-                            isIncome ? "text-emerald-600 dark:text-emerald-500" : "text-foreground",
+                            amountStyle.className,
                           )}
                         >
-                          {isIncome ? "+" : "−"}
+                          {amountStyle.sign}
                           {formatMoney(template.amount, template.currency)}
                         </p>
                       </div>
@@ -286,6 +302,7 @@ const RecurringManager = ({
         expenseCategories={expenseCategories}
         incomeCategories={incomeCategories}
         allowIncome={allowIncome}
+        allowSavings={allowSavings}
         baseCurrency={baseCurrency}
         open={formOpen}
         onOpenChange={setFormOpen}

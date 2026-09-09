@@ -21,6 +21,35 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   month: "short",
 });
 
+const LIQUIDITY_ICON: Record<string, string> = { liquid: "💧", locked: "🔒" };
+
+/**
+ * Sign and colour for one entry's amount.
+ *
+ * A savings withdrawal is stored as a negative amount (see the transaction
+ * form), so it reads the other way round from a normal saving: money is
+ * coming back to spendable, the same direction income moves in.
+ */
+function amountStyle(
+  kind: RecentEntry["kind"],
+  baseAmount: string,
+): {
+  sign: string;
+  className: string;
+} {
+  if (kind === "income") {
+    return { sign: "+", className: "text-emerald-600 dark:text-emerald-500" };
+  }
+
+  if (kind === "savings") {
+    return Number(baseAmount) < 0
+      ? { sign: "+", className: "text-emerald-600 dark:text-emerald-500" }
+      : { sign: "−", className: "text-amber-600 dark:text-amber-500" };
+  }
+
+  return { sign: "−", className: "text-foreground" };
+}
+
 /**
  * The last few entries across both expenses and income.
  *
@@ -52,6 +81,10 @@ const RecentEntries = ({
               <Link href="/income" className="underline underline-offset-2">
                 income
               </Link>{" "}
+              or{" "}
+              <Link href="/savings" className="underline underline-offset-2">
+                savings
+              </Link>{" "}
             </>
           )}
           and it will appear here.
@@ -64,6 +97,9 @@ const RecentEntries = ({
     <ul className="divide-border mt-2 divide-y">
       {entries.map((entry) => {
         const isConverted = entry.currency !== baseCurrency;
+        const style = amountStyle(entry.kind, entry.baseAmount);
+        const fallbackIcon =
+          entry.kind === "savings" ? (LIQUIDITY_ICON[entry.liquidity ?? "liquid"] ?? "•") : "•";
 
         return (
           <li
@@ -76,7 +112,7 @@ const RecentEntries = ({
                 className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full text-base"
                 style={{ backgroundColor: `${entry.categoryColor ?? "#94a3b8"}33` }}
               >
-                {entry.categoryIcon ?? "•"}
+                {entry.categoryIcon ?? fallbackIcon}
               </span>
 
               <div className="min-w-0">
@@ -95,21 +131,14 @@ const RecentEntries = ({
             </div>
 
             <div className="shrink-0 text-right">
-              <p
-                className={cn(
-                  "text-sm font-semibold tabular-nums",
-                  entry.kind === "income"
-                    ? "text-emerald-600 dark:text-emerald-500"
-                    : "text-foreground",
-                )}
-              >
-                {entry.kind === "income" ? "+" : "−"}
-                {formatMoney(entry.baseAmount, baseCurrency)}
+              <p className={cn("text-sm font-semibold tabular-nums", style.className)}>
+                {style.sign}
+                {formatMoney(Math.abs(Number(entry.baseAmount)).toFixed(2), baseCurrency)}
               </p>
 
               {isConverted && (
                 <p className="text-muted-foreground text-xs tabular-nums">
-                  {formatMoney(entry.amount, entry.currency)}
+                  {formatMoney(Math.abs(Number(entry.amount)).toFixed(2), entry.currency)}
                 </p>
               )}
             </div>

@@ -74,10 +74,14 @@ const TransactionPageContent = async ({ kind, searchParams }: TransactionPagePro
     pageSize: DEFAULT_PAGE_SIZE,
   };
 
-  const basePath = kind === "expense" ? "/expenses" : "/income";
+  const basePath = kind === "expense" ? "/expenses" : kind === "income" ? "/income" : "/savings";
 
+  // Savings is never categorised — there is no picker for it, so there is
+  // nothing to fetch.
   const [categories, authors] = await Promise.all([
-    categoryService.getCategoriesByType(ctx, kind === "expense" ? "expense" : "income"),
+    kind === "savings"
+      ? Promise.resolve([])
+      : categoryService.getCategoriesByType(ctx, kind === "expense" ? "expense" : "income"),
     transactionService.listAuthors(ctx, kind),
   ]);
 
@@ -94,6 +98,7 @@ const TransactionPageContent = async ({ kind, searchParams }: TransactionPagePro
         categories={categories}
         authors={authors}
         showAuthorFilter={!space.isPersonal}
+        showCategoryFilter={kind !== "savings"}
         current={{
           from: filters.from,
           to: filters.to,

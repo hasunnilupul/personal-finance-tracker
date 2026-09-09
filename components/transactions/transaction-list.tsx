@@ -35,6 +35,32 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
+const LIQUIDITY_ICON: Record<string, string> = { liquid: "💧", locked: "🔒" };
+
+/**
+ * Sign and colour for one row's amount.
+ *
+ * A savings withdrawal is stored as a negative amount (see the form dialog),
+ * so it reads the other way round from a normal saving: money is coming back
+ * to spendable, the same direction income moves in.
+ */
+function amountStyle(
+  kind: TransactionKind,
+  baseAmount: string,
+): { sign: string; className: string } {
+  if (kind === "income") {
+    return { sign: "+", className: "text-emerald-600" };
+  }
+
+  if (kind === "savings") {
+    return Number(baseAmount) < 0
+      ? { sign: "+", className: "text-emerald-600" }
+      : { sign: "−", className: "text-amber-600 dark:text-amber-500" };
+  }
+
+  return { sign: "−", className: "text-foreground" };
+}
+
 /**
  * The rows of a transaction list.
  *
@@ -57,6 +83,9 @@ const TransactionList = ({
         const isConverted = item.currency !== baseCurrency;
         const elsewhere = item.organizationId !== activeSpaceId;
         const busy = busyId === item.id;
+        const style = amountStyle(kind, item.baseAmount);
+        const fallbackIcon =
+          kind === "savings" ? (LIQUIDITY_ICON[item.liquidity ?? "liquid"] ?? "•") : "•";
 
         return (
           <li
@@ -72,7 +101,7 @@ const TransactionList = ({
                 className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full text-base"
                 style={{ backgroundColor: `${item.categoryColor ?? "#94a3b8"}33` }}
               >
-                {item.categoryIcon ?? "•"}
+                {item.categoryIcon ?? fallbackIcon}
               </span>
 
               <div className="min-w-0">
@@ -93,19 +122,14 @@ const TransactionList = ({
 
             <div className="flex shrink-0 items-center gap-1">
               <div className="text-right">
-                <p
-                  className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    kind === "income" ? "text-emerald-600" : "text-foreground",
-                  )}
-                >
-                  {kind === "income" ? "+" : "−"}
-                  {formatMoney(item.baseAmount, baseCurrency)}
+                <p className={cn("text-sm font-semibold tabular-nums", style.className)}>
+                  {style.sign}
+                  {formatMoney(Math.abs(Number(item.baseAmount)).toFixed(2), baseCurrency)}
                 </p>
 
                 {isConverted && (
                   <p className="text-muted-foreground text-xs tabular-nums">
-                    {formatMoney(item.amount, item.currency)}
+                    {formatMoney(Math.abs(Number(item.amount)).toFixed(2), item.currency)}
                   </p>
                 )}
               </div>

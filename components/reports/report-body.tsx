@@ -39,7 +39,7 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
       <div
         className={
           showEarnings
-            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-6"
             : "grid gap-3 sm:grid-cols-2 lg:grid-cols-2"
         }
       >
@@ -61,10 +61,21 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
 
         {showEarnings && (
           <StatTile
+            label="Saved"
+            value={formatMoney(summary.savings, currency)}
+            accent="var(--chart-3)"
+            hint={range.label}
+          />
+        )}
+
+        {showEarnings && (
+          <StatTile
             label="Net"
             value={formatMoney(summary.net, currency)}
             tone={isNegative ? "negative" : "positive"}
-            hint={isNegative ? "Spent more than was earned" : "Kept out of income"}
+            hint={
+              isNegative ? "Spent or saved more than was earned" : "Kept out of income and savings"
+            }
           />
         )}
 
@@ -91,7 +102,7 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
       <Card className="p-4 sm:p-6">
         <div>
           <h2 className="text-foreground text-lg font-semibold tracking-tight">
-            {showEarnings ? "Income and expenses" : "Expenses"}
+            {showEarnings ? "Income, expenses and savings" : "Expenses"}
           </h2>
           <p className="text-muted-foreground mt-0.5 text-xs">By month, {range.label}</p>
         </div>

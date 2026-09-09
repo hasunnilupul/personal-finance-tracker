@@ -21,6 +21,8 @@ interface TransactionFiltersProps {
   categories: Category[];
   authors: { id: string; name: string }[];
   showAuthorFilter: boolean;
+  /** False for savings, which is never categorised. Defaults to `true`. */
+  showCategoryFilter?: boolean;
   current: {
     from?: string;
     to?: string;
@@ -43,6 +45,7 @@ const TransactionFilters = ({
   categories,
   authors,
   showAuthorFilter,
+  showCategoryFilter = true,
   current,
 }: TransactionFiltersProps) => {
   const router = useRouter();
@@ -113,27 +116,29 @@ const TransactionFilters = ({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="filter-category" className="text-xs">
-          Category
-        </Label>
-        <Select
-          items={categoryItems}
-          value={current.categoryId ?? ANY}
-          onValueChange={(value) => apply("categoryId", String(value))}
-        >
-          <SelectTrigger id="filter-category" className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {categoryItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {showCategoryFilter && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="filter-category" className="text-xs">
+            Category
+          </Label>
+          <Select
+            items={categoryItems}
+            value={current.categoryId ?? ANY}
+            onValueChange={(value) => apply("categoryId", String(value))}
+          >
+            <SelectTrigger id="filter-category" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {showAuthorFilter && authors.length > 1 && (
         <div className="flex flex-col gap-1.5">

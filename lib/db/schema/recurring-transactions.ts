@@ -15,8 +15,10 @@ export const recurringTransactions = pgTable(
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     categoryId: integer("categoryId").references(() => categories.id, { onDelete: "set null" }),
-    type: varchar("type", { length: 10 }).notNull(), // 'expense' or 'income'
+    type: varchar("type", { length: 10 }).notNull(), // 'expense', 'income' or 'savings'
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    /** Set only when `type` is `'savings'` — `'liquid'` or `'locked'`. */
+    liquidity: varchar("liquidity", { length: 10 }),
     /**
      * The currency the template is denominated in.
      *

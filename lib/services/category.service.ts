@@ -2,6 +2,7 @@ import { categoryRepository } from "@/lib/repositories/category.repository";
 import { EMPTY_USAGE, categoryUsageRepository } from "@/lib/repositories/category-usage.repository";
 import { BatchStatement, rowsReturned, runBatch } from "@/lib/db/batch";
 import { Category, CategoryInput, CategoryWithUsage } from "@/lib/db/models/category.model";
+import { TransactionKind } from "@/lib/db/models/transaction.model";
 import { SpaceContext } from "@/lib/services/types";
 import { ServiceError } from "@/lib/services/errors";
 import { logger } from "@/lib/logger";
@@ -54,13 +55,18 @@ export class CategoryService {
    *
    * @param type The side the caller files under. A category is refused when it
    *   belongs to the other one, which is the same rule the pickers follow.
+   *   `"savings"` is accepted for {@link TransactionKind} callers even though
+   *   no category is ever created with that type — a savings entry's
+   *   `categoryId` is always `null`, so this never runs for one in practice;
+   *   if a caller ever posted one anyway it would be refused here rather than
+   *   silently accepted.
    * @param options.mismatchMessage Overrides the wrong-type sentence for a
    *   caller that can say something more useful about its own context.
    */
   async assertUsable(
     ctx: SpaceContext,
     categoryId: number | null | undefined,
-    type: "income" | "expense",
+    type: TransactionKind,
     options: { mismatchMessage?: string } = {},
   ): Promise<void> {
     if (categoryId === null || categoryId === undefined) {

@@ -55,6 +55,12 @@ export const tabs: Tab[] = [
     icon: "📉",
   },
   {
+    href: "/savings",
+    label: "Savings",
+    icon: "🏦",
+    personalOnly: true,
+  },
+  {
     href: "/goals",
     label: "Goals",
     icon: "🎯",

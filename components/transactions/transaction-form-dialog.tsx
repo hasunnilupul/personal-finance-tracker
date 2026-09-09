@@ -29,7 +29,11 @@ import {
 } from "@/app/actions/transaction.actions";
 import { SUPPORTED_CURRENCIES } from "@/constants/currencies";
 import { Category } from "@/lib/db/models/category.model";
-import { TransactionKind, TransactionListItem } from "@/lib/db/models/transaction.model";
+import {
+  SavingsLiquidity,
+  TransactionKind,
+  TransactionListItem,
+} from "@/lib/db/models/transaction.model";
 
 const initialState: TransactionFormState = {};
 
@@ -76,6 +80,14 @@ const TransactionForm = ({
   const [categoryId, setCategoryId] = useState(
     transaction?.categoryId ? String(transaction.categoryId) : "none",
   );
+  const [liquidity, setLiquidity] = useState<SavingsLiquidity>(transaction?.liquidity ?? "liquid");
+  // A withdrawal is stored as a negative amount — same signed-delta
+  // convention a savings goal's contribution uses. The amount field always
+  // shows and accepts a positive magnitude; direction is a separate control
+  // rather than a minus sign typed into it, which is easy to miss.
+  const [direction, setDirection] = useState<"add" | "withdraw">(
+    transaction && Number(transaction.amount) < 0 ? "withdraw" : "add",
+  );
 
   useEffect(() => {
     if (state.success) {
@@ -85,7 +97,7 @@ const TransactionForm = ({
     }
   }, [state.success, isEditing, onDone, router]);
 
-  const noun = kind === "expense" ? "expense" : "income";
+  const noun = kind === "expense" ? "expense" : kind === "income" ? "income" : "saving";
   const fieldError = (name: string) => state.fieldErrors?.[name];
 
   // `items` is what makes each trigger show a label rather than the raw value
@@ -101,6 +113,14 @@ const TransactionForm = ({
       value: String(category.id),
       label: `${category.icon} ${category.name}`,
     })),
+  ];
+  const liquidityItems = [
+    { value: "liquid", label: "Can still spend it" },
+    { value: "locked", label: "Set aside long-term (e.g. an investment)" },
+  ];
+  const directionItems = [
+    { value: "add", label: "Add to savings" },
+    { value: "withdraw", label: "Take out of savings" },
   ];
 
   return (
@@ -120,7 +140,36 @@ const TransactionForm = ({
         <input type="hidden" name="kind" value={kind} />
         {transaction && <input type="hidden" name="id" value={transaction.id} />}
         <input type="hidden" name="currency" value={currency} />
-        <input type="hidden" name="categoryId" value={categoryId} />
+        {kind === "savings" ? (
+          <>
+            <input type="hidden" name="liquidity" value={liquidity} />
+            <input type="hidden" name="direction" value={direction} />
+          </>
+        ) : (
+          <input type="hidden" name="categoryId" value={categoryId} />
+        )}
+
+        {kind === "savings" && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="direction-trigger">Direction</Label>
+            <Select
+              items={directionItems}
+              value={direction}
+              onValueChange={(value) => setDirection(value as "add" | "withdraw")}
+            >
+              <SelectTrigger id="direction-trigger" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {directionItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <div className="flex flex-1 flex-col gap-2">
@@ -130,7 +179,7 @@ const TransactionForm = ({
               name="amount"
               inputMode="decimal"
               placeholder="0.00"
-              defaultValue={transaction?.amount ?? ""}
+              defaultValue={transaction ? Math.abs(Number(transaction.amount)).toFixed(2) : ""}
               required
               autoFocus
             />
@@ -173,25 +222,47 @@ const TransactionForm = ({
           {fieldError("date") && <p className="text-destructive text-sm">{fieldError("date")}</p>}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="category-trigger">Category</Label>
-          <Select
-            items={categoryItems}
-            value={categoryId}
-            onValueChange={(value) => setCategoryId(String(value))}
-          >
-            <SelectTrigger id="category-trigger" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categoryItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {kind === "savings" ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="liquidity-trigger">Can it still be spent?</Label>
+            <Select
+              items={liquidityItems}
+              value={liquidity}
+              onValueChange={(value) => setLiquidity(value as SavingsLiquidity)}
+            >
+              <SelectTrigger id="liquidity-trigger" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {liquidityItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="category-trigger">Category</Label>
+            <Select
+              items={categoryItems}
+              value={categoryId}
+              onValueChange={(value) => setCategoryId(String(value))}
+            >
+              <SelectTrigger id="category-trigger" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="description">Note</Label>

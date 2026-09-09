@@ -66,15 +66,32 @@ beforeEach(() => {
   sumByMonth.mockResolvedValue(new Map());
 });
 
+/** Which table a call targeted, by comparing against the real schema objects. */
+async function tableKind(table: unknown): Promise<"income" | "expense" | "savings"> {
+  if (table === (await import("@/lib/db/schema/income")).income) {
+    return "income";
+  }
+
+  if (table === (await import("@/lib/db/schema/savings")).savings) {
+    return "savings";
+  }
+
+  return "expense";
+}
+
 describe("the reports summary's running balance", () => {
   it("carries everything before the range into balance", async () => {
     sumTransactions.mockImplementation(
-      async (table: { name?: string }, _scope: unknown, filters?: { from?: string }) => {
+      async (table: unknown, _scope: unknown, filters?: { from?: string }) => {
         const inRange = filters?.from !== undefined;
-        const isIncome = table === (await import("@/lib/db/schema/income")).income;
+        const kind = await tableKind(table);
 
-        if (isIncome) {
+        if (kind === "income") {
           return inRange ? "1000.00" : "5000.00";
+        }
+
+        if (kind === "savings") {
+          return inRange ? "100.00" : "500.00";
         }
 
         return inRange ? "400.00" : "3000.00";
@@ -85,10 +102,12 @@ describe("the reports summary's running balance", () => {
 
     expect(report.summary.income).toBe("1000.00");
     expect(report.summary.expense).toBe("400.00");
-    expect(report.summary.net).toBe("600.00");
-    // 5000.00 earned - 3000.00 spent before the range.
-    expect(report.summary.carriedBalance).toBe("2000.00");
-    expect(report.summary.balance).toBe("2600.00");
+    expect(report.summary.savings).toBe("100.00");
+    // Income minus expense minus savings — savings is deducted like an expense.
+    expect(report.summary.net).toBe("500.00");
+    // 5000.00 earned - 3000.00 spent - 500.00 saved, before the range.
+    expect(report.summary.carriedBalance).toBe("1500.00");
+    expect(report.summary.balance).toBe("2000.00");
   });
 
   it("asks for the carried figure with no lower bound, ending the day before the range", async () => {
@@ -100,7 +119,7 @@ describe("the reports summary's running balance", () => {
       isCarriedCall(filters),
     );
 
-    expect(carriedCalls).toHaveLength(2); // income and expense
+    expect(carriedCalls).toHaveLength(3); // income, expense and savings
     expect(carriedCalls.every(([, , filters]) => filters.to === "2026-08-31")).toBe(true);
   });
 
@@ -109,6 +128,7 @@ describe("the reports summary's running balance", () => {
 
     const report = await reportService.getReport(shared, RANGE);
 
+    expect(report.summary.savings).toBe("0.00");
     expect(report.summary.carriedBalance).toBe("0.00");
     expect(report.summary.balance).toBe("0.00");
     expect(sumTransactions.mock.calls.some(([, , filters]) => isCarriedCall(filters))).toBe(false);
@@ -116,12 +136,16 @@ describe("the reports summary's running balance", () => {
 
   it("can be negative, when more was ever spent than earned", async () => {
     sumTransactions.mockImplementation(
-      async (table: { name?: string }, _scope: unknown, filters?: { from?: string }) => {
+      async (table: unknown, _scope: unknown, filters?: { from?: string }) => {
         const inRange = filters?.from !== undefined;
-        const isIncome = table === (await import("@/lib/db/schema/income")).income;
+        const kind = await tableKind(table);
 
-        if (isIncome) {
+        if (kind === "income") {
           return inRange ? "0.00" : "100.00";
+        }
+
+        if (kind === "savings") {
+          return "0.00";
         }
 
         return inRange ? "50.00" : "300.00";
@@ -132,5 +156,30 @@ describe("the reports summary's running balance", () => {
 
     expect(report.summary.carriedBalance).toBe("-200.00");
     expect(report.summary.balance).toBe("-250.00");
+  });
+
+  it("deducts savings from net and balance, the same way an expense does", async () => {
+    sumTransactions.mockImplementation(
+      async (table: unknown, _scope: unknown, filters?: { from?: string }) => {
+        const inRange = filters?.from !== undefined;
+        const kind = await tableKind(table);
+
+        if (kind === "income") {
+          return inRange ? "1000.00" : "0.00";
+        }
+
+        if (kind === "expense") {
+          return "0.00";
+        }
+
+        // Savings only — no expense in range, so the whole drop is savings.
+        return inRange ? "300.00" : "0.00";
+      },
+    );
+
+    const report = await reportService.getReport(personal, RANGE);
+
+    expect(report.summary.net).toBe("700.00");
+    expect(report.summary.balance).toBe("700.00");
   });
 });

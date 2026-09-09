@@ -1,5 +1,6 @@
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
+import { savings } from "@/lib/db/schema/savings";
 import {
   inPersonalLedger,
   inSpace,
@@ -92,34 +93,49 @@ export class ReportService {
     const [
       incomeTotal,
       expenseTotal,
+      savingsTotal,
       categoryRows,
       expenseByMonth,
       incomeByMonth,
+      savingsByMonth,
       carriedIncome,
       carriedExpense,
+      carriedSavings,
     ] = await Promise.all([
       sumTransactions(income, earning, filters),
       sumTransactions(expenses, spending, filters),
+      ctx.isPersonal ? sumTransactions(savings, earning, filters) : "0",
       sumByCategoryWithNames(expenses, spending, filters),
       sumByMonth(expenses, spending, filters),
       sumByMonth(income, earning, filters),
+      ctx.isPersonal ? sumByMonth(savings, earning, filters) : new Map<string, string>(),
       ctx.isPersonal ? sumTransactions(income, earning, carriedFilters) : "0",
       ctx.isPersonal ? sumTransactions(expenses, spending, carriedFilters) : "0",
+      ctx.isPersonal ? sumTransactions(savings, earning, carriedFilters) : "0",
     ]);
 
     return {
-      summary: this.toSummary(incomeTotal, expenseTotal, carriedIncome, carriedExpense),
+      summary: this.toSummary(
+        incomeTotal,
+        expenseTotal,
+        savingsTotal,
+        carriedIncome,
+        carriedExpense,
+        carriedSavings,
+      ),
       byCategory: this.toBreakdown(categoryRows, expenseTotal),
       byMonth: monthsIn(range).map((month) => {
         const earned = incomeByMonth.get(month) ?? "0.00";
         const spent = expenseByMonth.get(month) ?? "0.00";
+        const saved = savingsByMonth.get(month) ?? "0.00";
 
         return {
           month,
           label: monthLabel(month),
           income: earned,
           expense: spent,
-          net: subtract(earned, spent),
+          savings: saved,
+          net: subtract(subtract(earned, spent), saved),
         } satisfies MonthlyTotals;
       }),
     };
@@ -128,17 +144,23 @@ export class ReportService {
   private toSummary(
     incomeTotal: string,
     expenseTotal: string,
+    savingsTotal: string,
     carriedIncome: string,
     carriedExpense: string,
+    carriedSavings: string,
   ): ReportSummary {
     const earned = Number(incomeTotal);
     const spent = Number(expenseTotal);
-    const net = earned - spent;
-    const carriedBalance = Number(carriedIncome) - Number(carriedExpense);
+    const saved = Number(savingsTotal);
+    // Savings are deducted the same way spending is — money set aside is no
+    // longer part of what is left over.
+    const net = earned - spent - saved;
+    const carriedBalance = Number(carriedIncome) - Number(carriedExpense) - Number(carriedSavings);
 
     return {
       income: earned.toFixed(2),
       expense: spent.toFixed(2),
+      savings: saved.toFixed(2),
       net: net.toFixed(2),
       // Undefined rather than zero when nothing was earned — see the model.
       savingsRate: earned > 0 ? net / earned : null,

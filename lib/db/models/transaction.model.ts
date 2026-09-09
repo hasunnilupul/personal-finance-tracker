@@ -1,14 +1,18 @@
+import type { SavingsLiquidity } from "@/lib/db/schema/savings";
+
+export type { SavingsLiquidity };
+
 /**
- * Expenses and income are structurally identical — same columns, same rules,
- * opposite sign in a report. The UI and the action layer treat them as one
- * concept keyed by this, so there is one list, one form and one set of
- * actions rather than two of each.
+ * Expenses, income and savings are structurally near-identical — same money
+ * columns, same rules, opposite sign in a report. The UI and the action layer
+ * treat them as one concept keyed by this, so there is one list, one form and
+ * one set of actions rather than three of each.
  *
- * They are no longer interchangeable about *where* they may be recorded:
- * income belongs to a personal space and nowhere else. See
+ * They are not interchangeable about *where* they may be recorded: income and
+ * savings belong to a personal space and nowhere else. See
  * `TransactionService.assertKindAllowed`.
  */
-export type TransactionKind = "expense" | "income";
+export type TransactionKind = "expense" | "income" | "savings";
 
 /**
  * A transaction as the list renders it: the row plus the names it references.
@@ -25,6 +29,8 @@ export interface TransactionListItem {
   categoryName: string | null;
   categoryIcon: string | null;
   categoryColor: string | null;
+  /** Savings rows only — see {@link SavingsLiquidity}. `null` for expense/income. */
+  liquidity: SavingsLiquidity | null;
   createdBy: string | null;
   createdByName: string | null;
   /**
