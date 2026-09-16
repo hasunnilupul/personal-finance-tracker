@@ -10,6 +10,39 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**In progress: fix for #72 — transaction descriptions overflowing the row**,
+on `fix/transaction-description-overflow`, branched from `dev` at `c305fa0`.
+Reported via GitHub issue with a screenshot, no comment thread. Affects the
+Expenses list, the Income list and the dashboard's Recent Activity — the repo
+owner confirmed all three when asked to look at the code.
+
+**One bug, copy-pasted into two components.** Both
+`components/transactions/transaction-list.tsx` (shared by the Expenses and
+Income pages) and `components/dashboard/recent-entries.tsx` (the dashboard's
+Recent Activity, a deliberate near-duplicate of the list's row markup — see
+that file's own comment on why it is not the same component) wrapped the
+description in a plain inline `<span className="truncate align-middle">`
+inside a block `<p>`. Tailwind's `truncate` needs a box with a constrained
+width to clip against; a bare inline span has none, so `white-space: nowrap`
+stopped the text wrapping but nothing clipped it, and it overflowed the row
+instead of ellipsizing — exactly the screenshot in the issue. The row's
+*other* line (date · category · author) truncated correctly, because that one
+already had `truncate` on the block-level `<p>` itself.
+
+**The fix makes the `<p>` a flex container instead of truncating the span
+directly.** `flex items-center` on the `<p>`, `min-w-0 truncate` on the
+description `<span>` (dropping the now-redundant `align-middle`) — `min-w-0`
+overrides flex's default `min-width: auto`, which is what let the span refuse
+to shrink in the first place. `SpaceBadge` already carries `shrink-0`, so it
+keeps its place beside the now-truncating description rather than being
+squeezed.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374, unchanged — no
+test exercises this row's markup). **Not yet seen in a browser** — the Chrome
+extension was not connected this session, so the ellipsis and the badge's
+position next to it are unconfirmed on screen. Worth a look before the PR
+merges.
+
 **Last completed: Feature 23 — savings, tracked separately from goals**,
 merged as **PR #71** (`c7950d8`, a two-parent merge commit into `dev` —
 `dev` moved `9b0f8f5..c7950d8`). Asked for by the repo owner directly ("users

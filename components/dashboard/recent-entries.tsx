@@ -116,8 +116,8 @@ const RecentEntries = ({
               </span>
 
               <div className="min-w-0">
-                <p className="text-foreground text-sm font-medium">
-                  <span className="truncate align-middle">
+                <p className="text-foreground flex items-center text-sm font-medium">
+                  <span className="min-w-0 truncate">
                     {entry.description || entry.categoryName || "Untitled"}
                   </span>
                   {entry.organizationId !== activeSpaceId && <SpaceBadge name={entry.spaceName} />}
