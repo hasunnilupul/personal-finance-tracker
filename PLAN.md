@@ -10,11 +10,12 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**In progress: fix for #72 — transaction descriptions overflowing the row**,
-on `fix/transaction-description-overflow`, branched from `dev` at `c305fa0`.
-Reported via GitHub issue with a screenshot, no comment thread. Affects the
-Expenses list, the Income list and the dashboard's Recent Activity — the repo
-owner confirmed all three when asked to look at the code.
+**Last completed: fix for #72 — transaction descriptions overflowing the
+row**, merged as **PR #75** (`a1bec03`, a two-parent merge commit into
+`dev` — `dev` moved `c305fa0..a1bec03`). Reported via GitHub issue with a
+screenshot, no comment thread. Affects the Expenses list, the Income list and
+the dashboard's Recent Activity — the repo owner confirmed all three when
+asked to look at the code.
 
 **One bug, copy-pasted into two components.** Both
 `components/transactions/transaction-list.tsx` (shared by the Expenses and
@@ -37,11 +38,15 @@ to shrink in the first place. `SpaceBadge` already carries `shrink-0`, so it
 keeps its place beside the now-truncating description rather than being
 squeezed.
 
-**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374, unchanged — no
-test exercises this row's markup). **Not yet seen in a browser** — the Chrome
-extension was not connected this session, so the ellipsis and the badge's
-position next to it are unconfirmed on screen. Worth a look before the PR
-merges.
+**Verified before the PR, and re-verified on `dev` after the merge.**
+`origin/dev` had not moved past `c305fa0` since branching, so there was
+nothing to pull in before opening the PR. `pnpm typecheck`, `pnpm lint` and
+`pnpm test` were run again on `dev` at `a1bec03` itself — still green,
+374 tests, 28 files.
+
+**Still not seen in a browser.** The Chrome extension was not connected this
+session, so the ellipsis and the badge's position next to it are unconfirmed
+on screen in any of the three lists. Worth a look before the next release.
 
 **Last completed: Feature 23 — savings, tracked separately from goals**,
 merged as **PR #71** (`c7950d8`, a two-parent merge commit into `dev` —
