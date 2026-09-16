@@ -10,8 +10,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**In progress: fix a stale e2e assertion on `fix/export-header-liquidity-column`**,
-branched from `dev` at `3d66ad9`. Found while running the full check suite
+**Last completed: fix a stale e2e assertion**, merged as **PR #76**
+(`928136a`, a two-parent merge commit into `dev` — `dev` moved
+`3d66ad9..928136a`). Found while running the full check suite
 ahead of the next release: `pnpm test:e2e` failed on
 `e2e/export.spec.ts` — "carries the header row, both amounts included" —
 with `Received` carrying a trailing `,Liquidity` the assertion did not expect.
@@ -47,7 +48,13 @@ owner's go-ahead — the same standard the two stray "Personal" spaces were
 held to earlier in this file. A clean run afterwards passed all 30, this test
 included, in 1.2m.
 
-**Last completed: fix for #72 — transaction descriptions overflowing the
+**Re-verified on `dev` at `928136a` after the merge.** `origin/dev` had not
+moved past `3d66ad9` since branching, so there was nothing to pull in before
+opening the PR. After the merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(374), `pnpm build`, and `pnpm test:e2e` (30) — all green, `dev` is genuinely
+release-ready.
+
+**Before that: fix for #72 — transaction descriptions overflowing the
 row**, merged as **PR #75** (`a1bec03`, a two-parent merge commit into
 `dev` — `dev` moved `c305fa0..a1bec03`). Reported via GitHub issue with a
 screenshot, no comment thread. Affects the Expenses list, the Income list and
