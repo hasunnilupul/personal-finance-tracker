@@ -10,7 +10,52 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Last completed: fix a stale e2e assertion**, merged as **PR #76**
+**Release PR open — `dev` → `main`, not yet merged.** Carries three merges
+since the last release: **#71** (Feature 23 — savings, tracked separately
+from expenses, income and goals), **#75** (fix for **#72** — transaction
+descriptions overflowing the row in the Expenses list, the Income list and
+the dashboard's Recent Activity) and **#76** (a stale e2e assertion that had
+left the suite red on `dev` since #71 merged) — plus the plan records for
+each.
+
+**One migration, purely additive.** `20260908112223_goofy_secret_warriors`
+creates the `savings` table and adds a nullable `liquidity` column to
+`recurringTransactions` — no `DELETE`, no backfill, nothing that can fail on
+existing rows. `git diff origin/main origin/dev -- package.json
+pnpm-lock.yaml` is empty, so there are no dependency changes either. The
+deploy-time migrate step has real work to do this time, but none of it is
+destructive — the lowest-risk shape short of a no-op.
+
+**Minor bump: `v1.2.0` → `v1.3.0`.** Additive from where a user stands — a new
+Savings page and kind, personal space only, plus two bug fixes — nothing
+removed, nothing changed about what a shared space shows.
+
+**What each PR still leaves unverified, going in:**
+
+- **#71 (savings).** Verified against the real development database and in a
+  signed-in browser before its own PR — see that record below for the
+  specific numbers.
+- **#75 (the overflow fix).** Not yet seen in a browser. The Chrome extension
+  was not connected in any session that touched this fix, so the ellipsis and
+  the space badge's position beside it are unconfirmed on screen in any of
+  the three lists it touches.
+- **#76** is a test-only change — no app behavior to verify visually.
+
+**Verified on `dev` at `13055e9`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(374), `pnpm build`, `pnpm test:e2e` (30, including a flake traced to stray
+test data rather than code — see the #76 record below for how it was found
+and cleaned up).
+
+**The deployment id before the merge was `dpl_4NuuURR5oXaF5ZMNPakRK1u3C7an`**,
+confirmed via `/api/version` at `personal-finance-tracker-uicg.vercel.app` —
+the same id the v1.2.0 release ended on, so production has not moved since.
+Recorded in advance per the established habit, so a slow deploy cannot be
+mistaken for a stale one.
+
+**`public/sw.js` is untouched, so this stays a clean Feature 13 trial** —
+still unanswered, still needing a device that already had the previous build.
+
+**Before that: fix a stale e2e assertion**, merged as **PR #76**
 (`928136a`, a two-parent merge commit into `dev` — `dev` moved
 `3d66ad9..928136a`). Found while running the full check suite
 ahead of the next release: `pnpm test:e2e` failed on
