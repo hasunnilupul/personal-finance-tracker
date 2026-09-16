@@ -10,6 +10,48 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Released 2026-09-16** — `0ee68e3` (PR #77), carrying **#71** (Feature 23 —
+savings, tracked separately from expenses, income and goals), **#75** (fix
+for **#72** — transaction descriptions overflowing the row in the Expenses
+list, the Income list and the dashboard's Recent Activity) and **#76** (a
+stale e2e assertion that had left the suite red on `dev` since #71 merged),
+plus the plan records for each. **Tagged `v1.3.0`.**
+
+**Merged with a merge commit, and the history is convergent.** `0ee68e3` has
+two parents (`c9cc614` and `ebb843a`), `git diff main dev` is empty, and
+`dev` is an ancestor of `main`. No reconvergence needed — the ruleset that
+restricts `main` to `merge` alone held.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_2kpWxYb2kPxKsJNQfVhXxSHdkqfX` and the sign-in page's `data-dpl-id` is
+the same string — both checked with a cache-busting query and against the
+commit's own status (`success`, not just an unchanged id) rather than a
+guess from a plain request.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export`
+answers **307 to `/sign-in` with a zero-byte body** — still the check worth
+making from outside, since every other endpoint leaks one page at a time and
+that one would hand over the entire ledger.
+
+**`public/sw.js` is untouched and byte-identical to the live file**, so this
+stays a clean Feature 13 trial — still unanswered, still needing a device
+that already had the previous build.
+
+**What is still unverified is the gap the PR left going in**: #75, the
+transaction-overflow fix, was never seen in an actual browser in any session
+that touched it — the Chrome extension was not connected. That is a real gap
+this release does not close, not a claim being made and walked back.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374), `pnpm build`
+and `pnpm test:e2e` (30) on `dev` at `ebb843a` before the merge — see below
+for the checks made against the live site itself.
+
+**Before the merge, the release PR was opened as follows** (kept for the
+detail on what shipped and why, now historical):
+
 **Release PR open — `dev` → `main`, not yet merged.** Carries three merges
 since the last release: **#71** (Feature 23 — savings, tracked separately
 from expenses, income and goals), **#75** (fix for **#72** — transaction
