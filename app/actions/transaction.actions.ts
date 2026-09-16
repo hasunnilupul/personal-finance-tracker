@@ -14,9 +14,10 @@ import { logger } from "@/lib/logger";
 const PATHS: Record<TransactionKind, string> = {
   expense: "/expenses",
   income: "/income",
+  savings: "/savings",
 };
 
-const kindSchema = z.enum(["expense", "income"]);
+const kindSchema = z.enum(["expense", "income", "savings"]);
 
 const transactionSchema = z.object({
   kind: kindSchema,
@@ -56,7 +57,17 @@ const transactionSchema = z.object({
     .max(255, "Keep the note under 255 characters.")
     .optional()
     .transform((value) => value || null),
+  liquidity: z.enum(["liquid", "locked"]).optional(),
+  // Savings only. A separate direction rather than a minus sign in the amount
+  // field — `parseAmount` strips one anyway, and "add" / "take out" is how
+  // people describe it. Same convention as a savings goal's contribution.
+  direction: z.enum(["add", "withdraw"]).optional(),
 });
+
+/** Negates an already-`parseAmount`-normalised decimal string. */
+function withDirection(amount: string, direction: "add" | "withdraw" | undefined): string {
+  return direction === "withdraw" ? `-${amount}` : amount;
+}
 
 export interface TransactionFormState {
   error?: string;
@@ -101,12 +112,15 @@ export async function createTransactionAction(
     return { fieldErrors: toFieldErrors(parsed.error) };
   }
 
-  const { kind, ...data } = parsed.data;
+  const { kind, direction, ...data } = parsed.data;
 
   try {
     const { ctx } = await requirePermission({ transaction: ["create"] });
 
-    await transactionService.create(ctx, kind, data);
+    await transactionService.create(ctx, kind, {
+      ...data,
+      amount: withDirection(data.amount, direction),
+    });
   } catch (error) {
     logger.error("Failed to create transaction", error, { kind });
 
@@ -139,12 +153,15 @@ export async function updateTransactionAction(
     return { fieldErrors: toFieldErrors(parsed.error) };
   }
 
-  const { kind, ...data } = parsed.data;
+  const { kind, direction, ...data } = parsed.data;
 
   try {
     const { ctx } = await requirePermission({ transaction: ["update"] });
 
-    const updated = await transactionService.update(ctx, kind, id, data);
+    const updated = await transactionService.update(ctx, kind, id, {
+      ...data,
+      amount: withDirection(data.amount, direction),
+    });
 
     if (!updated) {
       return { error: "That entry no longer exists." };

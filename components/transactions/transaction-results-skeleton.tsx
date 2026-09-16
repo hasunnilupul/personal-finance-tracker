@@ -22,7 +22,7 @@ interface TransactionResultsSkeletonProps {
 const TransactionResultsSkeleton = ({ kind, rows = 6 }: TransactionResultsSkeletonProps) => {
   return (
     <LoadingRegion
-      label={`Loading ${kind === "expense" ? "expenses" : "income"}`}
+      label={`Loading ${kind === "expense" ? "expenses" : kind === "income" ? "income" : "savings"}`}
       className="flex flex-col gap-4"
     >
       <Card className="p-4 sm:p-6">

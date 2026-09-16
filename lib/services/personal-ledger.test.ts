@@ -24,6 +24,7 @@ const expenseCreate = vi.fn();
 const expenseUpdate = vi.fn();
 const expenseFindById = vi.fn();
 const incomeCreate = vi.fn();
+const savingsCreate = vi.fn();
 const findPersonalSpace = vi.fn();
 const categoryFindById = vi.fn();
 const categoryCreate = vi.fn();
@@ -61,6 +62,17 @@ vi.mock("@/lib/repositories/expense.repository", () => ({
 vi.mock("@/lib/repositories/income.repository", () => ({
   incomeRepository: {
     create: (...args: unknown[]) => incomeCreate(...args),
+    createIfAbsent: vi.fn(),
+    update: vi.fn(),
+    findById: vi.fn(),
+    delete: vi.fn(),
+    findAll: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/repositories/savings.repository", () => ({
+  savingsRepository: {
+    create: (...args: unknown[]) => savingsCreate(...args),
     createIfAbsent: vi.fn(),
     update: vi.fn(),
     findById: vi.fn(),
@@ -107,6 +119,7 @@ const { recurringTransactionService } =
 const { isServiceError } = await import("@/lib/services/errors");
 const { expenses } = await import("@/lib/db/schema/expenses");
 const { income } = await import("@/lib/db/schema/income");
+const { savings } = await import("@/lib/db/schema/savings");
 
 const personal: SpaceContext = {
   organizationId: "org-personal",
@@ -177,6 +190,16 @@ describe("what a personal ledger reads", () => {
     expect(findTransactionPage).toHaveBeenCalledWith(
       expenses,
       { within: "space", organizationId: "org-household" },
+      {},
+    );
+  });
+
+  it("keeps savings inside the personal space too, the same as income", async () => {
+    await transactionService.list(personal, "savings");
+
+    expect(findTransactionPage).toHaveBeenCalledWith(
+      savings,
+      { within: "space", organizationId: "org-personal" },
       {},
     );
   });
@@ -331,6 +354,68 @@ describe("income belongs to a personal space", () => {
         description: null,
         isActive: true,
       } as never),
+    ).rejects.toSatisfy((error: unknown) => isServiceError(error) && error.code === "FORBIDDEN");
+  });
+});
+
+describe("savings belongs to a personal space, the same as income", () => {
+  it("refuses a saving in a shared space", async () => {
+    await expect(
+      transactionService.create(shared, "savings", {
+        amount: "100.00",
+        currency: "LKR",
+        date: DATE,
+      }),
+    ).rejects.toSatisfy((error: unknown) => isServiceError(error) && error.code === "FORBIDDEN");
+
+    expect(savingsCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an edit to one too, so an entry cannot be moved in by editing", async () => {
+    await expect(
+      transactionService.update(shared, "savings", 1, { amount: "100.00" }),
+    ).rejects.toSatisfy((error: unknown) => isServiceError(error) && error.code === "FORBIDDEN");
+  });
+
+  it("still allows savings in a personal space", async () => {
+    savingsCreate.mockImplementation(async (row: unknown) => row);
+
+    await transactionService.create(personal, "savings", {
+      amount: "100.00",
+      currency: "LKR",
+      date: DATE,
+      liquidity: "locked",
+    });
+
+    expect(savingsCreate).toHaveBeenCalled();
+  });
+
+  it("defaults liquidity to 'liquid' when not set", async () => {
+    savingsCreate.mockImplementation(async (row: unknown) => row);
+
+    await transactionService.create(personal, "savings", {
+      amount: "100.00",
+      currency: "LKR",
+      date: DATE,
+    });
+
+    expect(savingsCreate).toHaveBeenCalledWith(expect.objectContaining({ liquidity: "liquid" }));
+  });
+
+  it("refuses a recurring savings template in a shared space", async () => {
+    await expect(
+      recurringTransactionService.create(shared, {
+        type: "savings",
+        amount: "100.00",
+        currency: "LKR",
+        frequency: "monthly",
+        startDate: DATE,
+        endDate: null,
+        categoryId: null,
+        description: null,
+        liquidity: "locked",
+        isActive: true,
+      }),
     ).rejects.toSatisfy((error: unknown) => isServiceError(error) && error.code === "FORBIDDEN");
   });
 });

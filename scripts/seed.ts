@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { spaceService } from "@/lib/services/space.service";
 import { seedExpenses } from "@/scripts/seed-expenses";
+import { seedSavings } from "@/scripts/seed-savings";
 
 /**
  * Every table the seed owns. `CASCADE` handles the foreign keys between them.
@@ -14,6 +15,7 @@ const SEEDED_TABLES = [
   "categories",
   "expenses",
   "income",
+  "savings",
   "recurringTransactions",
   "savingsGoals",
   "invitation",
@@ -62,6 +64,7 @@ async function seed() {
     logger.info("🏠 Personal space ready", { organizationId: personalSpace.id });
 
     await seedExpenses(personalSpace.id, userId);
+    await seedSavings(personalSpace.id, userId);
 
     logger.info("✅ Seed completed");
   } catch (error) {

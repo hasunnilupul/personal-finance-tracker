@@ -8,6 +8,7 @@ import {
 } from "@/lib/repositories/transaction-query";
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
+import { savings } from "@/lib/db/schema/savings";
 import type { TransactionFilters, TransactionKind } from "@/lib/db/models/transaction.model";
 import type { SpaceContext } from "@/lib/services/types";
 import { CSV_BOM, csvRow } from "@/lib/export/csv";
@@ -22,7 +23,7 @@ import { CSV_BOM, csvRow } from "@/lib/export/csv";
  * however long the history is.
  */
 
-const TABLES = { expense: expenses, income } as const;
+const TABLES = { expense: expenses, income, savings } as const;
 
 /** Rows per round trip. Large enough to be few trips, small enough to hold. */
 const CHUNK_SIZE = 500;
@@ -49,6 +50,7 @@ const HEADER = [
   "Amount (base)",
   "Base currency",
   "Entered by",
+  "Liquidity",
 ] as const;
 
 /** `YYYY-MM-DD`, which sorts correctly as text and is what spreadsheets parse. */
@@ -73,16 +75,18 @@ export interface ExportOptions {
  * spreadsheet can reproduce with one click on the Date column. The `Type`
  * column is what makes the two halves separable.
  *
- * **A shared space has no income to walk.** Asking for it would be one round
- * trip to be handed nothing, and — worse for a file somebody files away — the
- * export would carry an income section that is empty because the concept does
- * not exist here, which reads exactly like an income section that is empty
- * because the export broke.
+ * **A shared space has no income or savings to walk.** Asking for either
+ * would be one round trip to be handed nothing, and — worse for a file
+ * somebody files away — the export would carry a section that is empty
+ * because the concept does not exist here, which reads exactly like a section
+ * that is empty because the export broke.
  */
 function kindsFor(ctx: SpaceContext, kind?: TransactionKind): TransactionKind[] {
-  const requested: TransactionKind[] = kind ? [kind] : ["expense", "income"];
+  const requested: TransactionKind[] = kind ? [kind] : ["expense", "income", "savings"];
 
-  return ctx.isPersonal ? requested : requested.filter((each) => each !== "income");
+  return ctx.isPersonal
+    ? requested
+    : requested.filter((each) => each !== "income" && each !== "savings");
 }
 
 /**
@@ -137,6 +141,7 @@ export async function* streamTransactionCsv(options: ExportOptions): AsyncGenera
             row.baseAmount,
             ctx.baseCurrency,
             row.createdByName,
+            row.liquidity,
           ]),
         )
         .join("");

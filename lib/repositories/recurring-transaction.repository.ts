@@ -39,6 +39,7 @@ export class RecurringTransactionRepository {
         amount: recurringTransactions.amount,
         currency: recurringTransactions.currency,
         description: recurringTransactions.description,
+        liquidity: recurringTransactions.liquidity,
         frequency: recurringTransactions.frequency,
         startDate: recurringTransactions.startDate,
         nextDate: recurringTransactions.nextDate,

@@ -1,5 +1,6 @@
 import { expenses } from "@/lib/db/schema/expenses";
 import { income } from "@/lib/db/schema/income";
+import { savings } from "@/lib/db/schema/savings";
 import {
   findTransactionPage,
   inPersonalLedger,
@@ -13,10 +14,12 @@ import { budgetService } from "@/lib/services/budget.service";
 import { categoryService } from "@/lib/services/category.service";
 import { expenseService } from "@/lib/services/expense.service";
 import { incomeService } from "@/lib/services/income.service";
+import { savingsService } from "@/lib/services/savings.service";
 import { notificationService } from "@/lib/services/notification.service";
 import { formatMoney } from "@/lib/currency/format";
 import { SpaceContext } from "@/lib/services/types";
 import {
+  SavingsLiquidity,
   TransactionFilters,
   TransactionKind,
   TransactionPage,
@@ -33,11 +36,14 @@ export interface TransactionInput {
   date: Date;
   categoryId?: number | null;
   description?: string | null;
+  /** Savings only — see {@link SavingsLiquidity}. Ignored for expense/income. */
+  liquidity?: SavingsLiquidity;
 }
 
 const TABLES: Record<TransactionKind, TransactionTable> = {
   expense: expenses,
   income,
+  savings,
 };
 
 /**
@@ -57,10 +63,10 @@ export class TransactionService {
    * shared space reads only its own, because that is the joint account and
    * what somebody spent privately is none of it.
    *
-   * Income never widens, and does not need to: it can only be recorded in a
-   * personal space, so the two scopes would select the same rows anyway.
-   * Asking for the space scope says which rows are expected rather than
-   * relying on the wider one being empty.
+   * Income and savings never widen, and do not need to: both can only be
+   * recorded in a personal space, so the two scopes would select the same
+   * rows anyway. Asking for the space scope says which rows are expected
+   * rather than relying on the wider one being empty.
    */
   private scopeFor(ctx: SpaceContext, kind: TransactionKind): TransactionScope {
     return ctx.isPersonal && kind === "expense"
@@ -69,19 +75,21 @@ export class TransactionService {
   }
 
   /**
-   * Refuses to record income anywhere but a personal space.
+   * Refuses to record income or savings anywhere but a personal space.
    *
    * A shared space is a joint ledger of what a household *spends*; what each
-   * member earns is their own, and splitting it across as many copies as
-   * somebody happens to have spaces was how this app used to lose track of it.
-   * The UI does not offer income in a shared space; this is the check that
-   * holds when something else asks anyway.
+   * member earns or sets aside is their own, and splitting it across as many
+   * copies as somebody happens to have spaces was how this app used to lose
+   * track of it. The UI does not offer income or savings in a shared space;
+   * this is the check that holds when something else asks anyway.
    */
   private assertKindAllowed(ctx: SpaceContext, kind: TransactionKind): void {
-    if (kind === "income" && !ctx.isPersonal) {
+    if (kind !== "expense" && !ctx.isPersonal) {
+      const noun = kind === "income" ? "Income" : "Savings";
+
       throw new ServiceError(
         "FORBIDDEN",
-        "Income is recorded in your personal space, not in a shared one.",
+        `${noun} is recorded in your personal space, not in a shared one.`,
       );
     }
   }
@@ -133,7 +141,9 @@ export class TransactionService {
     const created =
       kind === "expense"
         ? await expenseService.createExpense(ctx, data, options)
-        : await incomeService.createIncome(ctx, data, options);
+        : kind === "income"
+          ? await incomeService.createIncome(ctx, data, options)
+          : await savingsService.createSaving(ctx, data, options);
 
     if (created) {
       await this.announceOverspend(ctx, kind, created.categoryId, created.date);
@@ -157,7 +167,9 @@ export class TransactionService {
     const updated =
       kind === "expense"
         ? await expenseService.updateExpense(ctx, id, data)
-        : await incomeService.updateIncome(ctx, id, data);
+        : kind === "income"
+          ? await incomeService.updateIncome(ctx, id, data)
+          : await savingsService.updateSaving(ctx, id, data);
 
     if (updated) {
       await this.announceOverspend(ctx, kind, updated.categoryId, updated.date);
@@ -228,9 +240,13 @@ export class TransactionService {
   }
 
   async remove(ctx: SpaceContext, kind: TransactionKind, id: number) {
-    return kind === "expense"
-      ? expenseService.deleteExpense(ctx, id)
-      : incomeService.deleteIncome(ctx, id);
+    if (kind === "expense") {
+      return expenseService.deleteExpense(ctx, id);
+    }
+
+    return kind === "income"
+      ? incomeService.deleteIncome(ctx, id)
+      : savingsService.deleteSaving(ctx, id);
   }
 }
 

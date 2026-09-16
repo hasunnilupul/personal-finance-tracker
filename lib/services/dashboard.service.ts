@@ -24,8 +24,8 @@ export const BUDGET_HEALTH_LIMIT = 4;
 /**
  * A recent entry, tagged with which side it came from.
  *
- * Expenses and income are separate tables, so a merged list has to carry the
- * kind with each row — it is what decides the sign and the colour.
+ * Expenses, income and savings are separate tables, so a merged list has to
+ * carry the kind with each row — it is what decides the sign and the colour.
  */
 export interface RecentEntry extends TransactionListItem {
   kind: TransactionKind;
@@ -37,6 +37,7 @@ export interface RecentEntry extends TransactionListItem {
 export interface MonthTotals {
   income: string;
   expense: string;
+  savings: string;
   net: string;
 }
 
@@ -49,9 +50,10 @@ export interface DashboardData {
   totals: MonthTotals;
   /**
    * The running balance, personal space only: `carriedBalance` is everything
-   * earned minus everything spent *before* this month, and `balance` adds this
-   * month's own net on top. A shared space has no income of its own to run a
-   * balance against, so both are `"0.00"` there and the page does not show them.
+   * earned minus everything spent or saved *before* this month, and `balance`
+   * adds this month's own net on top. A shared space has no income of its own
+   * to run a balance against, so both are `"0.00"` there and the page does not
+   * show them.
    */
   carriedBalance: string;
   balance: string;
@@ -104,24 +106,34 @@ export class DashboardService {
     const [
       incomeTotal,
       expenseTotal,
+      savingsTotal,
       recentExpenses,
       recentIncome,
+      recentSavings,
       overview,
       carriedIncome,
       carriedExpense,
+      carriedSavings,
     ] = await Promise.all([
       transactionService.total(ctx, "income", filters),
       transactionService.total(ctx, "expense", filters),
+      ctx.isPersonal ? transactionService.total(ctx, "savings", filters) : "0",
       transactionService.list(ctx, "expense", { page: 1, pageSize: RECENT_LIMIT }),
       transactionService.list(ctx, "income", { page: 1, pageSize: RECENT_LIMIT }),
+      ctx.isPersonal
+        ? transactionService.list(ctx, "savings", { page: 1, pageSize: RECENT_LIMIT })
+        : Promise.resolve({ items: [], total: 0, page: 1, pageSize: RECENT_LIMIT }),
       budgetService.getOverview(ctx, month),
       ctx.isPersonal ? transactionService.total(ctx, "income", carriedFilters) : "0",
       ctx.isPersonal ? transactionService.total(ctx, "expense", carriedFilters) : "0",
+      ctx.isPersonal ? transactionService.total(ctx, "savings", carriedFilters) : "0",
     ]);
 
     const monthly = overview.monthly.budgets;
-    const net = Number(incomeTotal) - Number(expenseTotal);
-    const carriedBalance = Number(carriedIncome) - Number(carriedExpense);
+    // Savings are deducted the same way an expense is — money set aside is no
+    // longer part of what is left to spend.
+    const net = Number(incomeTotal) - Number(expenseTotal) - Number(savingsTotal);
+    const carriedBalance = Number(carriedIncome) - Number(carriedExpense) - Number(carriedSavings);
 
     return {
       monthLabel: window.label,
@@ -131,11 +143,12 @@ export class DashboardService {
         // that are already fixed to two.
         income: Number(incomeTotal).toFixed(2),
         expense: Number(expenseTotal).toFixed(2),
+        savings: Number(savingsTotal).toFixed(2),
         net: net.toFixed(2),
       },
       carriedBalance: carriedBalance.toFixed(2),
       balance: (carriedBalance + net).toFixed(2),
-      recent: mergeRecent(recentExpenses.items, recentIncome.items),
+      recent: mergeRecent(recentExpenses.items, recentIncome.items, recentSavings.items),
       budgets: worstFirst(monthly).slice(0, BUDGET_HEALTH_LIMIT),
       budgetCount: monthly.length,
       overCount: overview.monthly.summary.overCount,
@@ -144,14 +157,15 @@ export class DashboardService {
 }
 
 /**
- * The most recent entries across both tables.
+ * The most recent entries across all three tables.
  *
- * Each side is asked for its own newest few and the two are merged here, rather
- * than in SQL: a `UNION` across the two tables would need every column named
- * twice and would still be sorted in the application to interleave them.
+ * Each side is asked for its own newest few and they are merged here, rather
+ * than in SQL: a `UNION` across the tables would need every column named
+ * three times over and would still be sorted in the application to interleave
+ * them.
  *
  * Two entries filed on the same day break the tie on `updatedAt`, not on id:
- * the two tables have separate identity sequences, so comparing an expense's id
+ * the tables have separate identity sequences, so comparing an expense's id
  * with an income's id ranks them by which table happened to be busier rather
  * than by which was touched more recently. Id is kept as the last step only to
  * make the order stable, which matters within one table.
@@ -159,10 +173,12 @@ export class DashboardService {
 function mergeRecent(
   expenseItems: TransactionListItem[],
   incomeItems: TransactionListItem[],
+  savingsItems: TransactionListItem[],
 ): RecentEntry[] {
   const tagged: RecentEntry[] = [
     ...expenseItems.map((item) => ({ ...item, kind: "expense" as const })),
     ...incomeItems.map((item) => ({ ...item, kind: "income" as const })),
+    ...savingsItems.map((item) => ({ ...item, kind: "savings" as const })),
   ];
 
   return tagged

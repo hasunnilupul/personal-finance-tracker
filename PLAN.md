@@ -10,10 +10,208 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries four merges since
-the last release: **#66** and **#67** (the running balance, on the dashboard and
-on `/reports`), **#68** (the no-AI-attribution rule), and **#69** (the
-`ThemeSwitcher` hydration fix) — plus this record.
+**Release PR open — `dev` → `main`, not yet merged.** Carries three merges
+since the last release: **#71** (Feature 23 — savings, tracked separately
+from expenses, income and goals), **#75** (fix for **#72** — transaction
+descriptions overflowing the row in the Expenses list, the Income list and
+the dashboard's Recent Activity) and **#76** (a stale e2e assertion that had
+left the suite red on `dev` since #71 merged) — plus the plan records for
+each.
+
+**One migration, purely additive.** `20260908112223_goofy_secret_warriors`
+creates the `savings` table and adds a nullable `liquidity` column to
+`recurringTransactions` — no `DELETE`, no backfill, nothing that can fail on
+existing rows. `git diff origin/main origin/dev -- package.json
+pnpm-lock.yaml` is empty, so there are no dependency changes either. The
+deploy-time migrate step has real work to do this time, but none of it is
+destructive — the lowest-risk shape short of a no-op.
+
+**Minor bump: `v1.2.0` → `v1.3.0`.** Additive from where a user stands — a new
+Savings page and kind, personal space only, plus two bug fixes — nothing
+removed, nothing changed about what a shared space shows.
+
+**What each PR still leaves unverified, going in:**
+
+- **#71 (savings).** Verified against the real development database and in a
+  signed-in browser before its own PR — see that record below for the
+  specific numbers.
+- **#75 (the overflow fix).** Not yet seen in a browser. The Chrome extension
+  was not connected in any session that touched this fix, so the ellipsis and
+  the space badge's position beside it are unconfirmed on screen in any of
+  the three lists it touches.
+- **#76** is a test-only change — no app behavior to verify visually.
+
+**Verified on `dev` at `13055e9`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(374), `pnpm build`, `pnpm test:e2e` (30, including a flake traced to stray
+test data rather than code — see the #76 record below for how it was found
+and cleaned up).
+
+**The deployment id before the merge was `dpl_4NuuURR5oXaF5ZMNPakRK1u3C7an`**,
+confirmed via `/api/version` at `personal-finance-tracker-uicg.vercel.app` —
+the same id the v1.2.0 release ended on, so production has not moved since.
+Recorded in advance per the established habit, so a slow deploy cannot be
+mistaken for a stale one.
+
+**`public/sw.js` is untouched, so this stays a clean Feature 13 trial** —
+still unanswered, still needing a device that already had the previous build.
+
+**Before that: fix a stale e2e assertion**, merged as **PR #76**
+(`928136a`, a two-parent merge commit into `dev` — `dev` moved
+`3d66ad9..928136a`). Found while running the full check suite
+ahead of the next release: `pnpm test:e2e` failed on
+`e2e/export.spec.ts` — "carries the header row, both amounts included" —
+with `Received` carrying a trailing `,Liquidity` the assertion did not expect.
+
+**Not a flake, and not an app bug.** `lib/export/transactions.ts`'s `HEADER`
+constant has carried `Liquidity` as its last column since Feature 23 (PR #71,
+`7777a5c`) — CSV export deliberately reports liquidity for savings entries,
+same as every other column. The e2e test's expected header string was simply
+never updated alongside it, so `dev` has been shipping this gap since that
+merge; nothing caught it because PR #71's own verification ran `pnpm test`
+and `pnpm build`, not `pnpm test:e2e`.
+
+**The fix is one line**: the expected header in `e2e/export.spec.ts` now ends
+`,Entered by,Liquidity`, matching what the endpoint has actually been
+returning all along.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374, unchanged —
+this is an e2e-only assertion), `pnpm test:e2e` (30 passed).
+
+**One flake surfaced along the way, and it traced back to test data, not
+code.** The first full e2e run failed on `shared-space.spec.ts`'s "turns up
+in the personal ledger, badged and counted" — a different symptom than the
+timeout PLAN.md already documents for this test (that one was `SpaceSwitcher`
+staying disabled; this run failed on the row never appearing). A retry of
+that test alone failed too, which the earlier documented flake never did.
+**The cause was two stray "Cross-space smoke" rows (`id` 9 and 10, Rs 1234.56
+each) sitting in `E2E Shared`** — the test writes a real entry and deletes it
+at the end, and both the original failing run and the retry had aborted
+*before* reaching that cleanup step, so each left one behind. Confirmed with
+a guarded, throwaway script (checked both rows' description matched before
+deleting, run and removed, never committed) before deleting them on the repo
+owner's go-ahead — the same standard the two stray "Personal" spaces were
+held to earlier in this file. A clean run afterwards passed all 30, this test
+included, in 1.2m.
+
+**Re-verified on `dev` at `928136a` after the merge.** `origin/dev` had not
+moved past `3d66ad9` since branching, so there was nothing to pull in before
+opening the PR. After the merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(374), `pnpm build`, and `pnpm test:e2e` (30) — all green, `dev` is genuinely
+release-ready.
+
+**Before that: fix for #72 — transaction descriptions overflowing the
+row**, merged as **PR #75** (`a1bec03`, a two-parent merge commit into
+`dev` — `dev` moved `c305fa0..a1bec03`). Reported via GitHub issue with a
+screenshot, no comment thread. Affects the Expenses list, the Income list and
+the dashboard's Recent Activity — the repo owner confirmed all three when
+asked to look at the code.
+
+**One bug, copy-pasted into two components.** Both
+`components/transactions/transaction-list.tsx` (shared by the Expenses and
+Income pages) and `components/dashboard/recent-entries.tsx` (the dashboard's
+Recent Activity, a deliberate near-duplicate of the list's row markup — see
+that file's own comment on why it is not the same component) wrapped the
+description in a plain inline `<span className="truncate align-middle">`
+inside a block `<p>`. Tailwind's `truncate` needs a box with a constrained
+width to clip against; a bare inline span has none, so `white-space: nowrap`
+stopped the text wrapping but nothing clipped it, and it overflowed the row
+instead of ellipsizing — exactly the screenshot in the issue. The row's
+*other* line (date · category · author) truncated correctly, because that one
+already had `truncate` on the block-level `<p>` itself.
+
+**The fix makes the `<p>` a flex container instead of truncating the span
+directly.** `flex items-center` on the `<p>`, `min-w-0 truncate` on the
+description `<span>` (dropping the now-redundant `align-middle`) — `min-w-0`
+overrides flex's default `min-width: auto`, which is what let the span refuse
+to shrink in the first place. `SpaceBadge` already carries `shrink-0`, so it
+keeps its place beside the now-truncating description rather than being
+squeezed.
+
+**Verified before the PR, and re-verified on `dev` after the merge.**
+`origin/dev` had not moved past `c305fa0` since branching, so there was
+nothing to pull in before opening the PR. `pnpm typecheck`, `pnpm lint` and
+`pnpm test` were run again on `dev` at `a1bec03` itself — still green,
+374 tests, 28 files.
+
+**Still not seen in a browser.** The Chrome extension was not connected this
+session, so the ellipsis and the badge's position next to it are unconfirmed
+on screen in any of the three lists. Worth a look before the next release.
+
+**Last completed: Feature 23 — savings, tracked separately from goals**,
+merged as **PR #71** (`c7950d8`, a two-parent merge commit into `dev` —
+`dev` moved `9b0f8f5..c7950d8`). Asked for by the repo owner directly ("users
+should be able to record their savings separately, and show them in the
+monthly reports"), clarified into a concrete design over three rounds of
+questions before any code was written — see the feature's own record below
+for what was confirmed and why.
+
+**Built and verified against the real development database in a signed-in
+browser before the PR, and re-verified on `dev` after the merge.**
+`origin/dev` had not moved past `9b0f8f5` since branching, so there was
+nothing to pull in before opening the PR. After the merge, `pnpm typecheck
+&& pnpm lint && pnpm test` were re-run on `dev` at `c7950d8` itself — still
+green at 374 tests, 28 files.
+
+**Released 2026-09-08** — `c9cc614` (PR #70), carrying **#66** and **#67** (the
+running balance, on the dashboard and on `/reports`), **#68** (the
+no-AI-attribution rule), and **#69** (the `ThemeSwitcher` hydration fix), plus
+this record. **Tagged `v1.2.0`.**
+
+**Squash-merged despite asking for a merge commit, and repaired the same way
+#38 was.** `c9cc614` has **one parent** (`59aee0e`), not two — GitHub squashed
+it regardless of the PR description's explicit request. `git diff main dev` was
+empty (the content was never in doubt, only the ancestry), so the fix was the
+one PLAN.md already prescribes for exactly this: merge `main` back into `dev`,
+which is `b23531c` — a clean three-way merge, no conflicts, verified green
+again afterwards. **Worth naming plainly: asking in the PR body is not a
+control.** It didn't stop this the first time either (#38), and it didn't here.
+
+**So it is a control now, not a convention.** The repo's `main` ruleset
+("Protected Default", id `21286275`) allowed `merge`, `squash` and `rebase` on
+every PR into `main` — nothing in it ever restricted *how* a release PR could
+be merged, which is exactly the gap that let this happen twice. Its
+`pull_request` rule's `allowed_merge_methods` is now `["merge"]` only, set via
+`gh api --method PUT repos/.../rulesets/21286275`. GitHub itself refuses a
+squash or rebase into `main` from here on, rather than the fix living in this
+paragraph waiting to be read again next release. **Scoped to `main` alone** —
+the ruleset's condition is `~DEFAULT_BRANCH`, so a feature PR into `dev` can
+still be squashed exactly as before; nothing about that half of the workflow
+changed. Everything else on the ruleset — the required approving review,
+force-push and deletion protection — was left untouched.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_4NuuURR5oXaF5ZMNPakRK1u3C7an` and the page's `data-dpl-id` is the same
+string — checked against the commit's own status (`success`) rather than
+guessed from a plain request, so this isn't a stale response from before the
+build finished.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers
+**307 to `/sign-in` with a zero-byte body** — still the check worth making from
+outside, since every other endpoint leaks one page at a time and that one would
+hand over the entire ledger.
+
+**`public/sw.js` is untouched and byte-identical to the live file** (ignoring
+line endings), so this stays a clean Feature 13 trial — still unanswered, still
+needing a device that already had the previous build.
+
+**What is still unverified is the same gap the PR left**: the running balance
+and the hydration fix were both checked live in a browser *before* this merge,
+against `dev` rather than against this production build — a stronger check than
+most releases get, but not the same claim as "confirmed on the live site with
+the owner's own account," which no release here has closed for either feature
+yet.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (366) on `b23531c`
+after the reconvergence merge, plus every check above against the live site.
+`pnpm build` and `pnpm test:e2e` were not re-run past the merge — the tree is
+identical to what was already green on `dev` before the squash, and the
+reconvergence changed no file.
+
+**Before this release, the release PR was opened as follows** (kept for the
+detail on what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main origin/dev --
 lib/db/` touches only `report.model.ts`, a TypeScript interface rather than a
@@ -1439,6 +1637,10 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Second converted amount  | `personalBaseAmount`, written not derived | Same reason as `baseAmount`: a total stays one `sum()` instead of a rate lookup per row   |
 | Budgets vs. shared spend | Budgets stay inside their own space       | A limit is on a category, and categories are space-scoped — matching by name is a trap    |
 | Existing shared income   | Deleted by migration, counted first       | The repo owner's call; `scripts/count-shared-income.ts` prices it before it is paid       |
+| Savings entries          | Personal-space-only third `TransactionKind`, deducted from net like an expense | Reuses the expense/income query layer rather than a parallel stack — the "third kind" this repo's own follow-ups anticipated |
+| Savings liquidity        | `liquid`/`locked` is informational only; both deduct identically | Keeps the model to one new column instead of two account types                          |
+| Savings vs. savings goals | Kept fully separate; no link between a saving and a goal | Confirmed with the repo owner rather than assumed — a goal is a target, a saving is real money |
+| Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -2125,6 +2327,88 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 23 — Savings, tracked separately from goals ✅ merged (PR #71)
+
+- [x] A third `TransactionKind`, `savings` — real money, entered like an
+      expense, personal-space only
+- [x] Tagged `liquid` or `locked` (`components/transactions/transaction-form-dialog.tsx`),
+      informational only — both deduct from net/balance identically
+- [x] Deducted from `net`/`carriedBalance`/`balance` on the dashboard and
+      reports, the same way an expense is
+- [x] `/savings` — list, filters (no category filter — savings is never
+      categorised), add/edit/delete, reusing the shared transaction page,
+      list and form components expense/income already use
+- [x] A withdrawal is a negative-amount saving (a `Direction` picker in the
+      form: "Add to savings" / "Take out of savings"), the same signed-delta
+      convention a savings goal's contribution already uses — no separate
+      withdrawal flow
+- [x] Recurring savings templates — `/recurring`'s `Kind` picker gains
+      "Saving", with a liquidity picker in place of the category picker;
+      `endDate` was already nullable, so the open-ended investment-plan case
+      needed no schema change
+- [x] Dashboard "Saved this month" tile, reports "Saved" tile and a third
+      trend-chart series; the recent-activity lists on both merge in savings
+      rows alongside expenses and income
+- [x] CSV export gains a `Liquidity` column and walks the `savings` table
+      the same way it already walks `income`
+- [x] 8 new unit tests (personal-space refusal, the default liquidity, and a
+      fifth running-balance case each on the dashboard and reports suites)
+
+**Asked for by the repo owner, and confirmed before building rather than
+assumed** (three rounds of clarifying questions): a saving is real money,
+not a target — the existing `savingsGoals` feature already covers "a target,
+no money moves," and this is deliberately the opposite of that, kept fully
+separate with no link between the two. Deducted from net "like an expense."
+Liquid vs. locked is a label, not two account types. A later withdrawal is a
+signed entry, not a new flow — the same convention goal contributions
+already established.
+
+**Reuses the expense/income machinery rather than forking it.** This
+repo's own "Known follow-ups" section had flagged the two-table,
+one-query-layer shape as "only worth revisiting if a third kind ever
+appears" — one has. `savings` slots into the existing `TransactionTable`
+union, `TransactionService`'s `TABLES` dispatch map, the shared
+`transaction-query.ts` functions, `transaction.actions.ts`, and the shared
+page/list/form components — one new table, one new service/repository pair,
+and small `kind === "savings"` branches through the UI, rather than a
+parallel `/goals`-shaped stack.
+
+**`categoryId` is carried on the `savings` table but never populated.** The
+shared query functions (`buildConditions`, `listColumns`,
+`sumByCategoryWithNames`) read `table.categoryId` directly across the
+`TransactionTable` union; dropping the column from `savings` would have
+forced every one of them into per-table branching. The UI never renders a
+category picker for a saving, and `categoryService.assertUsable` safely
+refuses a crafted id anyway (no category is ever created with
+`type: "savings"`) — the same trade-off already on record for
+`personalBaseAmount`'s "in table" narrowing.
+
+**Verified against the real (development) database in an actual signed-in
+browser**, not just compiled: added a liquid saving and a withdrawal
+(confirmed the withdrawal renders `+Rs` in green, the same direction income
+moves in, and the total recalculates correctly); confirmed `/savings`
+explains itself rather than redirecting when visited from a shared space;
+created a monthly recurring `locked` saving with no end date and confirmed
+`catchUp` materialised one entry immediately (`created: 1, templates: 1` in
+the server log) with the right liquidity; checked the dashboard's "Saved
+this month" tile and the reports page's "Saved" tile, trend-chart series and
+accessible table for both "This month" and "Last 6 months".
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` — 374 (366 plus 8
+new: the personal-space refusal and default-liquidity cases in
+`personal-ledger.test.ts`, and a fifth running-balance case each in
+`dashboard.service.test.ts` and `report.service.test.ts` covering savings
+being deducted from net/balance), `pnpm build`.
+
+**Migration is purely additive** — one `CREATE TABLE savings`, one nullable
+`ALTER TABLE recurringTransactions ADD COLUMN liquidity` — no data migration,
+no pre-count needed.
+
+**Not done**: a liquidity filter on the `/savings` list (the badge shows it
+per-row; filtering by it was left out to keep the diff to what was asked
+for) and a category breakdown for savings (there are no savings categories
+to break down by). Both are easy follow-ups if wanted.
 
 ### Feature 22 — One pocket, one ledger ✅ merged (PR #62)
 

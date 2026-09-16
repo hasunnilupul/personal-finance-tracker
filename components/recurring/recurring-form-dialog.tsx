@@ -29,7 +29,7 @@ import {
 } from "@/app/actions/recurring.actions";
 import { RecurringWithCategory } from "@/lib/repositories/recurring-transaction.repository";
 import { Category } from "@/lib/db/models/category.model";
-import { TransactionKind } from "@/lib/db/models/transaction.model";
+import { SavingsLiquidity, TransactionKind } from "@/lib/db/models/transaction.model";
 import { FREQUENCIES, FREQUENCY_LABEL, Frequency } from "@/lib/recurring/schedule";
 import { SUPPORTED_CURRENCIES } from "@/constants/currencies";
 
@@ -50,6 +50,13 @@ interface RecurringFormProps {
    * told no.
    */
   allowIncome: boolean;
+  /**
+   * Whether this space can hold recurring savings at all.
+   *
+   * Same reasoning as {@link allowIncome} — false in a shared space, where
+   * savings is never offered and the service refuses it regardless.
+   */
+  allowSavings: boolean;
   baseCurrency: string;
   onDone: () => void;
 }
@@ -65,6 +72,7 @@ const RecurringForm = ({
   expenseCategories,
   incomeCategories,
   allowIncome,
+  allowSavings,
   baseCurrency,
   onDone,
 }: RecurringFormProps) => {
@@ -86,6 +94,9 @@ const RecurringForm = ({
   const [categoryId, setCategoryId] = useState(
     template?.categoryId ? String(template.categoryId) : NONE,
   );
+  const [liquidity, setLiquidity] = useState<SavingsLiquidity>(
+    (template?.liquidity as SavingsLiquidity) ?? "liquid",
+  );
 
   useEffect(() => {
     if (state.success) {
@@ -95,7 +106,8 @@ const RecurringForm = ({
     }
   }, [state.success, isEditing, onDone, router]);
 
-  const categories = type === "expense" ? expenseCategories : incomeCategories;
+  const categories =
+    type === "expense" ? expenseCategories : type === "income" ? incomeCategories : [];
 
   // Switching side can strip the selection away — resolved at render rather
   // than synchronised, so there is no effect to fight with lint.
@@ -115,7 +127,12 @@ const RecurringForm = ({
   }));
   const typeItems = [
     { value: "expense", label: "Expense" },
-    { value: "income", label: "Income" },
+    ...(allowIncome ? [{ value: "income", label: "Income" }] : []),
+    ...(allowSavings ? [{ value: "savings", label: "Saving" }] : []),
+  ];
+  const liquidityItems = [
+    { value: "liquid", label: "Can still spend it" },
+    { value: "locked", label: "Set aside long-term (e.g. an investment)" },
   ];
   const frequencyItems = FREQUENCIES.map((option) => ({
     value: option,
@@ -144,13 +161,17 @@ const RecurringForm = ({
         <input type="hidden" name="type" value={type} />
         <input type="hidden" name="frequency" value={frequency} />
         <input type="hidden" name="currency" value={currency} />
-        {effectiveCategoryId !== NONE && (
-          <input type="hidden" name="categoryId" value={effectiveCategoryId} />
+        {type === "savings" ? (
+          <input type="hidden" name="liquidity" value={liquidity} />
+        ) : (
+          effectiveCategoryId !== NONE && (
+            <input type="hidden" name="categoryId" value={effectiveCategoryId} />
+          )
         )}
         <input type="hidden" name="isActive" value={String(template?.isActive ?? true)} />
 
         <div className="flex gap-2">
-          {allowIncome && (
+          {(allowIncome || allowSavings) && (
             <div className="flex flex-1 flex-col gap-2">
               <Label htmlFor="recurring-type">Kind</Label>
               <Select
@@ -230,25 +251,47 @@ const RecurringForm = ({
 
         {fieldError("amount") && <p className="text-destructive text-sm">{fieldError("amount")}</p>}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="recurring-category">Category</Label>
-          <Select
-            items={categoryItems}
-            value={effectiveCategoryId}
-            onValueChange={(value) => setCategoryId(String(value))}
-          >
-            <SelectTrigger id="recurring-category" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categoryItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {type === "savings" ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="recurring-liquidity">Can it still be spent?</Label>
+            <Select
+              items={liquidityItems}
+              value={liquidity}
+              onValueChange={(value) => setLiquidity(value as SavingsLiquidity)}
+            >
+              <SelectTrigger id="recurring-liquidity" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {liquidityItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="recurring-category">Category</Label>
+            <Select
+              items={categoryItems}
+              value={effectiveCategoryId}
+              onValueChange={(value) => setCategoryId(String(value))}
+            >
+              <SelectTrigger id="recurring-category" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="recurring-description">Description</Label>
@@ -314,6 +357,8 @@ interface RecurringFormDialogProps {
   incomeCategories: Category[];
   /** See {@link RecurringFormProps.allowIncome}. */
   allowIncome: boolean;
+  /** See {@link RecurringFormProps.allowSavings}. */
+  allowSavings: boolean;
   baseCurrency: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -324,6 +369,7 @@ const RecurringFormDialog = ({
   expenseCategories,
   incomeCategories,
   allowIncome,
+  allowSavings,
   baseCurrency,
   open,
   onOpenChange,
@@ -337,6 +383,7 @@ const RecurringFormDialog = ({
           expenseCategories={expenseCategories}
           incomeCategories={incomeCategories}
           allowIncome={allowIncome}
+          allowSavings={allowSavings}
           baseCurrency={baseCurrency}
           onDone={() => onOpenChange(false)}
         />

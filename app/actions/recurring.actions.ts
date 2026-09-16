@@ -9,6 +9,7 @@ import { isServiceError } from "@/lib/services/errors";
 import { parseAmount } from "@/lib/currency/format";
 import { FREQUENCIES } from "@/lib/recurring/schedule";
 import { SUPPORTED_CURRENCY_CODES } from "@/constants/currencies";
+import type { SavingsLiquidity, TransactionKind } from "@/lib/db/models/transaction.model";
 import { logger } from "@/lib/logger";
 
 const RECURRING_PATH = "/recurring";
@@ -24,6 +25,7 @@ function revalidateAll() {
   revalidatePath("/");
   revalidatePath("/expenses");
   revalidatePath("/income");
+  revalidatePath("/savings");
   revalidatePath("/reports");
 }
 
@@ -51,7 +53,7 @@ const daySchema = z.string().transform((value, ctx) => {
 });
 
 const recurringSchema = z.object({
-  type: z.enum(["expense", "income"]),
+  type: z.enum(["expense", "income", "savings"]),
   amount: z.string().transform((value, ctx) => {
     const parsed = parseAmount(value);
 
@@ -76,6 +78,10 @@ const recurringSchema = z.object({
     .max(255)
     .optional()
     .transform((value) => value?.trim() || null),
+  liquidity: z
+    .enum(["liquid", "locked"])
+    .optional()
+    .transform((value) => value ?? null),
   frequency: z.enum(FREQUENCIES),
   startDate: daySchema,
   endDate: z
@@ -243,11 +249,12 @@ export async function setRecurringActiveAction(
     }
 
     await recurringTransactionService.update(ctx, id, {
-      type: current.type as "expense" | "income",
+      type: current.type as TransactionKind,
       amount: current.amount,
       currency: current.currency,
       categoryId: current.categoryId,
       description: current.description,
+      liquidity: current.liquidity as SavingsLiquidity | null,
       frequency: current.frequency as (typeof FREQUENCIES)[number],
       startDate: current.startDate,
       endDate: current.endDate,
