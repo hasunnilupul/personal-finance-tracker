@@ -10,6 +10,43 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**In progress: fix a stale e2e assertion on `fix/export-header-liquidity-column`**,
+branched from `dev` at `3d66ad9`. Found while running the full check suite
+ahead of the next release: `pnpm test:e2e` failed on
+`e2e/export.spec.ts` — "carries the header row, both amounts included" —
+with `Received` carrying a trailing `,Liquidity` the assertion did not expect.
+
+**Not a flake, and not an app bug.** `lib/export/transactions.ts`'s `HEADER`
+constant has carried `Liquidity` as its last column since Feature 23 (PR #71,
+`7777a5c`) — CSV export deliberately reports liquidity for savings entries,
+same as every other column. The e2e test's expected header string was simply
+never updated alongside it, so `dev` has been shipping this gap since that
+merge; nothing caught it because PR #71's own verification ran `pnpm test`
+and `pnpm build`, not `pnpm test:e2e`.
+
+**The fix is one line**: the expected header in `e2e/export.spec.ts` now ends
+`,Entered by,Liquidity`, matching what the endpoint has actually been
+returning all along.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374, unchanged —
+this is an e2e-only assertion), `pnpm test:e2e` (30 passed).
+
+**One flake surfaced along the way, and it traced back to test data, not
+code.** The first full e2e run failed on `shared-space.spec.ts`'s "turns up
+in the personal ledger, badged and counted" — a different symptom than the
+timeout PLAN.md already documents for this test (that one was `SpaceSwitcher`
+staying disabled; this run failed on the row never appearing). A retry of
+that test alone failed too, which the earlier documented flake never did.
+**The cause was two stray "Cross-space smoke" rows (`id` 9 and 10, Rs 1234.56
+each) sitting in `E2E Shared`** — the test writes a real entry and deletes it
+at the end, and both the original failing run and the retry had aborted
+*before* reaching that cleanup step, so each left one behind. Confirmed with
+a guarded, throwaway script (checked both rows' description matched before
+deleting, run and removed, never committed) before deleting them on the repo
+owner's go-ahead — the same standard the two stray "Personal" spaces were
+held to earlier in this file. A clean run afterwards passed all 30, this test
+included, in 1.2m.
+
 **Last completed: fix for #72 — transaction descriptions overflowing the
 row**, merged as **PR #75** (`a1bec03`, a two-parent merge commit into
 `dev` — `dev` moved `c305fa0..a1bec03`). Reported via GitHub issue with a
