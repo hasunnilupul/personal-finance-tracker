@@ -66,7 +66,7 @@ test.describe("signed in", () => {
     // of the same pocket. Without the column those rows are indistinguishable
     // from the personal ones once the file is open.
     expect(header).toBe(
-      "Date,Type,Space,Description,Category,Amount,Currency,Exchange rate,Amount (base),Base currency,Entered by",
+      "Date,Type,Space,Description,Category,Amount,Currency,Exchange rate,Amount (base),Base currency,Entered by,Liquidity",
     );
   });
 
