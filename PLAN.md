@@ -40,10 +40,11 @@ that one would hand over the entire ledger.
 stays a clean Feature 13 trial — still unanswered, still needing a device
 that already had the previous build.
 
-**What is still unverified is the gap the PR left going in**: #75, the
+**The one gap the PR left going in is now closed.** #75, the
 transaction-overflow fix, was never seen in an actual browser in any session
-that touched it — the Chrome extension was not connected. That is a real gap
-this release does not close, not a claim being made and walked back.
+that touched it — the Chrome extension was not connected in any of them.
+**Confirmed working by the repo owner** after the release, checked directly
+rather than through this session's own tools.
 
 **Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374), `pnpm build`
 and `pnpm test:e2e` (30) on `dev` at `ebb843a` before the merge — see below
