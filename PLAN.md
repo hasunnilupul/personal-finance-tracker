@@ -10,6 +10,22 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Invitation email is live.** The repo owner verified a sending domain in
+Resend (DNS on Cloudflare) and set `RESEND_FROM` to an address on it in
+Vercel's Production environment — configuration only, no code or dependency
+change, so nothing here needs a release of its own. This closes the
+`RESEND_FROM` item that sat under "Reachability" as an open trap.
+
+**Confirmed by the repo owner, not by this session:** an invitation sent from
+the Members page arrived at the owner's own address, and again at a second
+address that is not the Resend account's own — which `onboarding@resend.dev`
+could never do — and it landed in the inbox, not spam. That second delivery
+is the one that matters, since a send to the account owner proves nothing
+about the domain.
+
+**Not checked:** other mail providers (only the two inboxes above), and the
+DMARC policy, whose strictness is the owner's call. Neither blocks anything.
+
 **Released 2026-09-16** — `0ee68e3` (PR #77), carrying **#71** (Feature 23 —
 savings, tracked separately from expenses, income and goals), **#75** (fix
 for **#72** — transaction descriptions overflowing the row in the Expenses
@@ -3252,7 +3268,7 @@ nothing if the recording waits for you to look.
 | `DATABASE_URL`          | Runtime          | Pooled Neon connection. Same endpoint as below |
 | `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection. Needed in Production too    |
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
-| `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
+| `RESEND_FROM`           | Invite email     | Set. Address on a domain verified in Resend    |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
 | `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
 | `VAPID_PUBLIC_KEY`      | Web push         | Same value as the `NEXT_PUBLIC_` one below     |
@@ -3311,8 +3327,9 @@ the accelerator for a space nobody opens.
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
 account's own address, so it cannot reach family members. A `*.vercel.app`
-domain cannot be verified — you do not control its DNS. Until a real domain is
-verified, invites work by copying the link.
+domain cannot be verified — you do not control its DNS. **A domain is now
+verified and `RESEND_FROM` is set**, so invitations are emailed; copying the
+link still works whenever the variable is empty or a send fails.
 
 **On Vercel Deployment Protection:** it is **on**, and it is not an app setting,
 so no amount of correct configuration inside the app works around it. Checked
