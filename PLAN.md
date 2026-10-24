@@ -10,10 +10,60 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries two merges since
-`v1.3.0`: **#87** (Expenses and Income open on the current month, plus a search
-box) and **#88** (dependency security fixes, `next` 16.2.11 → 16.4.2), plus the
-plan records for each and the Resend record (#80).
+**Released 2026-10-24** — `0f026ae` (PR #89), carrying **#87** (Expenses and
+Income open on the current month, plus a search box) and **#88** (dependency
+security fixes, `next` 16.2.11 → 16.4.2), plus the plan records for each and the
+Resend record (#80). **Not yet tagged `v1.4.0`** — the tag is waiting on the repo
+owner's go-ahead, and tagging has lagged releasing before.
+
+**Merged with a merge commit, and the history is convergent.** `0f026ae` has two
+parents (`0ee68e3` and `f174ba0`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_9U8addzsyYfRuWz7CP7BSC5tncwj`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `0f026ae` itself.
+The commit status read `pending` on the first look and `success` about a minute
+later — the build was still running, so there was nothing to diagnose, which is
+what the gotcha about unchanged ids is for. It was before the merge
+`dpl_3AxLT3JJZH5QBx5qrnR5vvv3SyDQ`.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200
+as `application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers
+**307 with a zero-byte body**. The old `personal-finance-tracker-uicg.vercel.app`
+still answers 308 to the new domain. **`public/sw.js` is untouched and
+byte-identical to the live file**, so this stays a clean Feature 13 trial — still
+unanswered, still needing a device that already had the previous build.
+
+**Next 16.4.2 is running on the live site, and that is all this shows.** It
+deployed and the public routes above answer correctly. Nothing signed-in has been
+exercised there: no Server Action, no `use cache`, no list page. The e2e suite
+that passed ran against the development database. A person signing in and opening
+Expenses is the check that has not been made.
+
+**The Dependabot alerts have not visibly dropped, and that is not yet a finding.**
+GitHub still showed 35 open alerts for the five minutes after the deploy, with
+alert #60 (`next`, "< 16.3.3") unchanged since 2026-09-11. `main`'s lockfile
+carries 16.4.2, so the alert should close at the next scan — but GitHub's
+dependency graph endpoint returned nothing to read, so what it currently believes
+is installed could not be seen. **Check the count again later**; if it has not
+moved after a day, the cause is GitHub's scan, not the lockfile. `zod` 3.25.76 is
+the one finding expected to stay.
+
+**Still open from #88:** whether Dependabot's security-update PRs honour the new
+`target-branch: dev`. That only shows when it next opens one.
+
+**Still unverified after this release**, and the list is the one earlier records
+carried: whether Feature 13 actually installs a new worker, whether push
+delivers, whether `financeflow-private-*` disappears from Cache Storage on
+sign-out, whether an invitation notice reaches the other account, whether the
+budget warning arrives in the bell, and whether the CSV opens in a spreadsheet.
+**New:** the Search box at phone width, and everything signed-in on Next 16.4.2.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail
+on what shipped and why, now historical):
 
 **Why this release matters more than most: the Dependabot alerts follow the
 default branch.** #88 only landed on `dev`, so GitHub still shows 35 open alerts
@@ -74,10 +124,6 @@ that already had the previous build.
 **Verified on `dev` at `f39ff1d`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
 (381), `pnpm build` and `pnpm test:e2e` (37) — run on the branch before #88
 merged; `dev` has had nothing since but this record.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, the same URL-by-URL answers, and
-whether GitHub's open-alert count dropped from 35. Merge it as a **merge commit**.
 
 **Before that: dependency security fixes**, merged as **PR #88** (`f39ff1d`).
 Clears the open Dependabot alerts by one coordinated bump instead of the ten PRs
