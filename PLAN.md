@@ -10,10 +10,288 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries two merges since
-`v1.3.0`: **#87** (Expenses and Income open on the current month, plus a search
-box) and **#88** (dependency security fixes, `next` 16.2.11 → 16.4.2), plus the
-plan records for each and the Resend record (#80).
+**Release PR open — `dev` → `main`, not yet merged.** Carries three merges since
+`v1.4.0`: **#95** (the proxy no longer looks the session up in the database on
+private routes, and the space is fetched in one query), **#96** (the browser keeps
+pages it has fetched for 30 seconds, and four tabs prefetch their whole page) and
+**#97** (the list stays on screen, dimmed, while a filter or page loads instead of
+being swapped for a skeleton) — plus the plan record for each. This is the whole
+of the navigation-speed work that has been done; it is nowhere near live.
+
+**No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
+is empty, and so is the diff over `package.json` and `pnpm-lock.yaml`. The
+deploy-time migrate step is a no-op — the lowest-risk shape a release can have
+here. **`public/sw.js` is untouched and byte-identical to the live file**, so this
+is another clean Feature 13 trial — still unanswered, still needing a device that
+already had the previous build.
+
+**Minor bump: `v1.4.0` → `v1.5.0`.** Additive from where a user stands — the app
+should feel quicker and nothing is removed — but two things behave differently and
+are worth naming: a page can now be up to 30 seconds behind a change another member
+made in a shared space (your own changes are never stale), and a filter change dims
+the list rather than flashing a skeleton.
+
+**This release touches authentication, which the earlier ones did not.** #95 changed
+`proxy.ts`: for private routes it now checks the session cookie's presence instead
+of looking the session up in the database. That is safe because `requireUser` in the
+page is the check that holds and the proxy was only ever optimistic — but a
+redirect-loop between `/` and `/sign-in` was the specific way it could have gone
+wrong, and `e2e/stale-session.spec.ts` covers it. **It has not been tried with a
+real expired session on the live site.**
+
+**What each PR still leaves unverified, going in:**
+
+- **#95.** Nothing was measured on production — an authenticated production
+  navigation needs a signed-in session. The expectation is tens of milliseconds, not
+  a transformation. `PERF_LOG=1` in Vercel's environment logs the session and space
+  lookup times to the function logs; **set it before the merge, since an environment
+  variable needs a redeploy and this release provides one.**
+- **#96.** How it feels on the live site, and what four concurrent full prefetches
+  cost there. `staleTimes` is an `experimental` flag in this version of Next.
+- **#97.** Pagination: the next and previous buttons use the new `onNavigate` path,
+  and the e2e account does not have more than 25 entries in a month, so nothing
+  exercises it. It is the least-tested part of the release.
+
+**Not changed by this release, and still the largest cost:** a request from Colombo
+enters at Vercel's `sin1` edge and runs in `iad1`, which puts about 0.2s of round
+trip under every navigation that reaches the server. Moving compute and the database
+to Singapore is the repo owner's open decision. **Do not read an unimpressive result
+from this release as the work having failed — it is the part that does not touch the
+floor.**
+
+**Still open from v1.4.0:** the Dependabot alert count read **35** when this PR was
+opened, unchanged since before v1.4.0 deployed. `main` has carried the fixed
+lockfile since `0f026ae`. Not yet a finding — a day had not passed — but if it is
+still 35 after one, the cause is GitHub's scan, not the tree.
+
+**The deployment id before the merge is `dpl_9U8addzsyYfRuWz7CP7BSC5tncwj`** —
+the one v1.4.0 ended on, so production has not moved since — confirmed through
+`/api/version` and the sign-in page's `data-dpl-id` on
+`finance-flow.nilupulperera.dev`, and recorded in advance so a slow deploy cannot be
+mistaken for a stale one.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` answers 200 as `application/manifest+json`; `/sw.js` 200 as
+JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**.
+
+**Verified on `dev` at `613f969`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385),
+`pnpm build` and `pnpm test:e2e` (43) — run on #97's branch before it merged; `dev`
+has had nothing since but this record.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, the same URL-by-URL answers, and
+the alert count again. Merge it as a **merge commit**.
+
+**Before that: step 3, the list stays on screen** — merged as **#97** (`613f969`).
+
+**Faster navigation, step 3: the list stays on screen while a filter loads.**
+Branch `perf/keep-list-while-loading`, merged as `613f969`. Step (c) of the plan in
+the follow-ups.
+
+**The change.** Changing the search, a date, a filter or the page used to swap
+the whole list for a skeleton: the `<Suspense>` around it was keyed on every
+filter, so each change was a new boundary and a flash of placeholder rows where
+there had been something to read. The key is gone. The old rows now stay, and
+`FilterPendingDim` (`components/transactions/filter-pending.tsx`) greys them out
+while the next ones load, marked `data-pending` / `aria-busy`. The skeleton is
+what the first visit shows, from `loading.tsx`.
+
+**One transition, owned above everything that uses it.** The filter bar is
+outside the Suspense boundary on purpose, the pagination links are inside the
+results, and the dim wraps both — so the `useTransition` that tracks the
+navigation lives in `FilterPendingProvider`, around all three. The bar's
+`router.push` calls run inside it, and so do the pagination links, which now go
+through `<Link onNavigate>` and `router.push`: `onNavigate` only fires for a plain
+click, so middle-click and open-in-new-tab are left to the browser as before.
+
+**The dim waits 200ms (`delay-200`) and clears at once.** A response faster than
+that never flickers; a slower one is told apart from a page that ignored the
+click. Returning to full opacity is immediate, because it happens when the new
+rows arrive.
+
+**Dropped from the plan: a pending state on the clicked tab link.** The Next docs
+say `useLinkStatus` is for routes that have no `loading.js`, and every route here
+has one, so a click already shows a skeleton immediately. It would have been
+redundant, and the iOS bar's pill makes any addition there risky.
+
+**The test needed a second attempt, and the first would have passed regardless.**
+The first version looked for a skeleton once, at the moment the pending flag
+flipped. With the Suspense key put back — the bug it exists to catch — it still
+passed, because a skeleton that arrives a beat after the flag is invisible to a
+single look. It now runs a `MutationObserver` for the whole load and asserts a
+skeleton never appeared. **Mutation-checked the second time:** with the key
+restored it fails (`sawSkeleton` true); without, it passes. Worth remembering for
+any "X must not appear" assertion: watch, don't look.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (43). **Not verified:** pagination. Going to the next page uses the
+new `onNavigate` path, and the e2e account does not have more than 25 entries in a
+month, so nothing exercises it — it is the least-tested part of this change.
+Nor has anyone watched it on a real device or the live site.
+
+**Before that: faster navigation, step 2 (#96, merged as `5992c7f`).**
+
+**Faster navigation, step 2: the browser keeps pages it has fetched.** Branch
+`perf/client-router-cache`, merged as `5992c7f`. Step 2 of the plan recorded in the
+follow-ups; steps 0 and 1 were #95.
+
+**Two changes.** `experimental.staleTimes` is `dynamic: 30, static: 30` in
+`next.config.ts`; left at the defaults a dynamic page is not kept at all, so every
+click on a tab already visited waited on the server (about 0.2s before any work,
+from Colombo). And four tabs — Dashboard, Expenses, Income, Reports — carry
+`prefetch: true` on their definition in `components/navigation/tabs.ts`, which the
+sidebar and both mobile bars pass to `<Link>`. A full prefetch fetches the whole
+page ahead of the click, so the first open of those four is instant too.
+
+**Why only four, and why thirty seconds.** The sidebar is always on screen, so
+`prefetch` on every link is a full page render for each of the eleven
+destinations on every load, each one asking the database; the flag is opt-in
+for that reason and says so on the type. **Never set it on `/recurring`:** its page
+runs `catchUp` while it renders, which writes, and a prefetch must not. `static` is
+the figure that governs `prefetch: true` links and its default is five minutes —
+too long for money: in a shared space somebody else's entry would not show for
+that long. Thirty seconds is a judgement, not a measurement.
+
+**What is not stale.** The repo owner's own changes: the mutation actions call
+`revalidatePath`, which clears this cache, and the forms call `router.refresh()`.
+**What can be, for up to thirty seconds:** a change made by another member of a
+shared space, and anything that changes with the clock (the dashboard's month
+rolling over at midnight UTC).
+
+**Found while testing, worth keeping.** A `prefetch: true` link's full-page fetch
+is sent *without* the `next-router-prefetch` header, so it is indistinguishable
+from a navigation by headers alone. `e2e/navigation-cache.spec.ts` therefore counts
+page fetches made *after the click*, not by kind. And with all eleven prefetches
+starting at once, a local run (database across an ocean) needs a long budget; the
+spec sets 120s, which is this machine, not production.
+
+**Mutation-checked, unlike the last PR's test.** With the `staleTimes` and the
+`prefetch` flags switched off, both tests in the new spec fail; with them on, both
+pass. The spec: a prefetched tab opens with no page request of its own, and a tab
+visited a moment ago is not fetched again.
+
+**Also fixed here:** a `no-non-null-assertion` lint warning in
+`e2e/stale-session.spec.ts`, left by the previous PR.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (41). **Not verified:** how it feels on the live site, and what the
+prefetching costs there — eleven concurrent renders per load was the worry, four
+full ones is the answer, and `PERF_LOG=1` (#95) is how to see what they cost.
+**`staleTimes` is an `experimental` flag in this Next version.**
+
+**Before that: faster navigation, first pass (#95).**
+
+**Faster navigation, first pass (#95, merged).** Branch `perf/reduce-navigation-round-trips`,
+merged as `3802b9e`. The repo owner reported that SSR navigation feels slow and
+asked for it to be "buttery smooth"; this is steps 0 and 1 of a staged plan, and
+**it is a small slice of it** — see the follow-ups for the rest.
+
+**What was measured, and it changed the plan.** A request from Colombo enters at
+Vercel's `sin1` edge and runs in `iad1` (Virginia) — `x-vercel-id: sin1::iad1::…`
+— beside a Neon database in `us-east-1`. Warm time-to-first-byte for an endpoint
+that touches no database (`/api/version`) is **0.20–0.24s**. That is the floor for
+any navigation that reaches the server, and no amount of query tuning moves it.
+Queries from a laptop cost ~290ms each, but that is the laptop crossing an ocean;
+in production the function and database are neighbours, so serial queries cost far
+less there than the e2e timings suggest. **Those e2e timings (pages taking several
+seconds) describe this machine, not the live site.** Not measured: authenticated
+navigation on production — that needs a signed-in session, which was not available —
+so `PERF_LOG=1` (below) is how to get it.
+
+**Two changes, both about work done on every request:**
+
+- **`proxy.ts` no longer looks the session up in the database for private
+  routes.** It ran `auth.api.getSession` on every page request — every navigation
+  and every link prefetch — and the page then did it again in `requireUser`; the two
+  run in separate contexts, so React's `cache` cannot share the answer. Private
+  routes now check the cookie's presence (`getSessionCookie`); a dead cookie gets
+  through and `requireUser` turns it away, which is the check that holds. **The auth
+  routes keep the real lookup, deliberately**: redirecting on a cookie alone sends a
+  stale cookie from `/sign-in` to `/` and back for ever. `e2e/stale-session.spec.ts`
+  covers both halves.
+- **Membership and the space are one query.** `resolveActiveSpace` did
+  `findMembership` then `findById` in sequence; `spaceRepository.findForMember` is
+  one inner join. Compared against the dev database for both of the e2e account's
+  spaces: identical rows and role, and a space the user does not belong to returns
+  nothing.
+
+**`PERF_LOG=1` turns on per-request timing** (`lib/perf/timing.ts`): the session and
+space lookups log `[perf] session 23ms` to stdout, which Vercel captures. Off by
+default. Set it in Vercel, click around, read the function logs — that is the
+measurement this PR could not make itself.
+
+**`cookieCache` was planned and deliberately left out.** better-auth's
+`session.cookieCache` would save the session lookup too, but two things make it a
+hazard here. Server Components cannot write cookies, so an expired cache is never
+rewritten by the render that noticed it. And the app does not use the `nextCookies`
+plugin, so `setActiveOrganization` from a Server Action cannot refresh the cache
+cookie — after a space switch the cached session could keep the old
+`activeOrganizationId` for the whole window. Doing it properly means adding
+`nextCookies()` and re-running the space-switching spec. The saving is also
+smaller than it sounds once the proxy no longer looks the session up.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (39, including space switching). **Not verified:** any change in
+how fast the live site feels — expect tens of milliseconds, not a transformation.
+The redirect-loop test was not mutation-checked against the naive version.
+
+**Before that: the v1.4.0 release.**
+
+**Released 2026-10-24** — `0f026ae` (PR #89), carrying **#87** (Expenses and
+Income open on the current month, plus a search box) and **#88** (dependency
+security fixes, `next` 16.2.11 → 16.4.2), plus the plan records for each and the
+Resend record (#80). **Tagged `v1.4.0`** (annotated, on `0f026ae`) once the repo
+owner gave the go-ahead — the same day, rather than lagging a release behind as it
+has before. It has a GitHub release page, "v1.4.0 — this month, and search".
+
+**Merged with a merge commit, and the history is convergent.** `0f026ae` has two
+parents (`0ee68e3` and `f174ba0`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_9U8addzsyYfRuWz7CP7BSC5tncwj`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `0f026ae` itself.
+The commit status read `pending` on the first look and `success` about a minute
+later — the build was still running, so there was nothing to diagnose, which is
+what the gotcha about unchanged ids is for. It was before the merge
+`dpl_3AxLT3JJZH5QBx5qrnR5vvv3SyDQ`.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200
+as `application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers
+**307 with a zero-byte body**. The old `personal-finance-tracker-uicg.vercel.app`
+still answers 308 to the new domain. **`public/sw.js` is untouched and
+byte-identical to the live file**, so this stays a clean Feature 13 trial — still
+unanswered, still needing a device that already had the previous build.
+
+**Next 16.4.2 is running on the live site, and that is all this shows.** It
+deployed and the public routes above answer correctly. Nothing signed-in has been
+exercised there: no Server Action, no `use cache`, no list page. The e2e suite
+that passed ran against the development database. A person signing in and opening
+Expenses is the check that has not been made.
+
+**The Dependabot alerts have not visibly dropped, and that is not yet a finding.**
+GitHub still showed 35 open alerts for the five minutes after the deploy, with
+alert #60 (`next`, "< 16.3.3") unchanged since 2026-09-11. `main`'s lockfile
+carries 16.4.2, so the alert should close at the next scan — but GitHub's
+dependency graph endpoint returned nothing to read, so what it currently believes
+is installed could not be seen. **Check the count again later**; if it has not
+moved after a day, the cause is GitHub's scan, not the lockfile. `zod` 3.25.76 is
+the one finding expected to stay.
+
+**Still open from #88:** whether Dependabot's security-update PRs honour the new
+`target-branch: dev`. That only shows when it next opens one.
+
+**Still unverified after this release**, and the list is the one earlier records
+carried: whether Feature 13 actually installs a new worker, whether push
+delivers, whether `financeflow-private-*` disappears from Cache Storage on
+sign-out, whether an invitation notice reaches the other account, whether the
+budget warning arrives in the bell, and whether the CSV opens in a spreadsheet.
+**New:** the Search box at phone width, and everything signed-in on Next 16.4.2.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail
+on what shipped and why, now historical):
 
 **Why this release matters more than most: the Dependabot alerts follow the
 default branch.** #88 only landed on `dev`, so GitHub still shows 35 open alerts
@@ -74,10 +352,6 @@ that already had the previous build.
 **Verified on `dev` at `f39ff1d`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
 (381), `pnpm build` and `pnpm test:e2e` (37) — run on the branch before #88
 merged; `dev` has had nothing since but this record.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, the same URL-by-URL answers, and
-whether GitHub's open-alert count dropped from 35. Merge it as a **merge commit**.
 
 **Before that: dependency security fixes**, merged as **PR #88** (`f39ff1d`).
 Clears the open Dependabot alerts by one coordinated bump instead of the ten PRs
@@ -3976,6 +4250,17 @@ Things already hit, so they are not hit twice.
 ## Known follow-ups
 
 Not blocking, but worth doing.
+
+- [ ] **Navigation speed, the rest of the plan** (2026-10-24). In order of what it
+      is likely to buy: **(a) move compute and database to Singapore** (`sin1` and
+      Neon `aws-ap-southeast-1`) — the 0.2s floor is the Singapore↔Virginia hop on
+      every server round trip, and it is the largest single cost for users in Sri
+      Lanka; it is a data migration and the repo owner's call. **(b) client router
+      cache** — done, see Current position.
+      **(c) keep the old list on screen while a filter loads** — done, see
+      Current position (the clicked-link part was dropped, and why is recorded there). **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
+      Components + Partial Prefetching, the "instant navigation" path in Next 16.4 —
+      a migration of its own. **(f)** `cookieCache` with `nextCookies()`, see above.
 
 - [ ] **Clear the Dependabot alerts on a branch of their own** (found
       2026-10-24, 35 open). Merged as #88 and Dependabot's ten PRs closed as

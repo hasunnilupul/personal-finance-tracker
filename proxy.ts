@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
 
 import { auth } from "@/lib/auth/auth";
 
@@ -30,24 +31,40 @@ const authRoutes = ["/sign-in", "/sign-up"];
  */
 const afterSignInRoute = "/";
 
+/**
+ * An optimistic check, and deliberately not a database one.
+ *
+ * This runs on every page request — every navigation and every link prefetch —
+ * and used to look the session up in the database each time, only for the page
+ * to do it again a moment later (the two run in separate contexts, so React's
+ * `cache` cannot share the answer). For a private route the cookie's presence is
+ * enough to decide: a forged or expired one gets through here and is turned
+ * away by `requireUser`, which is the check that holds.
+ *
+ * **The auth routes are the exception, and must stay a real lookup.** Redirecting
+ * on a cookie alone would bounce a stale cookie from `/sign-in` to `/`, which
+ * redirects back to `/sign-in`, and so on without end.
+ */
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
 
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
   // Logged-in users should not access auth pages
-  if (session && isAuthRoute) {
-    return NextResponse.redirect(new URL(afterSignInRoute, request.url));
+  if (isAuthRoute) {
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
+
+    if (session) {
+      return NextResponse.redirect(new URL(afterSignInRoute, request.url));
+    }
   }
 
   // Protect private pages, remembering where the user was headed
-  if (!session && !isPublicRoute) {
+  if (!isPublicRoute && !getSessionCookie(request)) {
     const signInUrl = new URL("/sign-in", request.url);
 
     if (pathname !== afterSignInRoute) {
