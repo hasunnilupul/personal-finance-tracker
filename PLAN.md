@@ -10,13 +10,59 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries three merges since
-`v1.4.0`: **#95** (the proxy no longer looks the session up in the database on
-private routes, and the space is fetched in one query), **#96** (the browser keeps
-pages it has fetched for 30 seconds, and four tabs prefetch their whole page) and
-**#97** (the list stays on screen, dimmed, while a filter or page loads instead of
-being swapped for a skeleton) — plus the plan record for each. This is the whole
-of the navigation-speed work that has been done; it is nowhere near live.
+**Released 2026-10-24** — `18da67f` (PR #98), carrying **#95** (no database
+session lookup in the proxy for private routes; the space fetched in one query),
+**#96** (the browser keeps fetched pages for 30 seconds; four tabs prefetch their
+whole page) and **#97** (the list stays on screen, dimmed, while a filter or page
+loads), plus the plan records for each. **Not yet tagged `v1.5.0`** — waiting on the
+repo owner's go-ahead.
+
+**Merged with a merge commit, and the history is convergent.** `18da67f` has two
+parents (`0f026ae` and `f205465`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `18da67f` itself.
+The status read `pending` on the first look and `success` about a minute later, so
+the early read was a build still running, not a stale answer. It was
+`dpl_9U8addzsyYfRuWz7CP7BSC5tncwj` before the merge.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers **307
+with a zero-byte body**. **`public/sw.js` is untouched and byte-identical to the live
+file**, so this is another clean Feature 13 trial — still unanswered, still needing a
+device that already had the previous build.
+
+**The change to the proxy was exercised on the live site with a cookie the server
+does not recognise, and both halves held.** A request to `/expenses` carrying a
+made-up `__Secure-better-auth.session_token` answered **307 to `/sign-in`** — the
+proxy let it through on the cookie's presence and the page turned it away — and
+`/sign-in` with the same cookie answered **200 with no redirect**, so there is no
+loop. That is the failure the stale-cookie test exists for, seen outside the test
+suite for the first time. **Not tried: a real session that has genuinely expired.**
+
+**No migrations and no dependency changes**, so the migrate step had nothing to do.
+
+**Nothing in this release has been measured on production.** Whether it feels faster
+is unanswered. `PERF_LOG=1` is the way to find out; whether it was set before this
+deploy is not known to this record, so check the function logs for `[perf]` lines —
+if there are none, the variable is not set or the deploy predates it, and setting it
+needs a redeploy. The Singapore decision is still open and is what would move the
+0.2s floor.
+
+**Still open from #97:** pagination is untested, and so is everything above on a real
+device.
+
+**The Dependabot alert count still reads 35**, hours after v1.4.0 and v1.5.0 put the
+fixed lockfile on `main`. Still the same calendar day as v1.4.0, so not yet a finding;
+**check it again tomorrow.** If it is still 35, GitHub's scan is not picking up the
+lockfile and the cause is on its side or in how the graph is submitted, not in the tree.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on
+what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
 is empty, and so is the diff over `package.json` and `pnpm-lock.yaml`. The
@@ -77,10 +123,6 @@ JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**
 **Verified on `dev` at `613f969`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385),
 `pnpm build` and `pnpm test:e2e` (43) — run on #97's branch before it merged; `dev`
 has had nothing since but this record.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, the same URL-by-URL answers, and
-the alert count again. Merge it as a **merge commit**.
 
 **Before that: step 3, the list stays on screen** — merged as **#97** (`613f969`).
 
