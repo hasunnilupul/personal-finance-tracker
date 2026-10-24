@@ -22,7 +22,7 @@ const TransactionPageSkeleton = ({ kind }: TransactionPageSkeletonProps) => {
   return (
     <div className="flex flex-col gap-4">
       <div aria-hidden>
-        <ControlBarSkeleton fields={3} />
+        <ControlBarSkeleton fields={4} />
       </div>
 
       <TransactionResultsSkeleton kind={kind} />

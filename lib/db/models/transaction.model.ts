@@ -68,6 +68,8 @@ export interface TransactionFilters {
   to?: string;
   categoryId?: number;
   createdBy?: string;
+  /** Free text, matched against the description and the category name. */
+  search?: string;
   page?: number;
   pageSize?: number;
 }

@@ -10,6 +10,209 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Release PR open — `dev` → `main`, not yet merged.** Carries two merges since
+`v1.3.0`: **#87** (Expenses and Income open on the current month, plus a search
+box) and **#88** (dependency security fixes, `next` 16.2.11 → 16.4.2), plus the
+plan records for each and the Resend record (#80).
+
+**Why this release matters more than most: the Dependabot alerts follow the
+default branch.** #88 only landed on `dev`, so GitHub still shows 35 open alerts
+and production is still on the vulnerable `next`. **This merge is what fixes
+production, and it is the first step in which the alert count can drop.**
+Dependabot's ten open PRs were closed as superseded after #88 merged.
+
+**No migrations, but dependency changes — so watch the deploy, don't glance at
+it.** `git diff origin/main dev -- lib/db/` touches only `transaction.model.ts`,
+a TypeScript interface. `package.json` and `pnpm-lock.yaml` both change: `next`
+and `eslint-config-next` to 16.4.2, `vitest`, `vite` (now declared), the
+`sharp` / `js-yaml` / `brace-expansion` override floors, and the transitive set.
+The deploy-time migrate step has nothing to apply.
+
+**Minor bump: `v1.3.0` → `v1.4.0`.** Additive from where a user stands — the
+lists open on this month instead of everything, and gain a search box — with a
+framework minor underneath. Nothing removed. Savings is deliberately unchanged
+apart from the search box.
+
+**One behaviour change worth knowing before it ships:** Expenses and Income no
+longer open on all history. The range can still be widened (clear a date, or
+Clear returns to the current month), and totals shown are now for that range.
+
+**What each PR still leaves unverified, going in:**
+
+- **#87 (month default and search).** Passed the whole browser suite, including
+  a new read-only spec, but nobody has looked at it in a browser. The search
+  box's layout at phone width is unchecked on screen.
+- **#88 (dependencies).** Passed typecheck, lint, 381 unit tests, a production
+  build and 37 e2e tests, all against the development database. **Nothing has
+  exercised Next 16.4.2 on the live site.** Its Vercel preview built and passed,
+  which is the first evidence that the failing previews on Dependabot's PRs were
+  not a break in the framework itself — their logs were never read, so the cause
+  of those failures is still unknown.
+- **`zod` 3.25.76 stays** as one accepted `pnpm audit` finding, reached only
+  through the `shadcn` dev CLI; there is no patched 3.x. The alert for it, if
+  GitHub raises one, will not clear.
+
+**The production domain has moved, and this record had not noticed.** The old
+`personal-finance-tracker-uicg.vercel.app` now answers **308** to
+`finance-flow.nilupulperera.dev`. Checks below are against the new domain.
+
+**The deployment id before the merge is `dpl_3AxLT3JJZH5QBx5qrnR5vvv3SyDQ`**,
+confirmed through `/api/version` and the sign-in page's `data-dpl-id` on
+`finance-flow.nilupulperera.dev`, and recorded in advance so a slow deploy cannot
+be mistaken for a stale one. It is **not** the id the v1.3.0 release ended on
+(`dpl_2kpWxYb2…`) although `main` has not moved: a redeploy of the same commit
+is the likely explanation, since `RESEND_FROM` was set in Vercel's Production
+environment afterwards, but that is inferred and not observed.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as
+HTML; `/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js` 200
+as JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte
+body**. **`public/sw.js` is untouched and byte-identical to the live file**, so
+this is another clean Feature 13 trial — still unanswered, still needing a device
+that already had the previous build.
+
+**Verified on `dev` at `f39ff1d`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(381), `pnpm build` and `pnpm test:e2e` (37) — run on the branch before #88
+merged; `dev` has had nothing since but this record.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, the same URL-by-URL answers, and
+whether GitHub's open-alert count dropped from 35. Merge it as a **merge commit**.
+
+**Before that: dependency security fixes**, merged as **PR #88** (`f39ff1d`).
+Clears the open Dependabot alerts by one coordinated bump instead of the ten PRs
+Dependabot opened, and points Dependabot at `dev` from here on.
+
+**`next` 16.2.11 → 16.4.2, not 16.3.3.** The alerts named 16.3.3 as the fix, and
+that was already stale: `pnpm audit`'s advisory database listed further critical
+RCEs (`use cache`, Image Optimization over SVG) and a Server Actions DoS fixed
+only in 16.4.1. **The GitHub alert list lags the audit database, so audit before
+settling on a target version.** Read the release notes across 16.3 and 16.4 first
+(AGENTS.md): bug fixes and Turbopack changes, no API breaks for this app.
+`eslint-config-next` is pinned in lockstep and moved with it.
+
+**The rest:** `vitest` → 4.1.12, `sharp` / `js-yaml` / `brace-expansion`
+override floors raised past their fixed versions (`brace-expansion@^5` to
+`^5.0.12` — the alert list only knew about the v1 line), and the transitive
+packages (`hono`, `undici`, `fast-uri`, `browserslist`, `proxy-addr`, `qs`,
+`body-parser`, `ip-address`, `source-map-js`, `postcss-selector-parser`,
+`baseline-browser-mapping`, `@modelcontextprotocol/sdk`) refreshed in range.
+**`vite` is now a declared devDependency (`^8.3.4`).** It was only an
+auto-installed peer of `vitest`, which pnpm leaves at whatever the lockfile
+first resolved — `pnpm update` could not move it.
+
+**Left on purpose: `zod` 3.25.76**, one `pnpm audit` finding (high), reached only
+through `shadcn` (a dev CLI). There is no patched 3.x — the fix is 4.6.6 — and
+`shadcn` asks for `^3`, so forcing 4 would be changing a tool's validator under it
+to clear a finding on code that never ships. The app's own `zod` is 4.6.7.
+
+**`.github/dependabot.yml` is new**, `target-branch: dev`, weekly, minor and
+patch grouped into one PR. **Unverified until Dependabot next runs**: whether its
+security-update PRs honour `target-branch` as well as its version updates.
+
+**Dependabot's ten open PRs (#73, #74, #78, #79, #81–#86) were closed as
+superseded after #88 merged.** They also all failed the Vercel preview;
+**the cause was never read** (no Vercel CLI session here), so whether that is a
+real build break or a preview-environment quirk is unknown — this branch's own
+preview is the first useful evidence.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (381), `pnpm build` on
+Next 16.4.2, and `pnpm test:e2e` (37). `pnpm audit` goes from 19 findings to the
+one above. `public/sw.js` untouched. **Not verified:** production behaviour on
+16.4.2 — the e2e run is a production build against the development database,
+which is a long way from the live site, and nothing here exercises Server
+Actions or `use cache` beyond what the suite already touches.
+
+**Before that: Expenses and Income open on the current month, and both have a
+search box.** Reported by the repo owner as an issue: the lists opened on
+everything ever recorded. Merged as PR #87 (`83f98d9`).
+
+**The default is applied by the page, not by a redirect.** While the URL names
+neither `from` nor `to`, `TransactionPageContent` uses the first and last day of
+the current UTC month (`currentMonthRange` in `lib/reports/range.ts`, the same
+calendar the budgets and reports pages use). The moment either key is present
+— **even empty** — the URL is believed as written, which is how a user asks for
+"no limit on this end": clearing a date writes `from=` rather than deleting the
+key. The filter bar therefore always writes **both** ends when either changes;
+writing only one would leave the other absent and read as "the default month".
+Pagination links carry the range out in full for the same reason. **Clear
+returns to the default month**, not to everything.
+
+**Savings is deliberately left opening on everything** — a running pool rather
+than a monthly flow. It shares the page and the filter bar, so it gets the search
+box and nothing else.
+
+**Search matches the note and the category name**, case-insensitively, with
+`%`, `_` and `\` escaped (`likePattern`) so "50%" means 50%. The category half is
+a subquery on id, not a join: the count and sum queries read the table alone, and
+a join would have to be added to each to keep the list and its total agreeing.
+Debounced 350ms in the bar; Enter submits at once.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (381), and
+`pnpm test:e2e` (37) — the new `e2e/transaction-filters.spec.ts` is read-only,
+so an aborted run leaves nothing behind. **Not seen by a person in a browser**:
+the Chrome extension was not used, so the search box's layout at phone width is
+unchecked on screen.
+
+**Before that: invitation email is live.** The repo owner verified a sending domain in
+Resend (DNS on Cloudflare) and set `RESEND_FROM` to an address on it in
+Vercel's Production environment — configuration only, no code or dependency
+change, so nothing here needs a release of its own. This closes the
+`RESEND_FROM` item that sat under "Reachability" as an open trap.
+
+**Confirmed by the repo owner, not by this session:** an invitation sent from
+the Members page arrived at the owner's own address, and again at a second
+address that is not the Resend account's own — which `onboarding@resend.dev`
+could never do — and it landed in the inbox, not spam. That second delivery
+is the one that matters, since a send to the account owner proves nothing
+about the domain.
+
+**Not checked:** other mail providers (only the two inboxes above), and the
+DMARC policy, whose strictness is the owner's call. Neither blocks anything.
+
+**Released 2026-09-16** — `0ee68e3` (PR #77), carrying **#71** (Feature 23 —
+savings, tracked separately from expenses, income and goals), **#75** (fix
+for **#72** — transaction descriptions overflowing the row in the Expenses
+list, the Income list and the dashboard's Recent Activity) and **#76** (a
+stale e2e assertion that had left the suite red on `dev` since #71 merged),
+plus the plan records for each. **Tagged `v1.3.0`.**
+
+**Merged with a merge commit, and the history is convergent.** `0ee68e3` has
+two parents (`c9cc614` and `ebb843a`), `git diff main dev` is empty, and
+`dev` is an ancestor of `main`. No reconvergence needed — the ruleset that
+restricts `main` to `merge` alone held.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_2kpWxYb2kPxKsJNQfVhXxSHdkqfX` and the sign-in page's `data-dpl-id` is
+the same string — both checked with a cache-busting query and against the
+commit's own status (`success`, not just an unchanged id) rather than a
+guess from a plain request.
+
+Verified against the live site: `/` 307s to `/sign-in`; `/sign-in` and
+`/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export`
+answers **307 to `/sign-in` with a zero-byte body** — still the check worth
+making from outside, since every other endpoint leaks one page at a time and
+that one would hand over the entire ledger.
+
+**`public/sw.js` is untouched and byte-identical to the live file**, so this
+stays a clean Feature 13 trial — still unanswered, still needing a device
+that already had the previous build.
+
+**The one gap the PR left going in is now closed.** #75, the
+transaction-overflow fix, was never seen in an actual browser in any session
+that touched it — the Chrome extension was not connected in any of them.
+**Confirmed working by the repo owner** after the release, checked directly
+rather than through this session's own tools.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (374), `pnpm build`
+and `pnpm test:e2e` (30) on `dev` at `ebb843a` before the merge — see below
+for the checks made against the live site itself.
+
+**Before the merge, the release PR was opened as follows** (kept for the
+detail on what shipped and why, now historical):
+
 **Release PR open — `dev` → `main`, not yet merged.** Carries three merges
 since the last release: **#71** (Feature 23 — savings, tracked separately
 from expenses, income and goals), **#75** (fix for **#72** — transaction
@@ -1641,6 +1844,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Savings liquidity        | `liquid`/`locked` is informational only; both deduct identically | Keeps the model to one new column instead of two account types                          |
 | Savings vs. savings goals | Kept fully separate; no link between a saving and a goal | Confirmed with the repo owner rather than assumed — a goal is a target, a saving is real money |
 | Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
+| Transaction list default | Current UTC month for expenses and income; savings opens on everything | A ledger that opens on all history only gets slower; savings is a pool, not a monthly flow |
+| Empty date in the URL    | Present-but-empty means "no limit", absent means "default month" | Without the distinction a user could never see past the default range |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -3209,7 +3414,7 @@ nothing if the recording waits for you to look.
 | `DATABASE_URL`          | Runtime          | Pooled Neon connection. Same endpoint as below |
 | `DATABASE_URL_UNPOOLED` | Migrations       | Direct connection. Needed in Production too    |
 | `RESEND_API_KEY`        | Invite email     | Set                                            |
-| `RESEND_FROM`           | Invite email     | **Not set.** Needs a domain verified in Resend |
+| `RESEND_FROM`           | Invite email     | Set. Address on a domain verified in Resend    |
 | `ALLOW_PUBLIC_SIGNUP`   | Sign-up gate     | Defaults to `false`                            |
 | `CRON_SECRET`           | Both cron routes | Set. Both refuse to run without it             |
 | `VAPID_PUBLIC_KEY`      | Web push         | Same value as the `NEXT_PUBLIC_` one below     |
@@ -3268,8 +3473,9 @@ the accelerator for a space nobody opens.
 **On `RESEND_FROM`:** Resend only sends from a domain you have verified via DNS.
 `onboarding@resend.dev` works with no setup but delivers **only** to the Resend
 account's own address, so it cannot reach family members. A `*.vercel.app`
-domain cannot be verified — you do not control its DNS. Until a real domain is
-verified, invites work by copying the link.
+domain cannot be verified — you do not control its DNS. **A domain is now
+verified and `RESEND_FROM` is set**, so invitations are emailed; copying the
+link still works whenever the variable is empty or a send fails.
 
 **On Vercel Deployment Protection:** it is **on**, and it is not an app setting,
 so no amount of correct configuration inside the app works around it. Checked
@@ -3290,6 +3496,27 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **A URL assertion in e2e waits on the server, not on the click.** With the App
+  Router, `router.push` changes the address only when the navigation commits,
+  which is after the page has rendered against the database. Under the 3-worker
+  run that outlasts `toHaveURL`'s 5s default, and the failure reads as "the
+  control did nothing". The first fix tried here — a retry from a fresh load, on
+  the theory that the fill landed before hydration — made it worse and was wrong:
+  it was a 2s timeout inside a 20s retry against a navigation that takes longer.
+  Give the assertion a realistic timeout (`NAVIGATED` in
+  `e2e/transaction-filters.spec.ts`) before inventing a mechanism.
+- **A passing run alone proves little about a spec that has to share the
+  database.** `transaction-filters.spec.ts` passed 8/8 on its own and failed under
+  the full suite; run the whole thing before believing it.
+- **`pnpm test:e2e <file>` still runs every dependency project.** Naming a file
+  does not narrow the `chromium` project that `space-switching` depends on, so
+  "one spec" is the whole suite minus the files filtered by the name.
+- **One e2e build failed once with `No database connection string was provided to
+  neon()` while collecting page data for `/api/cron/refresh-rates`, and did not
+  reproduce.** `.env` holds `DATABASE_URL`, the shell had no override, and
+  `pnpm build` passed with and without `NODE_ENV=test` straight after. Cause
+  unknown; recorded so a repeat is recognised as that rather than a new bug.
 
 - **Before diagnosing an unchanged deployment id, ask whether the build has
   finished.** Two consecutive releases read the old id straight after the merge.
@@ -3749,6 +3976,13 @@ Things already hit, so they are not hit twice.
 ## Known follow-ups
 
 Not blocking, but worth doing.
+
+- [ ] **Clear the Dependabot alerts on a branch of their own** (found
+      2026-10-24, 35 open). Merged as #88 and Dependabot's ten PRs closed as
+      superseded. Remaining: confirm the alert count drops once the release
+      reaches `main` (alerts follow the default branch), and check whether the
+      `dependabot.yml` retargeting applies to security updates. One audit finding
+      is accepted: `zod` 3.25.76 via `shadcn`.
 
 - [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
       Done: `scripts/pre-count-destructive.ts`, spawned by

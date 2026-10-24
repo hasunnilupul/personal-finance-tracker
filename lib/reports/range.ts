@@ -122,6 +122,18 @@ function fromPreset(key: Exclude<RangeKey, "custom">, now: Date): DateRange {
   return { key, ...spans[key], label };
 }
 
+/**
+ * The first and last day of the current month, as `YYYY-MM-DD`.
+ *
+ * What the Expenses and Income pages open on before anyone has chosen a range.
+ * UTC, for the same reason every other range here is.
+ */
+export function currentMonthRange(now: Date = new Date()): { from: string; to: string } {
+  const month = currentMonth(now);
+
+  return { from: firstOfMonth(month), to: lastOfMonth(month) };
+}
+
 const DAY_LABEL = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
