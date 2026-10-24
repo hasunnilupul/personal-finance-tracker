@@ -6,6 +6,7 @@ import { SearchIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFilterPending } from "@/components/transactions/filter-pending";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -62,6 +63,7 @@ const TransactionFilters = ({
 }: TransactionFiltersProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { start } = useFilterPending();
 
   const [from, setFrom] = useState(current.from ?? "");
   const [to, setTo] = useState(current.to ?? "");
@@ -91,9 +93,9 @@ const TransactionFilters = ({
 
       const query = params.toString();
 
-      router.push(query ? `${basePath}?${query}` : basePath);
+      start(() => router.push(query ? `${basePath}?${query}` : basePath));
     },
-    [basePath, router, searchParams],
+    [basePath, router, searchParams, start],
   );
 
   // Both ends are written every time. Changing only one would leave the other
@@ -121,7 +123,7 @@ const TransactionFilters = ({
     setFrom(defaults.from ?? "");
     setTo(defaults.to ?? "");
     setSearch("");
-    router.push(basePath);
+    start(() => router.push(basePath));
   };
 
   const hasFilters = Boolean(
