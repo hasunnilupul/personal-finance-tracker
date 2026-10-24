@@ -10,7 +10,45 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Invitation email is live.** The repo owner verified a sending domain in
+**Expenses and Income open on the current month, and both have a search box.**
+Reported by the repo owner as an issue: the lists opened on everything ever
+recorded. Branch `feat/transaction-month-default-and-search`, PR open into `dev`.
+
+**The default is applied by the page, not by a redirect.** While the URL names
+neither `from` nor `to`, `TransactionPageContent` uses the first and last day of
+the current UTC month (`currentMonthRange` in `lib/reports/range.ts`, the same
+calendar the budgets and reports pages use). The moment either key is present
+— **even empty** — the URL is believed as written, which is how a user asks for
+"no limit on this end": clearing a date writes `from=` rather than deleting the
+key. The filter bar therefore always writes **both** ends when either changes;
+writing only one would leave the other absent and read as "the default month".
+Pagination links carry the range out in full for the same reason. **Clear
+returns to the default month**, not to everything.
+
+**Savings is deliberately left opening on everything** — a running pool rather
+than a monthly flow. It shares the page and the filter bar, so it gets the search
+box and nothing else.
+
+**Search matches the note and the category name**, case-insensitively, with
+`%`, `_` and `\` escaped (`likePattern`) so "50%" means 50%. The category half is
+a subquery on id, not a join: the count and sum queries read the table alone, and
+a join would have to be added to each to keep the list and its total agreeing.
+Debounced 350ms in the bar; Enter submits at once.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (381), and
+`pnpm test:e2e` (37) — the new `e2e/transaction-filters.spec.ts` is read-only,
+so an aborted run leaves nothing behind. **Not seen by a person in a browser**:
+the Chrome extension was not used, so the search box's layout at phone width is
+unchecked on screen.
+
+**Dependabot is a separate piece of work and has not been started.** 35 alerts
+were open (5 critical: four on `next`, fixed in 16.3.3, and one on `proxy-addr`).
+Its ten PRs all target `main` rather than `dev` and all fail the Vercel preview
+check; six alerted packages have no PR (`js-yaml`, `sharp` and `brace-expansion`
+are held back by `pnpm.overrides` ranges that are now too low). See the
+Dependabot follow-up at the foot of this file.
+
+**Before that: invitation email is live.** The repo owner verified a sending domain in
 Resend (DNS on Cloudflare) and set `RESEND_FROM` to an address on it in
 Vercel's Production environment — configuration only, no code or dependency
 change, so nothing here needs a release of its own. This closes the
@@ -1700,6 +1738,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Savings liquidity        | `liquid`/`locked` is informational only; both deduct identically | Keeps the model to one new column instead of two account types                          |
 | Savings vs. savings goals | Kept fully separate; no link between a saving and a goal | Confirmed with the repo owner rather than assumed — a goal is a target, a saving is real money |
 | Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
+| Transaction list default | Current UTC month for expenses and income; savings opens on everything | A ledger that opens on all history only gets slower; savings is a pool, not a monthly flow |
+| Empty date in the URL    | Present-but-empty means "no limit", absent means "default month" | Without the distinction a user could never see past the default range |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -3351,6 +3391,27 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **A URL assertion in e2e waits on the server, not on the click.** With the App
+  Router, `router.push` changes the address only when the navigation commits,
+  which is after the page has rendered against the database. Under the 3-worker
+  run that outlasts `toHaveURL`'s 5s default, and the failure reads as "the
+  control did nothing". The first fix tried here — a retry from a fresh load, on
+  the theory that the fill landed before hydration — made it worse and was wrong:
+  it was a 2s timeout inside a 20s retry against a navigation that takes longer.
+  Give the assertion a realistic timeout (`NAVIGATED` in
+  `e2e/transaction-filters.spec.ts`) before inventing a mechanism.
+- **A passing run alone proves little about a spec that has to share the
+  database.** `transaction-filters.spec.ts` passed 8/8 on its own and failed under
+  the full suite; run the whole thing before believing it.
+- **`pnpm test:e2e <file>` still runs every dependency project.** Naming a file
+  does not narrow the `chromium` project that `space-switching` depends on, so
+  "one spec" is the whole suite minus the files filtered by the name.
+- **One e2e build failed once with `No database connection string was provided to
+  neon()` while collecting page data for `/api/cron/refresh-rates`, and did not
+  reproduce.** `.env` holds `DATABASE_URL`, the shell had no override, and
+  `pnpm build` passed with and without `NODE_ENV=test` straight after. Cause
+  unknown; recorded so a repeat is recognised as that rather than a new bug.
+
 - **Before diagnosing an unchanged deployment id, ask whether the build has
   finished.** Two consecutive releases read the old id straight after the merge.
   The first was chased with a cache-busting query, which answers "is this
@@ -3809,6 +3870,19 @@ Things already hit, so they are not hit twice.
 ## Known follow-ups
 
 Not blocking, but worth doing.
+
+- [ ] **Clear the Dependabot alerts on a branch of their own** (found 2026-10-24,
+      35 open). Do not merge the ten Dependabot PRs as they stand: they target
+      `main`, which would put it ahead of `dev` the way `fc0dccf` once did, and
+      every one fails the Vercel preview. Instead one `fix/` branch off `dev`:
+      bump `next` 16.2.11 → 16.3.3 (read `node_modules/next/dist/docs` first),
+      `vitest` → 4.1.11, raise the `js-yaml`, `sharp` and `brace-expansion`
+      overrides past their fixed versions, refresh the transitive packages, run
+      the whole suite, close the Dependabot PRs as superseded, and add
+      `.github/dependabot.yml` with `target-branch: dev`. The `next` RCEs are
+      Windows-hosting and AVIF-image-optimisation only; this app is on Vercel and
+      has no `next/image` use, so it is unlikely to be exposed — the upgrade is
+      still the only fix. Why the previews fail is not yet known.
 
 - [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
       Done: `scripts/pre-count-destructive.ts`, spawned by

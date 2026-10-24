@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, lte, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import type { BatchStatement } from "@/lib/db/batch";
@@ -138,6 +138,35 @@ function effectiveExchangeRate(table: TransactionTable, scope: TransactionScope)
   return sql<string>`coalesce(${table.personalExchangeRate}, ${table.exchangeRate})`;
 }
 
+/**
+ * Makes user text safe to put inside an `ILIKE` pattern.
+ *
+ * `%` and `_` are wildcards and `\` is the escape character, so a search for
+ * "50%" would otherwise match every row that starts with "50".
+ */
+export function likePattern(search: string): string {
+  return `%${search.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+/**
+ * The search condition: the description, or the name of the entry's category.
+ *
+ * The category half is a subquery on `id` rather than a join, because the count
+ * and sum queries read the table alone and a join would have to be added to
+ * every one of them to keep the total and the list agreeing.
+ */
+function searchCondition(table: TransactionTable, search: string): SQL | undefined {
+  const pattern = likePattern(search);
+
+  return or(
+    ilike(table.description, pattern),
+    inArray(
+      table.categoryId,
+      db.select({ id: categories.id }).from(categories).where(ilike(categories.name, pattern)),
+    ),
+  );
+}
+
 function buildConditions(
   table: TransactionTable,
   scope: TransactionScope,
@@ -159,6 +188,10 @@ function buildConditions(
 
   if (filters.createdBy) {
     conditions.push(eq(table.createdBy, filters.createdBy));
+  }
+
+  if (filters.search) {
+    conditions.push(searchCondition(table, filters.search));
   }
 
   return and(...conditions);
