@@ -50,6 +50,7 @@ export default function AppSidebar({ isPersonal }: { isPersonal: boolean }) {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={tab.prefetch}
               aria-current={pathname === tab.href ? "page" : undefined}
               className={cn(
                 buttonVariants({ variant: pathname === tab.href ? "default" : "ghost" }),
