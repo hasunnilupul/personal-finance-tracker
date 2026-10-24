@@ -15,7 +15,7 @@ Income open on the current month, plus a search box) and **#88** (dependency
 security fixes, `next` 16.2.11 → 16.4.2), plus the plan records for each and the
 Resend record (#80). **Tagged `v1.4.0`** (annotated, on `0f026ae`) once the repo
 owner gave the go-ahead — the same day, rather than lagging a release behind as it
-has before. No GitHub release page was created for it; `v1.3.0` has one.
+has before. It has a GitHub release page, "v1.4.0 — this month, and search".
 
 **Merged with a merge commit, and the history is convergent.** `0f026ae` has two
 parents (`0ee68e3` and `f174ba0`), `git diff main dev` is empty, and `dev` is an
