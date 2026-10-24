@@ -1,0 +1,18 @@
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    # `dev`, not the default branch. Anything landing on `main` directly leaves
+    # it ahead of `dev` and turns the next release PR into a repair job — see
+    # PLAN.md, Workflow.
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine bumps instead of one per package.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

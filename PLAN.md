@@ -10,9 +10,54 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Expenses and Income open on the current month, and both have a search box.**
-Reported by the repo owner as an issue: the lists opened on everything ever
-recorded. Branch `feat/transaction-month-default-and-search`, PR open into `dev`.
+**Dependency security fixes.** Branch `fix/dependabot-alerts`, PR open into
+`dev`. Clears the open Dependabot alerts by one coordinated bump instead of the
+ten PRs Dependabot opened, and points Dependabot at `dev` from here on.
+
+**`next` 16.2.11 → 16.4.2, not 16.3.3.** The alerts named 16.3.3 as the fix, and
+that was already stale: `pnpm audit`'s advisory database listed further critical
+RCEs (`use cache`, Image Optimization over SVG) and a Server Actions DoS fixed
+only in 16.4.1. **The GitHub alert list lags the audit database, so audit before
+settling on a target version.** Read the release notes across 16.3 and 16.4 first
+(AGENTS.md): bug fixes and Turbopack changes, no API breaks for this app.
+`eslint-config-next` is pinned in lockstep and moved with it.
+
+**The rest:** `vitest` → 4.1.12, `sharp` / `js-yaml` / `brace-expansion`
+override floors raised past their fixed versions (`brace-expansion@^5` to
+`^5.0.12` — the alert list only knew about the v1 line), and the transitive
+packages (`hono`, `undici`, `fast-uri`, `browserslist`, `proxy-addr`, `qs`,
+`body-parser`, `ip-address`, `source-map-js`, `postcss-selector-parser`,
+`baseline-browser-mapping`, `@modelcontextprotocol/sdk`) refreshed in range.
+**`vite` is now a declared devDependency (`^8.3.4`).** It was only an
+auto-installed peer of `vitest`, which pnpm leaves at whatever the lockfile
+first resolved — `pnpm update` could not move it.
+
+**Left on purpose: `zod` 3.25.76**, one `pnpm audit` finding (high), reached only
+through `shadcn` (a dev CLI). There is no patched 3.x — the fix is 4.6.6 — and
+`shadcn` asks for `^3`, so forcing 4 would be changing a tool's validator under it
+to clear a finding on code that never ships. The app's own `zod` is 4.6.7.
+
+**`.github/dependabot.yml` is new**, `target-branch: dev`, weekly, minor and
+patch grouped into one PR. **Unverified until Dependabot next runs**: whether its
+security-update PRs honour `target-branch` as well as its version updates.
+
+**Not done, and waits on the merge:** closing Dependabot's ten open PRs
+(#73, #74, #78, #79, #81–#86) as superseded. Closing them first would leave the
+alerts open with nothing to show for it. They also all fail the Vercel preview;
+**the cause was never read** (no Vercel CLI session here), so whether that is a
+real build break or a preview-environment quirk is unknown — this branch's own
+preview is the first useful evidence.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (381), `pnpm build` on
+Next 16.4.2, and `pnpm test:e2e` (37). `pnpm audit` goes from 19 findings to the
+one above. `public/sw.js` untouched. **Not verified:** production behaviour on
+16.4.2 — the e2e run is a production build against the development database,
+which is a long way from the live site, and nothing here exercises Server
+Actions or `use cache` beyond what the suite already touches.
+
+**Before that: Expenses and Income open on the current month, and both have a
+search box.** Reported by the repo owner as an issue: the lists opened on
+everything ever recorded. Merged as PR #87 (`83f98d9`).
 
 **The default is applied by the page, not by a redirect.** While the URL names
 neither `from` nor `to`, `TransactionPageContent` uses the first and last day of
@@ -40,13 +85,6 @@ Debounced 350ms in the bar; Enter submits at once.
 so an aborted run leaves nothing behind. **Not seen by a person in a browser**:
 the Chrome extension was not used, so the search box's layout at phone width is
 unchecked on screen.
-
-**Dependabot is a separate piece of work and has not been started.** 35 alerts
-were open (5 critical: four on `next`, fixed in 16.3.3, and one on `proxy-addr`).
-Its ten PRs all target `main` rather than `dev` and all fail the Vercel preview
-check; six alerted packages have no PR (`js-yaml`, `sharp` and `brace-expansion`
-are held back by `pnpm.overrides` ranges that are now too low). See the
-Dependabot follow-up at the foot of this file.
 
 **Before that: invitation email is live.** The repo owner verified a sending domain in
 Resend (DNS on Cloudflare) and set `RESEND_FROM` to an address on it in
@@ -3871,18 +3909,11 @@ Things already hit, so they are not hit twice.
 
 Not blocking, but worth doing.
 
-- [ ] **Clear the Dependabot alerts on a branch of their own** (found 2026-10-24,
-      35 open). Do not merge the ten Dependabot PRs as they stand: they target
-      `main`, which would put it ahead of `dev` the way `fc0dccf` once did, and
-      every one fails the Vercel preview. Instead one `fix/` branch off `dev`:
-      bump `next` 16.2.11 → 16.3.3 (read `node_modules/next/dist/docs` first),
-      `vitest` → 4.1.11, raise the `js-yaml`, `sharp` and `brace-expansion`
-      overrides past their fixed versions, refresh the transitive packages, run
-      the whole suite, close the Dependabot PRs as superseded, and add
-      `.github/dependabot.yml` with `target-branch: dev`. The `next` RCEs are
-      Windows-hosting and AVIF-image-optimisation only; this app is on Vercel and
-      has no `next/image` use, so it is unlikely to be exposed — the upgrade is
-      still the only fix. Why the previews fail is not yet known.
+- [ ] **Clear the Dependabot alerts on a branch of their own** (found
+      2026-10-24, 35 open). Built on `fix/dependabot-alerts` — see Current position.
+      Remaining: close Dependabot's ten PRs once it merges, confirm the alert
+      count drops, and check whether the `dependabot.yml` retargeting applies to
+      security updates. One audit finding is accepted: `zod` 3.25.76 via `shadcn`.
 
 - [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
       Done: `scripts/pre-count-destructive.ts`, spawned by
