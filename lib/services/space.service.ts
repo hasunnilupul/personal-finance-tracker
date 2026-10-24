@@ -227,14 +227,10 @@ export class SpaceService {
     activeOrganizationId?: string | null,
   ): Promise<{ space: Organization; role: string }> {
     if (activeOrganizationId) {
-      const membership = await spaceRepository.findMembership(userId, activeOrganizationId);
+      const found = await spaceRepository.findForMember(userId, activeOrganizationId);
 
-      if (membership) {
-        const space = await spaceRepository.findById(activeOrganizationId);
-
-        if (space) {
-          return { space, role: membership.role };
-        }
+      if (found) {
+        return found;
       }
 
       logger.warn("Active space is not accessible, falling back to personal", {

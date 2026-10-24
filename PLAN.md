@@ -10,6 +10,62 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Faster navigation, first pass.** Branch `perf/reduce-navigation-round-trips`,
+PR open into `dev`. The repo owner reported that SSR navigation feels slow and
+asked for it to be "buttery smooth"; this is steps 0 and 1 of a staged plan, and
+**it is a small slice of it** — see the follow-ups for the rest.
+
+**What was measured, and it changed the plan.** A request from Colombo enters at
+Vercel's `sin1` edge and runs in `iad1` (Virginia) — `x-vercel-id: sin1::iad1::…`
+— beside a Neon database in `us-east-1`. Warm time-to-first-byte for an endpoint
+that touches no database (`/api/version`) is **0.20–0.24s**. That is the floor for
+any navigation that reaches the server, and no amount of query tuning moves it.
+Queries from a laptop cost ~290ms each, but that is the laptop crossing an ocean;
+in production the function and database are neighbours, so serial queries cost far
+less there than the e2e timings suggest. **Those e2e timings (pages taking several
+seconds) describe this machine, not the live site.** Not measured: authenticated
+navigation on production — that needs a signed-in session, which was not available —
+so `PERF_LOG=1` (below) is how to get it.
+
+**Two changes, both about work done on every request:**
+
+- **`proxy.ts` no longer looks the session up in the database for private
+  routes.** It ran `auth.api.getSession` on every page request — every navigation
+  and every link prefetch — and the page then did it again in `requireUser`; the two
+  run in separate contexts, so React's `cache` cannot share the answer. Private
+  routes now check the cookie's presence (`getSessionCookie`); a dead cookie gets
+  through and `requireUser` turns it away, which is the check that holds. **The auth
+  routes keep the real lookup, deliberately**: redirecting on a cookie alone sends a
+  stale cookie from `/sign-in` to `/` and back for ever. `e2e/stale-session.spec.ts`
+  covers both halves.
+- **Membership and the space are one query.** `resolveActiveSpace` did
+  `findMembership` then `findById` in sequence; `spaceRepository.findForMember` is
+  one inner join. Compared against the dev database for both of the e2e account's
+  spaces: identical rows and role, and a space the user does not belong to returns
+  nothing.
+
+**`PERF_LOG=1` turns on per-request timing** (`lib/perf/timing.ts`): the session and
+space lookups log `[perf] session 23ms` to stdout, which Vercel captures. Off by
+default. Set it in Vercel, click around, read the function logs — that is the
+measurement this PR could not make itself.
+
+**`cookieCache` was planned and deliberately left out.** better-auth's
+`session.cookieCache` would save the session lookup too, but two things make it a
+hazard here. Server Components cannot write cookies, so an expired cache is never
+rewritten by the render that noticed it. And the app does not use the `nextCookies`
+plugin, so `setActiveOrganization` from a Server Action cannot refresh the cache
+cookie — after a space switch the cached session could keep the old
+`activeOrganizationId` for the whole window. Doing it properly means adding
+`nextCookies()` and re-running the space-switching spec. The saving is also
+smaller than it sounds once the proxy no longer looks the session up.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (39, including space switching). **Not verified:** any change in
+how fast the live site feels — expect tens of milliseconds, not a transformation.
+The redirect-loop test was not mutation-checked against the naive version.
+
+**Before that: the v1.4.0 release.**
+
 **Released 2026-10-24** — `0f026ae` (PR #89), carrying **#87** (Expenses and
 Income open on the current month, plus a search box) and **#88** (dependency
 security fixes, `next` 16.2.11 → 16.4.2), plus the plan records for each and the
@@ -4023,6 +4079,19 @@ Things already hit, so they are not hit twice.
 ## Known follow-ups
 
 Not blocking, but worth doing.
+
+- [ ] **Navigation speed, the rest of the plan** (2026-10-24). In order of what it
+      is likely to buy: **(a) move compute and database to Singapore** (`sin1` and
+      Neon `aws-ap-southeast-1`) — the 0.2s floor is the Singapore↔Virginia hop on
+      every server round trip, and it is the largest single cost for users in Sri
+      Lanka; it is a data migration and the repo owner's call. **(b) client router
+      cache**: `experimental.staleTimes.dynamic` and `prefetch={true}` on the sidebar
+      and bottom-bar links, so revisiting a tab skips the server entirely.
+      **(c) keep the old list on screen while a filter loads** (`useTransition`)
+      instead of swapping to a skeleton, and show a pending state on the clicked
+      link. **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
+      Components + Partial Prefetching, the "instant navigation" path in Next 16.4 —
+      a migration of its own. **(f)** `cookieCache` with `nextCookies()`, see above.
 
 - [ ] **Clear the Dependabot alerts on a branch of their own** (found
       2026-10-24, 35 open). Merged as #88 and Dependabot's ten PRs closed as

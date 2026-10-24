@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth/auth";
+import { timed } from "@/lib/perf/timing";
 import { spaceService } from "@/lib/services/space.service";
 import { PermissionRequest, roleHasPermission } from "@/lib/auth/permissions";
 import { Organization, Space } from "@/lib/db/models/organization.model";
@@ -40,9 +41,9 @@ export interface ActiveSpace {
  * @returns The session, or `null` when the request is anonymous.
  */
 export const getSession = cache(async (): Promise<Session | null> => {
-  return auth.api.getSession({
-    headers: await headers(),
-  });
+  const requestHeaders = await headers();
+
+  return timed("session", () => auth.api.getSession({ headers: requestHeaders }));
 });
 
 /**
@@ -96,9 +97,8 @@ export const requireActiveSpace = cache(async (): Promise<ActiveSpace> => {
     redirect("/sign-in");
   }
 
-  const { space, role } = await spaceService.resolveActiveSpace(
-    session.user.id,
-    session.session.activeOrganizationId,
+  const { space, role } = await timed("space", () =>
+    spaceService.resolveActiveSpace(session.user.id, session.session.activeOrganizationId),
   );
 
   return {
