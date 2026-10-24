@@ -20,6 +20,25 @@ const nextConfig: NextConfig = {
    */
   deploymentId: deploymentId(),
 
+  experimental: {
+    /**
+     * How long the browser keeps a page it has already fetched before asking
+     * again. Left at the defaults a dynamic page is not kept at all, so every
+     * click on a tab already visited waits on the server — a Singapore-to-Virginia
+     * round trip, about 0.2s before any work.
+     *
+     * Thirty seconds for both kinds, and `static` is the one that matters for
+     * `prefetch: true` links, whose default of five minutes is far too long for
+     * money: in a shared space somebody else's entry would not show for that
+     * long. Your own changes are never stale — the actions call `revalidatePath`,
+     * which clears this cache.
+     */
+    staleTimes: {
+      dynamic: 30,
+      static: 30,
+    },
+  },
+
   async headers() {
     return [
       {

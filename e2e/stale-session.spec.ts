@@ -12,8 +12,12 @@ import { test, expect } from "@playwright/test";
  */
 test.describe("a cookie the server does not recognise", () => {
   test.beforeEach(async ({ context, baseURL }) => {
+    if (!baseURL) {
+      throw new Error("baseURL is set in playwright.config.ts");
+    }
+
     await context.addCookies([
-      { name: "better-auth.session_token", value: "not-a-real-session.xx", url: baseURL! },
+      { name: "better-auth.session_token", value: "not-a-real-session.xx", url: baseURL },
     ]);
   });
 

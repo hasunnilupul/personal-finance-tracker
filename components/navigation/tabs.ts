@@ -21,6 +21,16 @@ export type Tab = {
   primary?: boolean;
   /** Hidden in shared spaces, where the page it points at does not exist. */
   personalOnly?: boolean;
+  /**
+   * Fetch the whole page ahead of the click, not just down to its skeleton.
+   *
+   * Off by default, and that is the point: the sidebar is always on screen, so a
+   * full prefetch on every link is a full page render for every destination on
+   * every load, each one asking the database. It is for the pages opened most.
+   * Never set it on `/recurring`, whose page writes while it renders — a
+   * prefetch must not do that.
+   */
+  prefetch?: boolean;
 };
 
 export const tabs: Tab[] = [
@@ -29,12 +39,14 @@ export const tabs: Tab[] = [
     label: "Dashboard",
     icon: "📊",
     primary: true,
+    prefetch: true,
   },
   {
     href: "/expenses",
     label: "Expenses",
     icon: "💰",
     primary: true,
+    prefetch: true,
   },
   {
     href: "/income",
@@ -42,6 +54,7 @@ export const tabs: Tab[] = [
     icon: "💵",
     primary: true,
     personalOnly: true,
+    prefetch: true,
   },
   {
     href: "/budgets",
@@ -53,6 +66,7 @@ export const tabs: Tab[] = [
     href: "/reports",
     label: "Reports",
     icon: "📉",
+    prefetch: true,
   },
   {
     href: "/savings",

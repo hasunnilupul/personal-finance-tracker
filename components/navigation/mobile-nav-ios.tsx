@@ -139,6 +139,7 @@ export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
           <Link
             key={tab.href}
             href={tab.href}
+            prefetch={tab.prefetch}
             aria-current={pathname === tab.href ? "page" : undefined}
             className={cn("ff-iosbar-item", "transition-colors")}
           >
@@ -163,7 +164,7 @@ export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
               <DropdownMenuItem
                 key={tab.href}
                 className={cn(pathname === tab.href && "text-primary")}
-                render={<Link href={tab.href} />}
+                render={<Link href={tab.href} prefetch={tab.prefetch} />}
               >
                 <span>{tab.icon}</span>
                 {tab.label}

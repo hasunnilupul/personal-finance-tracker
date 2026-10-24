@@ -10,8 +10,58 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Faster navigation, first pass.** Branch `perf/reduce-navigation-round-trips`,
-PR open into `dev`. The repo owner reported that SSR navigation feels slow and
+**Faster navigation, step 2: the browser keeps pages it has fetched.** Branch
+`perf/client-router-cache`, PR open into `dev`. Step 2 of the plan recorded in the
+follow-ups; steps 0 and 1 were #95.
+
+**Two changes.** `experimental.staleTimes` is `dynamic: 30, static: 30` in
+`next.config.ts`; left at the defaults a dynamic page is not kept at all, so every
+click on a tab already visited waited on the server (about 0.2s before any work,
+from Colombo). And four tabs — Dashboard, Expenses, Income, Reports — carry
+`prefetch: true` on their definition in `components/navigation/tabs.ts`, which the
+sidebar and both mobile bars pass to `<Link>`. A full prefetch fetches the whole
+page ahead of the click, so the first open of those four is instant too.
+
+**Why only four, and why thirty seconds.** The sidebar is always on screen, so
+`prefetch` on every link is a full page render for each of the eleven
+destinations on every load, each one asking the database; the flag is opt-in
+for that reason and says so on the type. **Never set it on `/recurring`:** its page
+runs `catchUp` while it renders, which writes, and a prefetch must not. `static` is
+the figure that governs `prefetch: true` links and its default is five minutes —
+too long for money: in a shared space somebody else's entry would not show for
+that long. Thirty seconds is a judgement, not a measurement.
+
+**What is not stale.** The repo owner's own changes: the mutation actions call
+`revalidatePath`, which clears this cache, and the forms call `router.refresh()`.
+**What can be, for up to thirty seconds:** a change made by another member of a
+shared space, and anything that changes with the clock (the dashboard's month
+rolling over at midnight UTC).
+
+**Found while testing, worth keeping.** A `prefetch: true` link's full-page fetch
+is sent *without* the `next-router-prefetch` header, so it is indistinguishable
+from a navigation by headers alone. `e2e/navigation-cache.spec.ts` therefore counts
+page fetches made *after the click*, not by kind. And with all eleven prefetches
+starting at once, a local run (database across an ocean) needs a long budget; the
+spec sets 120s, which is this machine, not production.
+
+**Mutation-checked, unlike the last PR's test.** With the `staleTimes` and the
+`prefetch` flags switched off, both tests in the new spec fail; with them on, both
+pass. The spec: a prefetched tab opens with no page request of its own, and a tab
+visited a moment ago is not fetched again.
+
+**Also fixed here:** a `no-non-null-assertion` lint warning in
+`e2e/stale-session.spec.ts`, left by the previous PR.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (41). **Not verified:** how it feels on the live site, and what the
+prefetching costs there — eleven concurrent renders per load was the worry, four
+full ones is the answer, and `PERF_LOG=1` (#95) is how to see what they cost.
+**`staleTimes` is an `experimental` flag in this Next version.**
+
+**Before that: faster navigation, first pass (#95).**
+
+**Faster navigation, first pass (#95, merged).** Branch `perf/reduce-navigation-round-trips`,
+merged as `3802b9e`. The repo owner reported that SSR navigation feels slow and
 asked for it to be "buttery smooth"; this is steps 0 and 1 of a staged plan, and
 **it is a small slice of it** — see the follow-ups for the rest.
 
@@ -4085,8 +4135,7 @@ Not blocking, but worth doing.
       Neon `aws-ap-southeast-1`) — the 0.2s floor is the Singapore↔Virginia hop on
       every server round trip, and it is the largest single cost for users in Sri
       Lanka; it is a data migration and the repo owner's call. **(b) client router
-      cache**: `experimental.staleTimes.dynamic` and `prefetch={true}` on the sidebar
-      and bottom-bar links, so revisiting a tab skips the server entirely.
+      cache** — done, see Current position.
       **(c) keep the old list on screen while a filter loads** (`useTransition`)
       instead of swapping to a skeleton, and show a pending state on the clicked
       link. **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
