@@ -82,6 +82,25 @@ export class SpaceRepository {
   }
 
   /**
+   * A space and the caller's role in it, in one round trip.
+   *
+   * Membership and the space itself used to be two sequential queries on every
+   * request. The inner join answers both at once, and still returns nothing when
+   * the user is not a member — which is the check this exists to make.
+   */
+  async findForMember(
+    userId: string,
+    organizationId: string,
+  ): Promise<{ space: Organization; role: string } | undefined> {
+    const [result] = await db
+      .select({ space: getTableColumns(organization), role: member.role })
+      .from(member)
+      .innerJoin(organization, eq(member.organizationId, organization.id))
+      .where(and(eq(member.userId, userId), eq(member.organizationId, organizationId)));
+    return result;
+  }
+
+  /**
    * The user's own private ledger, created for them at sign-up.
    */
   async findPersonalSpace(userId: string): Promise<Organization | undefined> {
