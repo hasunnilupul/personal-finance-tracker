@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useFilterPending } from "@/components/transactions/filter-pending";
 import TransactionFormDialog from "@/components/transactions/transaction-form-dialog";
 import TransactionList from "@/components/transactions/transaction-list";
 import { deleteTransactionAction } from "@/app/actions/transaction.actions";
@@ -57,6 +58,7 @@ const TransactionManager = ({
   const [editing, setEditing] = useState<TransactionListItem | undefined>();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [, startTransition] = useTransition();
+  const { start: startNavigation } = useFilterPending();
 
   const noun = kind === "expense" ? "expense" : kind === "income" ? "income" : "saving";
   const pageCount = Math.max(1, Math.ceil(page.total / page.pageSize));
@@ -107,6 +109,14 @@ const TransactionManager = ({
     const search = params.toString();
 
     return search ? `${basePath}?${search}` : basePath;
+  };
+
+  // Taken over from the link so the list can grey out while the next page loads.
+  // `onNavigate` only fires for a plain click, which leaves middle-click and
+  // open-in-new-tab to the browser, exactly as before.
+  const goToPage = (event: { preventDefault: () => void }, target: number) => {
+    event.preventDefault();
+    startNavigation(() => router.push(pageHref(target)));
   };
 
   return (
@@ -181,7 +191,14 @@ const TransactionManager = ({
                     size="sm"
                     disabled={page.page <= 1}
                     nativeButton={page.page <= 1}
-                    render={page.page > 1 ? <Link href={pageHref(page.page - 1)} /> : undefined}
+                    render={
+                      page.page > 1 ? (
+                        <Link
+                          href={pageHref(page.page - 1)}
+                          onNavigate={(event) => goToPage(event, page.page - 1)}
+                        />
+                      ) : undefined
+                    }
                   >
                     Previous
                   </Button>
@@ -192,7 +209,12 @@ const TransactionManager = ({
                     disabled={page.page >= pageCount}
                     nativeButton={page.page >= pageCount}
                     render={
-                      page.page < pageCount ? <Link href={pageHref(page.page + 1)} /> : undefined
+                      page.page < pageCount ? (
+                        <Link
+                          href={pageHref(page.page + 1)}
+                          onNavigate={(event) => goToPage(event, page.page + 1)}
+                        />
+                      ) : undefined
                     }
                   >
                     Next

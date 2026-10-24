@@ -10,8 +10,55 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Faster navigation, step 3: the list stays on screen while a filter loads.**
+Branch `perf/keep-list-while-loading`, PR open into `dev`. Step (c) of the plan in
+the follow-ups.
+
+**The change.** Changing the search, a date, a filter or the page used to swap
+the whole list for a skeleton: the `<Suspense>` around it was keyed on every
+filter, so each change was a new boundary and a flash of placeholder rows where
+there had been something to read. The key is gone. The old rows now stay, and
+`FilterPendingDim` (`components/transactions/filter-pending.tsx`) greys them out
+while the next ones load, marked `data-pending` / `aria-busy`. The skeleton is
+what the first visit shows, from `loading.tsx`.
+
+**One transition, owned above everything that uses it.** The filter bar is
+outside the Suspense boundary on purpose, the pagination links are inside the
+results, and the dim wraps both — so the `useTransition` that tracks the
+navigation lives in `FilterPendingProvider`, around all three. The bar's
+`router.push` calls run inside it, and so do the pagination links, which now go
+through `<Link onNavigate>` and `router.push`: `onNavigate` only fires for a plain
+click, so middle-click and open-in-new-tab are left to the browser as before.
+
+**The dim waits 200ms (`delay-200`) and clears at once.** A response faster than
+that never flickers; a slower one is told apart from a page that ignored the
+click. Returning to full opacity is immediate, because it happens when the new
+rows arrive.
+
+**Dropped from the plan: a pending state on the clicked tab link.** The Next docs
+say `useLinkStatus` is for routes that have no `loading.js`, and every route here
+has one, so a click already shows a skeleton immediately. It would have been
+redundant, and the iOS bar's pill makes any addition there risky.
+
+**The test needed a second attempt, and the first would have passed regardless.**
+The first version looked for a skeleton once, at the moment the pending flag
+flipped. With the Suspense key put back — the bug it exists to catch — it still
+passed, because a skeleton that arrives a beat after the flag is invisible to a
+single look. It now runs a `MutationObserver` for the whole load and asserts a
+skeleton never appeared. **Mutation-checked the second time:** with the key
+restored it fails (`sawSkeleton` true); without, it passes. Worth remembering for
+any "X must not appear" assertion: watch, don't look.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385), `pnpm build` and
+`pnpm test:e2e` (43). **Not verified:** pagination. Going to the next page uses the
+new `onNavigate` path, and the e2e account does not have more than 25 entries in a
+month, so nothing exercises it — it is the least-tested part of this change.
+Nor has anyone watched it on a real device or the live site.
+
+**Before that: faster navigation, step 2 (#96, merged as `5992c7f`).**
+
 **Faster navigation, step 2: the browser keeps pages it has fetched.** Branch
-`perf/client-router-cache`, PR open into `dev`. Step 2 of the plan recorded in the
+`perf/client-router-cache`, merged as `5992c7f`. Step 2 of the plan recorded in the
 follow-ups; steps 0 and 1 were #95.
 
 **Two changes.** `experimental.staleTimes` is `dynamic: 30, static: 30` in
@@ -4136,9 +4183,8 @@ Not blocking, but worth doing.
       every server round trip, and it is the largest single cost for users in Sri
       Lanka; it is a data migration and the repo owner's call. **(b) client router
       cache** — done, see Current position.
-      **(c) keep the old list on screen while a filter loads** (`useTransition`)
-      instead of swapping to a skeleton, and show a pending state on the clicked
-      link. **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
+      **(c) keep the old list on screen while a filter loads** — done, see
+      Current position (the clicked-link part was dropped, and why is recorded there). **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
       Components + Partial Prefetching, the "instant navigation" path in Next 16.4 —
       a migration of its own. **(f)** `cookieCache` with `nextCookies()`, see above.
 

@@ -61,6 +61,45 @@ for (const path of ["/expenses", "/income"]) {
       await expect(page.getByLabel("To")).toHaveValue(to);
     });
 
+    // The list is not swapped for a skeleton while the next results load: the old
+    // rows stay and the region is marked pending. A skeleton is the first visit's.
+    //
+    // Watched with an observer for the whole load, not looked for once. A skeleton
+    // that arrives a beat after the pending flag is exactly the failure this is
+    // for, and a single check at the flag's moment cannot see it.
+    test("keeps the results on screen while a search loads", async ({ page }) => {
+      await page.goto(path);
+
+      const results = page.locator("[data-pending]");
+
+      await expect(results).toHaveAttribute("data-pending", "false", NAVIGATED);
+      await expect(page.getByText(/total$/i)).toBeVisible(NAVIGATED);
+
+      await page.evaluate(() => {
+        const w = window as unknown as { sawSkeleton: boolean };
+        w.sawSkeleton = false;
+
+        new MutationObserver(() => {
+          const loading = document.querySelectorAll("[role=status] .sr-only");
+
+          if ([...loading].some((el) => /^Loading (expenses|income)$/.test(el.textContent ?? ""))) {
+            w.sawSkeleton = true;
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+
+      await page.getByRole("searchbox", { name: "Search" }).fill("zz-keeps-the-list");
+
+      await expect(results).toHaveAttribute("data-pending", "true", NAVIGATED);
+      await expect(results).toHaveAttribute("data-pending", "false", NAVIGATED);
+      await expect(page).toHaveURL(/search=zz-keeps-the-list/);
+      await expect(page.getByText(/total$/i)).toBeVisible();
+
+      expect(
+        await page.evaluate(() => (window as unknown as { sawSkeleton: boolean }).sawSkeleton),
+      ).toBe(false);
+    });
+
     test("searches, and Clear empties the box", async ({ page }) => {
       await page.goto(path);
 

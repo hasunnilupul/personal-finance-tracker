@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { FilterPendingDim, FilterPendingProvider } from "@/components/transactions/filter-pending";
 import TransactionFilters from "@/components/transactions/transaction-filters";
 import TransactionResults from "@/components/transactions/transaction-results";
 import TransactionResultsSkeleton from "@/components/transactions/transaction-results-skeleton";
@@ -66,13 +67,15 @@ function toDateFilter(value: string | undefined): string | undefined {
  * The filter bar and the results are split across a `<Suspense>` boundary. The
  * bar depends only on the space, so it renders as soon as the categories and
  * authors are known and then stays; the list and the total depend on the
- * filters, so they stream in behind a skeleton every time one changes.
+ * filters.
  *
- * **The boundary is keyed on the filters.** Without a `key` React keeps the
+ * **The boundary is not keyed, and that is deliberate.** It used to be, which made
+ * every filter change swap the list for a skeleton. Left unkeyed, React keeps the
  * resolved boundary mounted across a search-param navigation and shows the old
- * rows until the new ones arrive, which reads as a page that ignored the click.
- * `loading.tsx` does not cover this either — the segment never unmounts, so its
- * fallback belongs to the first visit only.
+ * rows until the new ones arrive — which on its own reads as a page that ignored
+ * the click, so `FilterPendingDim` greys them out while the navigation is in
+ * flight. The skeleton is still what the first visit shows; `loading.tsx` covers
+ * that.
  */
 const TransactionPageContent = async ({ kind, searchParams }: TransactionPageProps) => {
   const params = await searchParams;
@@ -121,37 +124,38 @@ const TransactionPageContent = async ({ kind, searchParams }: TransactionPagePro
   query.set("to", filters.to ?? "");
 
   return (
-    <div className="flex flex-col gap-4">
-      <TransactionFilters
-        basePath={basePath}
-        categories={categories}
-        authors={authors}
-        showAuthorFilter={!space.isPersonal}
-        showCategoryFilter={kind !== "savings"}
-        defaults={defaultRange}
-        current={{
-          from: filters.from,
-          to: filters.to,
-          categoryId: params.categoryId,
-          createdBy: filters.createdBy,
-          search: filters.search,
-        }}
-      />
-
-      <Suspense
-        key={`${filters.from ?? ""}|${filters.to ?? ""}|${filters.categoryId ?? ""}|${filters.createdBy ?? ""}|${filters.search ?? ""}|${filters.page}`}
-        fallback={<TransactionResultsSkeleton kind={kind} />}
-      >
-        <TransactionResults
-          kind={kind}
-          filters={filters}
-          categories={categories}
+    <FilterPendingProvider>
+      <div className="flex flex-col gap-4">
+        <TransactionFilters
           basePath={basePath}
-          query={query.toString()}
-          hasFilters={hasFilters}
+          categories={categories}
+          authors={authors}
+          showAuthorFilter={!space.isPersonal}
+          showCategoryFilter={kind !== "savings"}
+          defaults={defaultRange}
+          current={{
+            from: filters.from,
+            to: filters.to,
+            categoryId: params.categoryId,
+            createdBy: filters.createdBy,
+            search: filters.search,
+          }}
         />
-      </Suspense>
-    </div>
+
+        <FilterPendingDim>
+          <Suspense fallback={<TransactionResultsSkeleton kind={kind} />}>
+            <TransactionResults
+              kind={kind}
+              filters={filters}
+              categories={categories}
+              basePath={basePath}
+              query={query.toString()}
+              hasFilters={hasFilters}
+            />
+          </Suspense>
+        </FilterPendingDim>
+      </div>
+    </FilterPendingProvider>
   );
 };
 
