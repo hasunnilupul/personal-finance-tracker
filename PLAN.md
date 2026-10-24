@@ -10,8 +10,82 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Release PR open — `dev` → `main`, not yet merged.** Carries three merges since
+`v1.4.0`: **#95** (the proxy no longer looks the session up in the database on
+private routes, and the space is fetched in one query), **#96** (the browser keeps
+pages it has fetched for 30 seconds, and four tabs prefetch their whole page) and
+**#97** (the list stays on screen, dimmed, while a filter or page loads instead of
+being swapped for a skeleton) — plus the plan record for each. This is the whole
+of the navigation-speed work that has been done; it is nowhere near live.
+
+**No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
+is empty, and so is the diff over `package.json` and `pnpm-lock.yaml`. The
+deploy-time migrate step is a no-op — the lowest-risk shape a release can have
+here. **`public/sw.js` is untouched and byte-identical to the live file**, so this
+is another clean Feature 13 trial — still unanswered, still needing a device that
+already had the previous build.
+
+**Minor bump: `v1.4.0` → `v1.5.0`.** Additive from where a user stands — the app
+should feel quicker and nothing is removed — but two things behave differently and
+are worth naming: a page can now be up to 30 seconds behind a change another member
+made in a shared space (your own changes are never stale), and a filter change dims
+the list rather than flashing a skeleton.
+
+**This release touches authentication, which the earlier ones did not.** #95 changed
+`proxy.ts`: for private routes it now checks the session cookie's presence instead
+of looking the session up in the database. That is safe because `requireUser` in the
+page is the check that holds and the proxy was only ever optimistic — but a
+redirect-loop between `/` and `/sign-in` was the specific way it could have gone
+wrong, and `e2e/stale-session.spec.ts` covers it. **It has not been tried with a
+real expired session on the live site.**
+
+**What each PR still leaves unverified, going in:**
+
+- **#95.** Nothing was measured on production — an authenticated production
+  navigation needs a signed-in session. The expectation is tens of milliseconds, not
+  a transformation. `PERF_LOG=1` in Vercel's environment logs the session and space
+  lookup times to the function logs; **set it before the merge, since an environment
+  variable needs a redeploy and this release provides one.**
+- **#96.** How it feels on the live site, and what four concurrent full prefetches
+  cost there. `staleTimes` is an `experimental` flag in this version of Next.
+- **#97.** Pagination: the next and previous buttons use the new `onNavigate` path,
+  and the e2e account does not have more than 25 entries in a month, so nothing
+  exercises it. It is the least-tested part of the release.
+
+**Not changed by this release, and still the largest cost:** a request from Colombo
+enters at Vercel's `sin1` edge and runs in `iad1`, which puts about 0.2s of round
+trip under every navigation that reaches the server. Moving compute and the database
+to Singapore is the repo owner's open decision. **Do not read an unimpressive result
+from this release as the work having failed — it is the part that does not touch the
+floor.**
+
+**Still open from v1.4.0:** the Dependabot alert count read **35** when this PR was
+opened, unchanged since before v1.4.0 deployed. `main` has carried the fixed
+lockfile since `0f026ae`. Not yet a finding — a day had not passed — but if it is
+still 35 after one, the cause is GitHub's scan, not the tree.
+
+**The deployment id before the merge is `dpl_9U8addzsyYfRuWz7CP7BSC5tncwj`** —
+the one v1.4.0 ended on, so production has not moved since — confirmed through
+`/api/version` and the sign-in page's `data-dpl-id` on
+`finance-flow.nilupulperera.dev`, and recorded in advance so a slow deploy cannot be
+mistaken for a stale one.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` answers 200 as `application/manifest+json`; `/sw.js` 200 as
+JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**.
+
+**Verified on `dev` at `613f969`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385),
+`pnpm build` and `pnpm test:e2e` (43) — run on #97's branch before it merged; `dev`
+has had nothing since but this record.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, the same URL-by-URL answers, and
+the alert count again. Merge it as a **merge commit**.
+
+**Before that: step 3, the list stays on screen** — merged as **#97** (`613f969`).
+
 **Faster navigation, step 3: the list stays on screen while a filter loads.**
-Branch `perf/keep-list-while-loading`, PR open into `dev`. Step (c) of the plan in
+Branch `perf/keep-list-while-loading`, merged as `613f969`. Step (c) of the plan in
 the follow-ups.
 
 **The change.** Changing the search, a date, a filter or the page used to swap
