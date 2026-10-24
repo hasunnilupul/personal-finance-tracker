@@ -14,8 +14,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 session lookup in the proxy for private routes; the space fetched in one query),
 **#96** (the browser keeps fetched pages for 30 seconds; four tabs prefetch their
 whole page) and **#97** (the list stays on screen, dimmed, while a filter or page
-loads), plus the plan records for each. **Not yet tagged `v1.5.0`** — waiting on the
-repo owner's go-ahead.
+loads), plus the plan records for each. **Tagged `v1.5.0`** (annotated, on
+`18da67f`) on the repo owner's go-ahead, the same day. No GitHub release page was
+created for it; `v1.4.0` has one.
 
 **Merged with a merge commit, and the history is convergent.** `18da67f` has two
 parents (`0f026ae` and `f205465`), `git diff main dev` is empty, and `dev` is an
