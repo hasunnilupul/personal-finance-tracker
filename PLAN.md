@@ -10,9 +10,78 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Dependency security fixes.** Branch `fix/dependabot-alerts`, PR open into
-`dev`. Clears the open Dependabot alerts by one coordinated bump instead of the
-ten PRs Dependabot opened, and points Dependabot at `dev` from here on.
+**Release PR open — `dev` → `main`, not yet merged.** Carries two merges since
+`v1.3.0`: **#87** (Expenses and Income open on the current month, plus a search
+box) and **#88** (dependency security fixes, `next` 16.2.11 → 16.4.2), plus the
+plan records for each and the Resend record (#80).
+
+**Why this release matters more than most: the Dependabot alerts follow the
+default branch.** #88 only landed on `dev`, so GitHub still shows 35 open alerts
+and production is still on the vulnerable `next`. **This merge is what fixes
+production, and it is the first step in which the alert count can drop.**
+Dependabot's ten open PRs were closed as superseded after #88 merged.
+
+**No migrations, but dependency changes — so watch the deploy, don't glance at
+it.** `git diff origin/main dev -- lib/db/` touches only `transaction.model.ts`,
+a TypeScript interface. `package.json` and `pnpm-lock.yaml` both change: `next`
+and `eslint-config-next` to 16.4.2, `vitest`, `vite` (now declared), the
+`sharp` / `js-yaml` / `brace-expansion` override floors, and the transitive set.
+The deploy-time migrate step has nothing to apply.
+
+**Minor bump: `v1.3.0` → `v1.4.0`.** Additive from where a user stands — the
+lists open on this month instead of everything, and gain a search box — with a
+framework minor underneath. Nothing removed. Savings is deliberately unchanged
+apart from the search box.
+
+**One behaviour change worth knowing before it ships:** Expenses and Income no
+longer open on all history. The range can still be widened (clear a date, or
+Clear returns to the current month), and totals shown are now for that range.
+
+**What each PR still leaves unverified, going in:**
+
+- **#87 (month default and search).** Passed the whole browser suite, including
+  a new read-only spec, but nobody has looked at it in a browser. The search
+  box's layout at phone width is unchecked on screen.
+- **#88 (dependencies).** Passed typecheck, lint, 381 unit tests, a production
+  build and 37 e2e tests, all against the development database. **Nothing has
+  exercised Next 16.4.2 on the live site.** Its Vercel preview built and passed,
+  which is the first evidence that the failing previews on Dependabot's PRs were
+  not a break in the framework itself — their logs were never read, so the cause
+  of those failures is still unknown.
+- **`zod` 3.25.76 stays** as one accepted `pnpm audit` finding, reached only
+  through the `shadcn` dev CLI; there is no patched 3.x. The alert for it, if
+  GitHub raises one, will not clear.
+
+**The production domain has moved, and this record had not noticed.** The old
+`personal-finance-tracker-uicg.vercel.app` now answers **308** to
+`finance-flow.nilupulperera.dev`. Checks below are against the new domain.
+
+**The deployment id before the merge is `dpl_3AxLT3JJZH5QBx5qrnR5vvv3SyDQ`**,
+confirmed through `/api/version` and the sign-in page's `data-dpl-id` on
+`finance-flow.nilupulperera.dev`, and recorded in advance so a slow deploy cannot
+be mistaken for a stale one. It is **not** the id the v1.3.0 release ended on
+(`dpl_2kpWxYb2…`) although `main` has not moved: a redeploy of the same commit
+is the likely explanation, since `RESEND_FROM` was set in Vercel's Production
+environment afterwards, but that is inferred and not observed.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as
+HTML; `/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js` 200
+as JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte
+body**. **`public/sw.js` is untouched and byte-identical to the live file**, so
+this is another clean Feature 13 trial — still unanswered, still needing a device
+that already had the previous build.
+
+**Verified on `dev` at `f39ff1d`:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(381), `pnpm build` and `pnpm test:e2e` (37) — run on the branch before #88
+merged; `dev` has had nothing since but this record.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, the same URL-by-URL answers, and
+whether GitHub's open-alert count dropped from 35. Merge it as a **merge commit**.
+
+**Before that: dependency security fixes**, merged as **PR #88** (`f39ff1d`).
+Clears the open Dependabot alerts by one coordinated bump instead of the ten PRs
+Dependabot opened, and points Dependabot at `dev` from here on.
 
 **`next` 16.2.11 → 16.4.2, not 16.3.3.** The alerts named 16.3.3 as the fix, and
 that was already stale: `pnpm audit`'s advisory database listed further critical
@@ -41,9 +110,8 @@ to clear a finding on code that never ships. The app's own `zod` is 4.6.7.
 patch grouped into one PR. **Unverified until Dependabot next runs**: whether its
 security-update PRs honour `target-branch` as well as its version updates.
 
-**Not done, and waits on the merge:** closing Dependabot's ten open PRs
-(#73, #74, #78, #79, #81–#86) as superseded. Closing them first would leave the
-alerts open with nothing to show for it. They also all fail the Vercel preview;
+**Dependabot's ten open PRs (#73, #74, #78, #79, #81–#86) were closed as
+superseded after #88 merged.** They also all failed the Vercel preview;
 **the cause was never read** (no Vercel CLI session here), so whether that is a
 real build break or a preview-environment quirk is unknown — this branch's own
 preview is the first useful evidence.
@@ -3910,10 +3978,11 @@ Things already hit, so they are not hit twice.
 Not blocking, but worth doing.
 
 - [ ] **Clear the Dependabot alerts on a branch of their own** (found
-      2026-10-24, 35 open). Built on `fix/dependabot-alerts` — see Current position.
-      Remaining: close Dependabot's ten PRs once it merges, confirm the alert
-      count drops, and check whether the `dependabot.yml` retargeting applies to
-      security updates. One audit finding is accepted: `zod` 3.25.76 via `shadcn`.
+      2026-10-24, 35 open). Merged as #88 and Dependabot's ten PRs closed as
+      superseded. Remaining: confirm the alert count drops once the release
+      reaches `main` (alerts follow the default branch), and check whether the
+      `dependabot.yml` retargeting applies to security updates. One audit finding
+      is accepted: `zod` 3.25.76 via `shadcn`.
 
 - [x] ~~**Make a destructive migration's pre-count a blocker, not a request.**~~
       Done: `scripts/pre-count-destructive.ts`, spawned by
