@@ -140,7 +140,7 @@ const TransactionManager = ({
             </p>
             <p className="text-muted-foreground mt-1 text-sm">
               {hasFilters
-                ? "Try widening the date range or clearing the filters."
+                ? "Try widening the date range, or changing the search and filters."
                 : `Add your first ${noun} to start tracking.`}
             </p>
 

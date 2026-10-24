@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  currentMonthRange,
   DEFAULT_RANGE,
   MAX_TREND_MONTHS,
   monthsIn,
@@ -116,5 +117,22 @@ describe("monthsIn", () => {
     const months = monthsIn(resolveRange({ range: "last-12-months" }, NOW));
 
     expect([...months].sort()).toEqual(months);
+  });
+});
+
+describe("currentMonthRange", () => {
+  it("spans the first to the last day of the month", () => {
+    expect(currentMonthRange(NOW)).toEqual({ from: "2026-08-01", to: "2026-08-31" });
+  });
+
+  it("knows a short month and a leap February", () => {
+    expect(currentMonthRange(new Date("2026-04-10T00:00:00.000Z")).to).toBe("2026-04-30");
+    expect(currentMonthRange(new Date("2028-02-10T00:00:00.000Z")).to).toBe("2028-02-29");
+  });
+
+  // Entries are filed against UTC days, so "this month" is decided in UTC too.
+  it("reads the month in UTC, not in the clock's local zone", () => {
+    expect(currentMonthRange(new Date("2026-08-31T23:30:00.000Z")).from).toBe("2026-08-01");
+    expect(currentMonthRange(new Date("2026-09-01T00:30:00.000Z")).from).toBe("2026-09-01");
   });
 });
