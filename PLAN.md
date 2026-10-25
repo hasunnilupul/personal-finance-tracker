@@ -10,6 +10,24 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Feature 26 — more ways to read the reports page** is built on `feat/report-chart-views`
+and its PR is open into `dev`; **it is waiting on the repo owner to merge it.** The
+Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
+category card offers **Bars** (existing) and **Donut**. A shared space gets Columns and
+Lines only — it records no income, so there is nothing to net — and the Trend chart there
+now draws just Expenses rather than three series with two of them flat. No migration, no
+dependency, no change to the query: every view is drawn from the `byMonth` and
+`byCategory` the page already had. See Feature 26 in the Roadmap for the reasoning.
+
+**Verified** on the branch after pulling `dev`: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(473, from 445) and `pnpm test:e2e` (60, against a production build); plus a look at a
+signed-in render in light and dark, at 900px and 390px, with mock data for the personal
+and shared cases and the real `/reports` for the test account (which has no spending, so
+it showed the empty branches). Keyboard arrows moving between tabs, and the chosen view
+surviving a range change, were both exercised in the browser. **Not verified:** nobody
+has seen the new views with a real month of the repo owner's own data, and the reports
+page has no browser test, so a regression there would be found by eye.
+
 **Released 2026-10-25** — `f48a71a` (PR #103), **tagged `v1.7.0`** (annotated, on
 `f48a71a`) on the repo owner's go-ahead, the same day. It was merged by the repo owner
 **as a merge commit**: `f48a71a` has two parents (`5bbd4a5` and `28271a3`), and `dev`
@@ -2459,6 +2477,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded      |
 | Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS            |
 | Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast    |
+| Category chart colour    | Five validated tokens by rank, then a neutral | Not the category's own colour (implies the hue means something); no aqua or green, which are income |
+| Report chart views       | Tabs inside the card, held in a module map | A different drawing of one answer is not a filter, and state alone resets on every range change |
 | Multi-table writes       | One `db.batch`, via `lib/db/batch.ts`     | The HTTP driver has no _interactive_ transactions, but a batch is still one transaction  |
 | Reassigning a category   | Budgets are not moved; they cascade       | The dialog already counts them destroyed, and moving one trips the unique period index   |
 | Recurring trigger        | On-read catch-up; cron as an accelerator  | `CRON_SECRET` is unset, so a cron-only sweep would never fire in this deployment         |
@@ -3173,6 +3193,48 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 26 — More ways to read the reports page ✅ done, PR open
+
+- [x] `ChartViews` (`components/charts/chart-views.tsx`) — a card with tabs over several
+      charts of the same data; the showing view is the only one mounted
+- [x] `MonthPlot` — the frame the month charts share (legend, gridlines, hover bands,
+      month labels, tooltip); `TrendChart` moved onto it, columns unchanged
+- [x] `TrendLines` — the same series as lines; `NetChart` — income less expenses and
+      savings, as bars up and down from a zero line
+- [x] `CategoryDonut` — spending as a ring of at most six wedges, the tail folded into
+      "Other", with the name, amount and share of every wedge printed beside it
+- [x] `lib/reports/chart-scale.ts` — `niceMax`, `niceDomain`, `foldCategories`,
+      `ringArcs`, 28 unit tests; `--viz-cat-1..5` and `--viz-other` in `globals.css`
+- [x] Every view has its own table twin; no new query, migration or dependency
+
+**Why these four and not others.** They are the readings the existing data supports
+without a new query: direction over time (lines), the one figure the other views make
+you subtract (net), and share rather than rank (donut). A daily or weekday view, or
+"where the income went", would each need a new grouped query and are listed under
+follow-ups rather than half-done here.
+
+**Why the choice lives in the card and not in the URL.** The views are different
+readings of one answer, not filters, and a URL param would re-run the report query for
+what is a change of drawing. The body sits under a `<Suspense>` keyed on the range, so
+**component state would reset to the first view on every range change** — the choice is
+kept in a module-level map read through `useSyncExternalStore` instead. It survives a
+client-side range change and not a reload, on purpose; no storage API is involved.
+
+**Donut colour is five more validated tokens, not the category's own colour.** Orange,
+blue, yellow, magenta, violet in that order, checked as an ordered set against both card
+surfaces (adjacent CVD ΔE 16.3 light / 13.2 dark, normal-vision 19.6 / 19.3) and with the
+last wedge beside the first, since a ring has no end (29.1 / 26.0). Aqua and green are
+left out because they are the income hue: every wedge is spending, and a green one would
+read as money in. Yellow and magenta measure under 3:1 on the light card, so — as with
+income's aqua — the printed names and amounts and the table twin are the relief, not an
+extra. Colour is by rank, so a category can change hue when the range does; that is why
+nothing depends on the hue alone.
+
+**Net is symmetric about zero when months fall on both sides** (`niceDomain`), so a
+month 50 over looks the same size as one 50 under, and the zero line is drawn heavier
+than the gridlines. It uses the two hues the page already means "in" and "out" by, but
+position says the same thing, so colour is never the only signal.
 
 ### Feature 25 — Optional two-step verification ✅ merged (PR #102)
 
@@ -4723,6 +4785,18 @@ Things already hit, so they are not hit twice.
   `15` — a typo becoming a plausible amount, which for money is the worst kind
   of failure. Found by the first test written against it. To accept a new
   format, widen the `AMOUNT` regex; never go back to stripping.
+- **`next dev` rewrites `AGENTS.md` when it starts.** It re-adds a
+  `<!-- BEGIN:nextjs-agent-rules -->` block and reflows the heading, so a feature
+  branch that ran the dev server has an unrelated modification to that file waiting in
+  `git status`. Revert it (`git checkout -- AGENTS.md`) before committing unless the
+  change is deliberate.
+- **A circle inside a stretched SVG is an ellipse.** The line chart draws its lines in
+  a `preserveAspectRatio="none"` SVG with `vector-effect: non-scaling-stroke` so they
+  stay 2px at any width, and lays its dots over it as HTML by percentage instead.
+  Putting `<circle>`s in that SVG looks right at one width and wrong at every other.
+- **`chart-views.tsx` reads module state, so it must not be given a server snapshot of
+  anything but "nothing chosen".** The server and the first client render must agree
+  for hydration; the stored choice lands just after, as a second render.
 
 ---
 

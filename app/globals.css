@@ -89,6 +89,26 @@
   --viz-income: #1baf7a;
   --viz-expense: #eb6834;
 
+  /*
+   * Category wedges, for the donut. Five hues in a fixed order plus a neutral
+   * for "Other" and the sixth wedge. Income's aqua and green are left out on
+   * purpose: every wedge here is spending, and a green one would read as money
+   * coming in. Slot 1 is the expense orange, so the biggest wedge carries the
+   * colour the bars view has already taught.
+   *
+   * Validated as an ordered set against the card surface, and the last wedge
+   * beside the first, since a ring has no end. Light (#ffffff): adjacent CVD
+   * ΔE 16.3, normal 19.6; wrap pair 29.1 / 34.9. Yellow (2.17:1) and magenta
+   * (2.69:1) sit under 3:1, so the donut prints every name and amount beside
+   * its swatch and ships a table twin instead of leaning on the fill.
+   */
+  --viz-cat-1: #eb6834;
+  --viz-cat-2: #2a78d6;
+  --viz-cat-3: #eda100;
+  --viz-cat-4: #e87ba4;
+  --viz-cat-5: #6250d6;
+  --viz-other: var(--chart-2);
+
   --radius: 0;
   --sidebar: oklch(0.987 0.002 197.1);
   --sidebar-foreground: oklch(0.148 0.004 228.8);
@@ -132,6 +152,13 @@
    */
   --viz-income: #199e70;
   --viz-expense: #d95926;
+
+  /* Dark steps of the same five hues; adjacent CVD ΔE 13.2, normal 19.3, wrap 26.0 / 27.0, all ≥ 3:1. */
+  --viz-cat-1: #d95926;
+  --viz-cat-2: #3987e5;
+  --viz-cat-3: #c98500;
+  --viz-cat-4: #d55181;
+  --viz-cat-5: #9085e9;
 
   --sidebar: oklch(0.218 0.008 223.9);
   --sidebar-foreground: oklch(0.987 0.002 197.1);
