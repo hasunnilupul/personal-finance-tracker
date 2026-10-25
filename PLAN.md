@@ -10,10 +10,73 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Feature 25 — optional two-step verification — is built and in review.** Branch
-`feat/two-factor-auth`, PR into `dev`. It follows Feature 24 (password change and
-reset, **merged as #101, `6d8065b`**), and a release comes after it; the repo owner
-merges the release PR, and said the feature PRs may be merged without asking.
+**Release v1.7.0 is open** — `dev` → `main`, to be merged by the repo owner **as a merge
+commit, never squashed**. It carries **#101** (Feature 24 — change password, forgot and
+reset password; merged as `6d8065b`) and **#102** (Feature 25 — optional two-step
+verification; merged as `e92361d`), plus their plan records. Both feature PRs were
+merged into `dev` by the assistant on the repo owner's instruction that it may; the
+release PR is the owner's.
+
+**Minor bump: `v1.6.0` → `v1.7.0`.** Additive from where a user stands: two new ways in
+and out of an account, nothing removed, and nobody is asked for anything new — two-step
+verification is off until somebody turns it on.
+
+**This release holds a migration and a dependency, so the deploy wants watching, not
+glancing at.** `20261025070731_greedy_thunderbird` creates `two_factor` and adds
+`user.two_factor_enabled` (default `false`, nullable), run by `build:deploy` before
+`next build` on the production database; it is additive and was applied to the
+development database first. `qrcode.react` ^4.2.0 is the only new package.
+`public/sw.js` is **byte-identical to the live file** (checked: same hash on `main` and
+`dev`), so Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js` 200 as JavaScript;
+`/api/export` 307s signed out. **`/forgot-password` and `/reset-password` answer 307**,
+because they do not exist there yet — after the merge they should answer 200. Dependabot
+reads 0 open alerts.
+
+**Verified on `dev` at `e92361d`'s tree:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(445), `pnpm build` and `pnpm test:e2e` (60). The browser suite ran against the
+development database, with the migration applied. It leaves two more stable accounts
+there by design — `e2e-security@financeflow.test` and `e2e-twofactor@financeflow.test`,
+each one row like the first — and the second is switched back to one-step sign-in at
+the end of every run.
+
+**What this release leaves unverified, and it is most of the point:**
+
+- **No reset email has been received by anyone.** The suite runs with Resend unset so it
+  can never send mail. The template, the link built from `BETTER_AUTH_URL`, and the
+  redirect to `/reset-password?token=…` were read, not followed. **The first real reset
+  on production is the first time it runs.**
+- **No real authenticator app has scanned the QR code.** The suite reads the same secret
+  from the text beside it and computes the code itself.
+- **Whether production's `BETTER_AUTH_SECRET` is random.** The development one warns
+  "low-entropy" at startup. It now encrypts every authenticator secret, and changing it
+  after anyone enrols would orphan their second factor.
+- **Whether the migration applies cleanly on production** — it has run on the
+  development database and nowhere else.
+- **A trusted-device cookie** ("Trust this device for 30 days") has never been exercised.
+- Carried over, unchanged by this release: the Singapore decision, whether `PERF_LOG=1`
+  is set, pagination has no test, `staleTimes` is still an `experimental` flag, and the
+  v1.4.0 list (does Feature 13 install a new worker, does push deliver, does
+  `financeflow-private-*` disappear on sign-out, does an invitation notice reach the
+  other account, does the budget warning reach the bell, does the CSV open in a
+  spreadsheet).
+
+**After the merge** the record still wants: the merge SHA, that it has two parents, the
+new deployment id from both `/api/version` and the sign-in page, whether `/forgot-password`
+and `/reset-password` now answer 200, and whether the deploy log shows the migration
+running. Committed straight to `dev`.
+
+---
+
+The two features, as they stood when they were merged:
+
+**Feature 25 — optional two-step verification** (merged as #102, branch
+`feat/two-factor-auth`) follows Feature 24 (password change and reset, merged as
+#101, `6d8065b`).
 
 What it adds: **Settings → Account** gains a Two-step verification card. Turning it on
 asks for the password, shows a QR code and the same secret as text, and switches on
@@ -35,7 +98,7 @@ no email or SMS code, because an inbox is exactly what a password reset already
 trusts. Lockout (ten failures, fifteen minutes) and the plugin's rate limit are left
 at their defaults.
 
-**Verified before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (445, from 434) and
+**Verified on the feature branch:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (445, from 434) and
 `pnpm test:e2e` (60, from 56). The browser suite runs the whole flow with a real RFC 6238 code:
 a wrong code does not switch it on, a right one does and returns ten backup codes,
 sign-in then stops for a code and refuses a wrong one, a backup code works once and
@@ -3080,7 +3143,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 25 — Optional two-step verification ✅ done, PR open
+### Feature 25 — Optional two-step verification ✅ merged (PR #102)
 
 - [x] `twoFactor` plugin in `lib/auth/auth.ts` (issuer "FinanceFlow", backup codes
       `encrypted`); `twoFactorClient` in `lib/auth/auth-client.ts`
