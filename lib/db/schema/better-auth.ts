@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -6,6 +6,12 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  /**
+   * Whether signing in asks for a second factor. Set by the two-factor plugin
+   * once the person has proved their authenticator works — not when they
+   * started setting it up — so a half-finished setup cannot lock anyone out.
+   */
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -75,4 +81,34 @@ export const verification = pgTable(
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+/**
+ * A person's authenticator secret and backup codes. At most one row per user.
+ *
+ * Both `secret` and `backupCodes` are encrypted by the plugin with
+ * `BETTER_AUTH_SECRET` before they reach this table, so a database dump alone
+ * does not yield a working second factor. That also makes the secret a reason
+ * not to rotate `BETTER_AUTH_SECRET` casually: it would orphan every row here.
+ *
+ * `verified` is false from the moment setup starts until the first correct
+ * code; sign-in ignores an unverified row.
+ */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until"),
+  },
+  (table) => [
+    index("twoFactor_secret_idx").on(table.secret),
+    index("twoFactor_userId_idx").on(table.userId),
+  ],
 );
