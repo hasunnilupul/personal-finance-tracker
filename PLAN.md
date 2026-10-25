@@ -14,7 +14,7 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 deletes on the Expenses, Income and Savings lists show before the server has answered,
 and the page puts itself back if the save fails), plus its plan record and the v1.5.0
 release records. **Tagged `v1.6.0`** (annotated, on `5bbd4a5`) on the repo owner's
-go-ahead, the same day. No GitHub release page was created for it; `v1.5.0` has one.
+go-ahead, the same day. It has a GitHub release page, "v1.6.0 — instant saves".
 
 **Merged with a merge commit, and the history is convergent.** `5bbd4a5` has two
 parents (`18da67f` and `de3e711`), `git diff main dev` is empty, and `dev` is an
