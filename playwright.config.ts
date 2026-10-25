@@ -120,6 +120,14 @@ export default defineConfig({
       // in the server log. It is the same trap the gotchas record for
       // `next dev` on the wrong port, met from the other direction.
       BETTER_AUTH_URL: BASE_URL,
+
+      // The suite must never send mail. It asks for a password reset on its own
+      // account, whose address is on a domain that cannot receive any, and a
+      // real send would be a bounce against the sender's reputation. Empty
+      // rather than absent: Next fills only variables the process does not
+      // already have, so an absent one would be filled from `.env`.
+      RESEND_API_KEY: "",
+      RESEND_FROM: "",
     },
   },
 });

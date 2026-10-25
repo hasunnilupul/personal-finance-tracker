@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BrandMark from "@/components/brand-mark";
 import MobileNav from "@/components/navigation/mobile-nav";
-import { tabsFor } from "@/components/navigation/tabs";
+import { isTabActive, tabsFor } from "@/components/navigation/tabs";
 
 /**
  * The desktop sidebar, and the mobile bar that stands in for it.
@@ -51,9 +51,9 @@ export default function AppSidebar({ isPersonal }: { isPersonal: boolean }) {
               key={tab.href}
               href={tab.href}
               prefetch={tab.prefetch}
-              aria-current={pathname === tab.href ? "page" : undefined}
+              aria-current={isTabActive(tab, pathname) ? "page" : undefined}
               className={cn(
-                buttonVariants({ variant: pathname === tab.href ? "default" : "ghost" }),
+                buttonVariants({ variant: isTabActive(tab, pathname) ? "default" : "ghost" }),
                 "w-full justify-start",
               )}
             >

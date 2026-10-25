@@ -1,6 +1,7 @@
 import BaseCurrencyForm from "@/components/base-currency-form";
 import ExportCard from "@/components/export-card";
 import PushToggle from "@/components/push-toggle";
+import SettingsSubnav from "@/components/settings-subnav";
 import { Card } from "@/components/ui/card";
 import { requireActiveSpace } from "@/lib/auth/dal";
 import { roleHasPermission } from "@/lib/auth/permissions";
@@ -21,6 +22,8 @@ const SpaceSettingsPage = async () => {
           Settings for <span className="text-foreground font-medium">{space.name}</span>.
         </p>
       </div>
+
+      <SettingsSubnav current="space" />
 
       {canEdit ? (
         <BaseCurrencyForm currentCurrency={space.baseCurrency} />

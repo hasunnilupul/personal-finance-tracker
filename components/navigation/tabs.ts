@@ -21,6 +21,8 @@ export type Tab = {
   primary?: boolean;
   /** Hidden in shared spaces, where the page it points at does not exist. */
   personalOnly?: boolean;
+  /** Other paths that belong to this tab, so it stays lit on them. */
+  alsoActiveOn?: string[];
   /**
    * Fetch the whole page ahead of the click, not just down to its skeleton.
    *
@@ -98,8 +100,20 @@ export const tabs: Tab[] = [
     href: "/settings/space",
     label: "Settings",
     icon: "⚙️",
+    alsoActiveOn: ["/settings/account"],
   },
 ];
+
+/**
+ * Whether a tab is the page the person is on.
+ *
+ * One definition for the sidebar and both bars, because the three each compared
+ * `pathname === tab.href` and a tab with a second page would have been lit in
+ * one and dark in another.
+ */
+export function isTabActive(tab: Tab, pathname: string): boolean {
+  return pathname === tab.href || (tab.alsoActiveOn?.includes(pathname) ?? false);
+}
 
 /**
  * The tabs a space actually has, split the way the bars need them.

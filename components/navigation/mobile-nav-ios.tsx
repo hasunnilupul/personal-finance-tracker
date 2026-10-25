@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { tabsFor } from "@/components/navigation/tabs";
+import { isTabActive, tabsFor } from "@/components/navigation/tabs";
 
 /**
  * The bottom bar on iOS and iPadOS.
@@ -40,8 +40,8 @@ export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
   /** The index "More" occupies, which is always the last column. */
   const moreIndex = primaryTabs.length;
 
-  const primaryIndex = primaryTabs.findIndex((tab) => tab.href === pathname);
-  const inOverflow = overflowTabs.some((tab) => tab.href === pathname);
+  const primaryIndex = primaryTabs.findIndex((tab) => isTabActive(tab, pathname));
+  const inOverflow = overflowTabs.some((tab) => isTabActive(tab, pathname));
 
   // Which column the pill sits under. A route matching no tab at all — a
   // nested page such as a future `/expenses/123` — parks it nowhere rather
@@ -140,7 +140,7 @@ export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
             key={tab.href}
             href={tab.href}
             prefetch={tab.prefetch}
-            aria-current={pathname === tab.href ? "page" : undefined}
+            aria-current={isTabActive(tab, pathname) ? "page" : undefined}
             className={cn("ff-iosbar-item", "transition-colors")}
           >
             <span className="ff-iosbar-icon">{tab.icon}</span>
@@ -163,7 +163,7 @@ export default function MobileNavIos({ isPersonal }: { isPersonal: boolean }) {
             {overflowTabs.map((tab) => (
               <DropdownMenuItem
                 key={tab.href}
-                className={cn(pathname === tab.href && "text-primary")}
+                className={cn(isTabActive(tab, pathname) && "text-primary")}
                 render={<Link href={tab.href} prefetch={tab.prefetch} />}
               >
                 <span>{tab.icon}</span>
