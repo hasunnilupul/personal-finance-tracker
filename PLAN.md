@@ -10,11 +10,52 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries one merge since
-`v1.5.0`: **#99** (adds, edits and deletes on the Expenses, Income and Savings lists
-show before the server has answered, and the page puts itself back if the save fails)
-— plus its plan record and the v1.5.0 release records that were committed to `dev`
-after that release was cut.
+**Released 2026-10-25** — `5bbd4a5` (PR #100), carrying **#99** (adds, edits and
+deletes on the Expenses, Income and Savings lists show before the server has answered,
+and the page puts itself back if the save fails), plus its plan record and the v1.5.0
+release records. **Not yet tagged `v1.6.0`** — waiting on the repo owner's go-ahead.
+
+**Merged with a merge commit, and the history is convergent.** `5bbd4a5` has two
+parents (`18da67f` and `de3e711`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `5bbd4a5` itself. The
+status read `pending` for about forty seconds and then `success`, so there was nothing
+to diagnose. It was `dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e` before the merge.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers **307
+with a zero-byte body**. **`public/sw.js` is untouched and byte-identical to the live
+file**, so this stays a clean Feature 13 trial — still unanswered, still needing a
+device that already had the previous build. The proxy's cookie handling held on the new
+build too: `/expenses` with a made-up session cookie answers **307 to `/sign-in`**, and
+`/sign-in` with the same cookie answers **200**, with no loop.
+
+**No migrations and no dependency changes**, so the migrate step had nothing to do.
+
+**What the live checks cannot show, and it is all of what this release is for.** They
+are signed-out requests. Nothing here shows a row appearing before its save, a failed
+save being taken back, or "Edit again" restoring the form — those need a signed-in
+session. **The first person to add an expense on the live site is the first to try
+it**, and the case most worth watching is a multi-currency entry, which is meant to
+wait for the server rather than appear early.
+
+**Dependabot reads 0 open alerts and there are no open pull requests.**
+
+**Still open:** the Singapore decision and the ~0.2s round trip under every navigation;
+whether `PERF_LOG=1` is set on Vercel (so whether `[perf]` lines exist); pagination
+has no test; `staleTimes` is still an `experimental` flag; and the list v1.4.0 left —
+whether Feature 13 installs a new worker, whether push delivers, whether
+`financeflow-private-*` disappears on sign-out, whether an invitation notice reaches
+the other account, whether the budget warning arrives in the bell, and whether the CSV
+opens in a spreadsheet.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on
+what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
 and the diff over `package.json` and `pnpm-lock.yaml` are both empty; the deploy-time
@@ -71,10 +112,6 @@ JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**
 `pnpm build` and `pnpm test:e2e` (48) — run on #99's branch before it merged; `dev` has
 had nothing since but this record. The development database held no stray test rows
 afterwards.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, and the same URL-by-URL answers.
-Merge it as a **merge commit**.
 
 **Before that: optimistic add, edit and delete** — merged as **#99** (`9cf7a87`).
 
