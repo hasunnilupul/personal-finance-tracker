@@ -10,10 +10,42 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** It carries one feature: **#104**
-(Feature 26 — line, net and donut views on the reports page, merged into `dev` as
-`ad429cc`), plus its plan records (`9b871a6`) and the v1.7.0 release records (`ce2f45e`).
-**It must be merged as a merge commit, never squashed.**
+**Released 2026-10-25** — `703b1e1` (PR #105), **tagged `v1.8.0`** (annotated, on
+`703b1e1`) the same day, with a GitHub release page, "v1.8.0 — more ways to read the
+reports page". It carries one feature: **#104** (Feature 26 — line, net and donut views
+on the reports page, merged into `dev` as `ad429cc`), plus its plan records (`9b871a6`)
+and the v1.7.0 release records (`ce2f45e`).
+
+**Merged with a merge commit, and the history is convergent.** `703b1e1` has two parents
+(`f48a71a` and `a56f1cc`), `git diff main dev` is empty, and `dev` is an ancestor of
+`main`. Nothing to reconverge. **The PR read `BLOCKED` / `REVIEW_REQUIRED` when the
+assistant tried to merge it** — there is no classic branch protection on `main`
+(the API answers 404), so it is a rule that needs a review, and the PR is authored from
+the same account that would approve it. It was merged on GitHub rather than bypassed with
+`--admin`, and the assistant did not do the merge.
+
+**The id moved and all three sides agree:** `/api/version`, the sign-in page's
+`data-dpl-id` and the Vercel status on `703b1e1` all name `dpl_5zZHqaPu7w6Rj2PthaUmz4PSgGXQ`
+(it was `dpl_ER1ESqMbab5jYSLYadUo89veku18`). The status read `pending` and then `success`
+within about thirty seconds.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`), all signed out:
+`/sign-in`, `/offline`, `/forgot-password`, `/manifest.webmanifest` and `/sw.js` answer
+200 (`/sw.js` as JavaScript, byte-identical to `main`'s blob, hash `d32773d…`); `/`,
+`/reports` and `/api/export` 307 to sign-in. A made-up session cookie on `/reports` 307s
+to `/sign-in` and on `/sign-in` answers 200, with no loop.
+
+**Still unverified, and it is all of what this release is for:** a chart cannot be seen
+signed out. **Nobody has opened `/reports` signed in with real data on this build.** The
+views were looked at with mock data, and the test account has no spending. The tab
+choice on a real phone, and how the donut's colours read on the repo owner's own
+categories, are open until somebody does.
+
+**Dependabot** was not checked for this release.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on what
+shipped and why, now historical). It carried one feature: **#104**, plus its plan
+records and the v1.7.0 release records.
 
 **Minor bump: `v1.7.0` → `v1.8.0`.** Additive from where a user stands: the reports page
 gains tabs over charts it already had, and nothing is removed or asked of anyone. The
@@ -35,18 +67,15 @@ answer 200; `/api/export` and `/reports` 307 signed out.
 `pnpm test:e2e` (60, against a production build), run on the feature branch after
 pulling `dev`; `dev` has gained only plan records since.
 
-**What this release will leave unverified, and it is all of what it is for:** nothing
-signed-out can see a chart. **Nobody has looked at the new views with real data** — the
-screenshots used mock data and the test account has no spending. The reports page has no
-browser test. Whether the tab choice behaves on a real phone, and whether the donut's
-colours read well on the repo owner's own categories, are open until somebody signed in
-opens `/reports`. The carried-over list from v1.7.0 below is unchanged by this release.
+**What this release left unverified, as written before the merge:** nothing signed-out
+can see a chart, the reports page has no browser test, and the carried-over list from
+v1.7.0 below is unchanged by this release.
 
 ---
 
 **Feature 26 — more ways to read the reports page** is **merged into `dev`** as
-`ad429cc` (PR #104, squashed, from `feat/report-chart-views`). **It is not released**: it
-reaches `main` with the next `dev` → `main` release PR. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
+`ad429cc` (PR #104, squashed, from `feat/report-chart-views`, which is deleted) and
+**released in v1.8.0**. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
 category card offers **Bars** (existing) and **Donut**. A shared space gets Columns and
 Lines only — it records no income, so there is nothing to net — and the Trend chart there
 now draws just Expenses rather than three series with two of them flat. No migration, no
