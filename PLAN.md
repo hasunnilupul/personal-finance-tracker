@@ -10,10 +10,106 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** It carries one feature: **#104**
-(Feature 26 — line, net and donut views on the reports page, merged into `dev` as
-`ad429cc`), plus its plan records (`9b871a6`) and the v1.7.0 release records (`ce2f45e`).
-**It must be merged as a merge commit, never squashed.**
+**Feature 27 — the daily spending view** is **merged into `dev`** as `1b9ecfb` (PR #106,
+squashed, from `feat/daily-spending-view`). **It is not released**: it reaches `main` with
+the next `dev` → `main` release PR. The Trend card
+gains a fourth tab, **Daily**: one column per day of the range, four figures above it
+(spent, average a day, busiest day, no-spend days), a table twin listing the days that
+had spending. It is offered for ranges of up to 366 days and left out for longer ones,
+and it is on in shared spaces too. **No migration and no dependency**, but unlike
+Feature 26 **it adds a query**: `sumByDay`, one grouped read beside `sumByMonth`, sharing
+its grouping through a new `sumGroupedBy`. See Feature 27 in the Roadmap.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (501, from 473) and
+`pnpm test:e2e` (60, against a production build, after pulling `dev`) — and, unlike
+Feature 26, **against the real database.** Seven expenses were entered through the form
+on the dev server across three months and the page read back figures worked out by hand
+beforehand: the month's total, a day with two entries summed to one column, the busiest
+day, the average over the days that have happened, the count of no-spend days, the
+three-month and twelve-month ranges, and the tab disappearing for a six-year custom
+range. Arrow keys, Home and End, hover, and the tab surviving a range change were
+exercised in the browser; light, dark and a 390px phone were looked at. The seven entries
+were then deleted and the server's list re-read to confirm none remained.
+**Not verified:** the reports page still has no browser test of its own (the seeding
+above was a throwaway script, not a spec, because a spec adding spending to the shared
+test account could disturb the others' counts); a touch scrub on a real
+phone was not tried (the 390px check was a desktop browser at that width); and nobody has
+looked at it with a real month of the repo owner's own data.
+
+**Release PR open — `dev` → `main`, to be tagged `v1.9.0`, not yet merged.** It carries
+one feature: **#106** (Feature 27 — the daily spending view, merged into `dev` as
+`1b9ecfb`), plus its plan record (`5d7031c`) and the v1.8.0 release records (`a56f1cc`,
+`5caef0d`). **It must be merged as a merge commit, never squashed.**
+
+**Minor bump: `v1.8.0` → `v1.9.0`.** Additive from where a user stands: the Trend card on
+the reports page gains a fourth tab, and nothing is removed or asked of anyone. The default
+view is still the chart that was there before.
+
+**This release holds no migration and no dependency change.** `git diff main dev` touches
+`PLAN.md`, `components/reports/{daily-chart,report-body}.tsx`, `lib/reports/{daily,range}*`,
+`lib/db/models/report.model.ts`, `lib/repositories/transaction-query.ts`,
+`lib/services/report.service*` and `personal-ledger.test.ts`, and nothing else: no
+`package.json`, no lockfile, nothing under `lib/db/migrations`, no `app/globals.css`.
+**It does add one query** — `sumByDay`, a grouped read beside `sumByMonth` — so unlike
+v1.8.0 this release changes what the server asks the database, though not the schema.
+`public/sw.js` is **byte-identical to the live file** (same hash live and on `main`), so
+Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_5zZHqaPu7w6Rj2PthaUmz4PSgGXQ` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+answer 200; `/api/export` and `/reports` 307 signed out.
+
+**Verified on `dev` before the PR:** `pnpm typecheck`, `pnpm lint` and `pnpm test` (501)
+re-run on `dev`; `pnpm test:e2e` (60, against a production build) was run on the feature
+branch, and `git diff` of that branch's last commit against `dev` outside `PLAN.md` is
+empty, so it is the same code. The new query was also run against the real dev database
+(see Feature 27). No Dependabot PRs are open.
+
+**What this release leaves unverified, as written before the merge:** nothing signed-out can
+see a chart; the reports page has no browser test; **nobody has opened `/reports` signed
+in with the repo owner's own data on this build**, and a touch scrub of the daily chart on a
+real phone has not been tried. The v1.8.0 gaps (the tab choice on a phone, the donut's
+colours on real categories) are unchanged.
+
+---
+
+**Released 2026-10-25** — `703b1e1` (PR #105), **tagged `v1.8.0`** (annotated, on
+`703b1e1`) the same day, with a GitHub release page, "v1.8.0 — more ways to read the
+reports page". It carries one feature: **#104** (Feature 26 — line, net and donut views
+on the reports page, merged into `dev` as `ad429cc`), plus its plan records (`9b871a6`)
+and the v1.7.0 release records (`ce2f45e`).
+
+**Merged with a merge commit, and the history is convergent.** `703b1e1` has two parents
+(`f48a71a` and `a56f1cc`), `git diff main dev` is empty, and `dev` is an ancestor of
+`main`. Nothing to reconverge. **The PR read `BLOCKED` / `REVIEW_REQUIRED` when the
+assistant tried to merge it** — there is no classic branch protection on `main`
+(the API answers 404), so it is a rule that needs a review, and the PR is authored from
+the same account that would approve it. It was merged on GitHub rather than bypassed with
+`--admin`, and the assistant did not do the merge.
+
+**The id moved and all three sides agree:** `/api/version`, the sign-in page's
+`data-dpl-id` and the Vercel status on `703b1e1` all name `dpl_5zZHqaPu7w6Rj2PthaUmz4PSgGXQ`
+(it was `dpl_ER1ESqMbab5jYSLYadUo89veku18`). The status read `pending` and then `success`
+within about thirty seconds.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`), all signed out:
+`/sign-in`, `/offline`, `/forgot-password`, `/manifest.webmanifest` and `/sw.js` answer
+200 (`/sw.js` as JavaScript, byte-identical to `main`'s blob, hash `d32773d…`); `/`,
+`/reports` and `/api/export` 307 to sign-in. A made-up session cookie on `/reports` 307s
+to `/sign-in` and on `/sign-in` answers 200, with no loop.
+
+**Still unverified, and it is all of what this release is for:** a chart cannot be seen
+signed out. **Nobody has opened `/reports` signed in with real data on this build.** The
+views were looked at with mock data, and the test account has no spending. The tab
+choice on a real phone, and how the donut's colours read on the repo owner's own
+categories, are open until somebody does.
+
+**Dependabot** was not checked for this release.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on what
+shipped and why, now historical). It carried one feature: **#104**, plus its plan
+records and the v1.7.0 release records.
 
 **Minor bump: `v1.7.0` → `v1.8.0`.** Additive from where a user stands: the reports page
 gains tabs over charts it already had, and nothing is removed or asked of anyone. The
@@ -35,18 +131,15 @@ answer 200; `/api/export` and `/reports` 307 signed out.
 `pnpm test:e2e` (60, against a production build), run on the feature branch after
 pulling `dev`; `dev` has gained only plan records since.
 
-**What this release will leave unverified, and it is all of what it is for:** nothing
-signed-out can see a chart. **Nobody has looked at the new views with real data** — the
-screenshots used mock data and the test account has no spending. The reports page has no
-browser test. Whether the tab choice behaves on a real phone, and whether the donut's
-colours read well on the repo owner's own categories, are open until somebody signed in
-opens `/reports`. The carried-over list from v1.7.0 below is unchanged by this release.
+**What this release left unverified, as written before the merge:** nothing signed-out
+can see a chart, the reports page has no browser test, and the carried-over list from
+v1.7.0 below is unchanged by this release.
 
 ---
 
 **Feature 26 — more ways to read the reports page** is **merged into `dev`** as
-`ad429cc` (PR #104, squashed, from `feat/report-chart-views`). **It is not released**: it
-reaches `main` with the next `dev` → `main` release PR. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
+`ad429cc` (PR #104, squashed, from `feat/report-chart-views`, which is deleted) and
+**released in v1.8.0**. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
 category card offers **Bars** (existing) and **Donut**. A shared space gets Columns and
 Lines only — it records no income, so there is nothing to net — and the Trend chart there
 now draws just Expenses rather than three series with two of them flat. No migration, no
@@ -3228,6 +3321,39 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
+### Feature 27 — The daily spending view ✅ merged (PR #106)
+
+- [x] `sumByDay` (`lib/repositories/transaction-query.ts`), with `sumByMonth` and it now
+      sharing `sumGroupedBy`; `ReportData.byDay` and `DailyTotal`
+- [x] `daysIn` and `MAX_DAILY_DAYS` (`lib/reports/range.ts`) — the day axis, empty past a
+      year; `ReportService.getReport` takes `now` and skips the query for a long range
+- [x] `lib/reports/daily.ts` — `summariseDays` and `dayTicks`
+- [x] `DailyChart` (`components/reports/daily-chart.tsx`) and a **Daily** tab in the Trend
+      card; table twin
+- [x] 28 unit tests: `daily.test.ts` (22) and the service (6), including that the daily
+      query is asked for exactly what the total is
+
+**Why one focusable plot and not a band per day.** There can be 366 columns. A hover
+band each would be a 1.5px target and a year of tab stops, so the pointer picks the
+nearest day by position and the arrow keys step through them (Page Up/Down by a week,
+Home and End). Keyboard focus lands on the busiest day. `touch-pan-y` leaves vertical
+scrolling to the page so a horizontal drag scrubs.
+
+**Why spending only, and why 366 days.** A day's income is not a figure anyone reads,
+and savings are set aside rather than spent; the personal view widens across the owner's
+spaces exactly as the monthly buckets do. Past a year the columns are thinner than a
+pointer and the tab is dropped, and the query is not run — `byDay` empty means "too long
+to draw", which is not the same as a range with no spending (every day present, zero).
+
+**Days still to come are left out of the figures, with one exception.** A range ends at
+the end of its last month, so without this the average is dragged down and the no-spend
+count padded by days nobody has had yet. **The exception is a day with spending on it.**
+The form dates an entry by the person's own calendar and "today" on the server is UTC, so
+for someone ahead of UTC — Sri Lanka is UTC+5:30 — an expense logged between their
+midnight and 05:30 is filed under a date the server calls tomorrow. Treating that day as
+future dropped real spending and made the strip disagree with the Expenses tile; caught
+reading the screenshots, fixed, and pinned by a test.
+
 ### Feature 26 — More ways to read the reports page ✅ merged (PR #104)
 
 - [x] `ChartViews` (`components/charts/chart-views.tsx`) — a card with tabs over several
@@ -4824,6 +4950,16 @@ Things already hit, so they are not hit twice.
   branch that ran the dev server has an unrelated modification to that file waiting in
   `git status`. Revert it (`git checkout -- AGENTS.md`) before committing unless the
   change is deliberate.
+- **A grouped query's expression has to be the same text in the select and the
+  group-by.** `sumGroupedBy` takes the whole `to_char(...)` expression and uses that one
+  object for both. Passing the format string as a bound parameter instead puts two `$n`
+  placeholders in the statement, which Postgres treats as two different expressions even
+  when they carry the same value, and the query fails with "must appear in the GROUP BY
+  clause".
+- **A "date" in this app is the person's calendar day, and "today" on the server is
+  UTC.** They disagree for part of every day for anyone not on UTC. Anything that
+  compares an entry's date to now has to expect an entry filed a day ahead — see the
+  daily view's `isFuture`.
 - **A circle inside a stretched SVG is an ellipse.** The line chart draws its lines in
   a `preserveAspectRatio="none"` SVG with `vector-effect: non-scaling-stroke` so they
   stay 2px at any width, and lays its dots over it as HTML by percentage instead.

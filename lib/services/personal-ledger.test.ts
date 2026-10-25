@@ -47,6 +47,7 @@ vi.mock("@/lib/repositories/transaction-query", async () => {
     sumBaseAmountByCategory: vi.fn(),
     sumByCategoryWithNames: vi.fn(),
     sumByMonth: vi.fn(),
+    sumByDay: vi.fn(),
   };
 });
 
