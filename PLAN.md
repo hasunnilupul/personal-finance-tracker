@@ -10,6 +10,40 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Release PR open — `dev` → `main`, not yet merged.** It carries one feature: **#104**
+(Feature 26 — line, net and donut views on the reports page, merged into `dev` as
+`ad429cc`), plus its plan records (`9b871a6`) and the v1.7.0 release records (`ce2f45e`).
+**It must be merged as a merge commit, never squashed.**
+
+**Minor bump: `v1.7.0` → `v1.8.0`.** Additive from where a user stands: the reports page
+gains tabs over charts it already had, and nothing is removed or asked of anyone. The
+default view in each card is the chart that was there before.
+
+**This release holds no migration and no dependency change** — the lowest-risk shape it
+can have. `git diff main dev` touches `PLAN.md`, `app/globals.css` (six colour tokens),
+`components/charts/chart-views.tsx`, `components/reports/*` and `lib/reports/chart-scale*`
+and nothing else: no `package.json`, no lockfile, nothing under `lib/db/migrations`.
+`public/sw.js` is **byte-identical to the live file** (same hash, `d32773d…`, live and on
+`main`), so Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_ER1ESqMbab5jYSLYadUo89veku18` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+answer 200; `/api/export` and `/reports` 307 signed out.
+
+**Verified on `dev` before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (473) and
+`pnpm test:e2e` (60, against a production build), run on the feature branch after
+pulling `dev`; `dev` has gained only plan records since.
+
+**What this release will leave unverified, and it is all of what it is for:** nothing
+signed-out can see a chart. **Nobody has looked at the new views with real data** — the
+screenshots used mock data and the test account has no spending. The reports page has no
+browser test. Whether the tab choice behaves on a real phone, and whether the donut's
+colours read well on the repo owner's own categories, are open until somebody signed in
+opens `/reports`. The carried-over list from v1.7.0 below is unchanged by this release.
+
+---
+
 **Feature 26 — more ways to read the reports page** is **merged into `dev`** as
 `ad429cc` (PR #104, squashed, from `feat/report-chart-views`). **It is not released**: it
 reaches `main` with the next `dev` → `main` release PR. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
