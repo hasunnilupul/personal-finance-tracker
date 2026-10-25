@@ -10,9 +10,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Feature 26 — more ways to read the reports page** is built on `feat/report-chart-views`
-and its PR is open into `dev`; **it is waiting on the repo owner to merge it.** The
-Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
+**Feature 26 — more ways to read the reports page** is **merged into `dev`** as
+`ad429cc` (PR #104, squashed, from `feat/report-chart-views`). **It is not released**: it
+reaches `main` with the next `dev` → `main` release PR. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
 category card offers **Bars** (existing) and **Donut**. A shared space gets Columns and
 Lines only — it records no income, so there is nothing to net — and the Trend chart there
 now draws just Expenses rather than three series with two of them flat. No migration, no
@@ -3194,7 +3194,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 26 — More ways to read the reports page ✅ done, PR open
+### Feature 26 — More ways to read the reports page ✅ merged (PR #104)
 
 - [x] `ChartViews` (`components/charts/chart-views.tsx`) — a card with tabs over several
       charts of the same data; the showing view is the only one mounted
