@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Response, test } from "@playwright/test";
 
 import { E2E_SHARED_SPACE, restorePersonalSpace, STORAGE_STATE } from "./support";
 
@@ -17,6 +17,13 @@ import { E2E_SHARED_SPACE, restorePersonalSpace, STORAGE_STATE } from "./support
  * failure that found this.
  */
 test.describe.configure({ mode: "serial" });
+
+/** A Server Action's response — the write has actually been answered. */
+const isServerAction = (response: Response) => {
+  const request = response.request();
+
+  return request.method() === "POST" && "next-action" in request.headers();
+};
 
 test.use({ storageState: STORAGE_STATE });
 
@@ -201,7 +208,13 @@ test.describe("a shared expense", () => {
     await page.getByRole("button", { name: "Add expense" }).first().click();
     await page.getByLabel("Amount").fill(String(AMOUNT));
     await page.getByLabel("Note").fill(NOTE);
+    // The row appears the moment the form is submitted, before the server has
+    // saved anything, so seeing it proves nothing about the write. Wait for the
+    // answer: the next step reloads the page, which would cancel a save in flight.
+    const saved = page.waitForResponse(isServerAction, { timeout: 60_000 });
+
     await page.getByRole("button", { name: "Add expense", exact: true }).last().click();
+    await saved;
 
     await expect(page.getByText(NOTE)).toBeVisible({ timeout: 15_000 });
 
@@ -230,11 +243,18 @@ test.describe("a shared expense", () => {
 
     page.on("dialog", (dialog) => dialog.accept());
 
+    // A deleted row leaves the list at once, so the list emptying says nothing
+    // about the delete. Ending the test with the request still in flight cancels
+    // it and leaves the row behind, which is how this suite has been left with
+    // stray rows before.
+    const deleted = page.waitForResponse(isServerAction, { timeout: 60_000 });
+
     await page
       .getByRole("listitem")
       .filter({ hasText: NOTE })
       .getByRole("button", { name: "Delete" })
       .click();
+    await deleted;
 
     await expect(page.getByText(NOTE)).toHaveCount(0, { timeout: 15_000 });
   });

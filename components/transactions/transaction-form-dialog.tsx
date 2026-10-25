@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { type FormEvent, useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ import {
   TransactionKind,
   TransactionListItem,
 } from "@/lib/db/models/transaction.model";
+import type { Draft } from "@/lib/transactions/optimistic";
 
 const initialState: TransactionFormState = {};
 
@@ -51,6 +52,14 @@ interface TransactionFormProps {
   categories: Category[];
   baseCurrency: string;
   transaction?: TransactionListItem;
+  /** What a failed save had posted, so the person gets their entry back. */
+  prefill?: Draft;
+  /**
+   * Offered the form before it posts. Returning `true` means the page has taken
+   * the submission over — shown it at once, and will send it itself — and the
+   * form should do nothing more. `false` leaves the ordinary path to run.
+   */
+  onOptimisticSubmit?: (formData: FormData) => boolean;
   onDone: () => void;
 }
 
@@ -66,6 +75,8 @@ const TransactionForm = ({
   categories,
   baseCurrency,
   transaction,
+  prefill,
+  onOptimisticSubmit,
   onDone,
 }: TransactionFormProps) => {
   const router = useRouter();
@@ -76,18 +87,39 @@ const TransactionForm = ({
     initialState,
   );
 
-  const [currency, setCurrency] = useState(transaction?.currency ?? baseCurrency);
-  const [categoryId, setCategoryId] = useState(
-    transaction?.categoryId ? String(transaction.categoryId) : "none",
+  const [currency, setCurrency] = useState(
+    prefill?.currency ?? transaction?.currency ?? baseCurrency,
   );
-  const [liquidity, setLiquidity] = useState<SavingsLiquidity>(transaction?.liquidity ?? "liquid");
+  const [categoryId, setCategoryId] = useState(
+    prefill
+      ? prefill.categoryId
+        ? String(prefill.categoryId)
+        : "none"
+      : transaction?.categoryId
+        ? String(transaction.categoryId)
+        : "none",
+  );
+  const [liquidity, setLiquidity] = useState<SavingsLiquidity>(
+    prefill?.liquidity ?? transaction?.liquidity ?? "liquid",
+  );
   // A withdrawal is stored as a negative amount — same signed-delta
   // convention a savings goal's contribution uses. The amount field always
   // shows and accepts a positive magnitude; direction is a separate control
   // rather than a minus sign typed into it, which is easy to miss.
   const [direction, setDirection] = useState<"add" | "withdraw">(
-    transaction && Number(transaction.amount) < 0 ? "withdraw" : "add",
+    prefill?.direction ?? (transaction && Number(transaction.amount) < 0 ? "withdraw" : "add"),
   );
+
+  // Decided in `onSubmit`, not inside the form's action. An action runs in a
+  // transition, and a transition holds back every state update made within it
+  // until its async work is done — which would keep this dialog open for exactly
+  // as long as the server takes, the thing this exists to avoid. `onSubmit` is an
+  // ordinary event; calling `preventDefault` there stops React starting the action.
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (onOptimisticSubmit?.(new FormData(event.currentTarget))) {
+      event.preventDefault();
+    }
+  };
 
   useEffect(() => {
     if (state.success) {
@@ -136,7 +168,7 @@ const TransactionForm = ({
         </DialogDescription>
       </DialogHeader>
 
-      <form action={formAction} className="flex flex-col gap-4">
+      <form action={formAction} onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input type="hidden" name="kind" value={kind} />
         {transaction && <input type="hidden" name="id" value={transaction.id} />}
         <input type="hidden" name="currency" value={currency} />
@@ -179,7 +211,13 @@ const TransactionForm = ({
               name="amount"
               inputMode="decimal"
               placeholder="0.00"
-              defaultValue={transaction ? Math.abs(Number(transaction.amount)).toFixed(2) : ""}
+              defaultValue={
+                prefill
+                  ? prefill.amount
+                  : transaction
+                    ? Math.abs(Number(transaction.amount)).toFixed(2)
+                    : ""
+              }
               required
               autoFocus
             />
@@ -216,7 +254,7 @@ const TransactionForm = ({
             id="date"
             name="date"
             type="date"
-            defaultValue={toDateInput(transaction?.date ?? new Date())}
+            defaultValue={prefill?.date ?? toDateInput(transaction?.date ?? new Date())}
             required
           />
           {fieldError("date") && <p className="text-destructive text-sm">{fieldError("date")}</p>}
@@ -271,7 +309,7 @@ const TransactionForm = ({
             name="description"
             placeholder="Optional"
             maxLength={255}
-            defaultValue={transaction?.description ?? ""}
+            defaultValue={prefill ? (prefill.description ?? "") : (transaction?.description ?? "")}
           />
           {fieldError("description") && (
             <p className="text-destructive text-sm">{fieldError("description")}</p>
@@ -303,6 +341,8 @@ interface TransactionFormDialogProps {
   baseCurrency: string;
   /** Provided when editing; absent when adding. */
   transaction?: TransactionListItem;
+  prefill?: Draft;
+  onOptimisticSubmit?: (formData: FormData) => boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -318,6 +358,8 @@ const TransactionFormDialog = ({
   categories,
   baseCurrency,
   transaction,
+  prefill,
+  onOptimisticSubmit,
   open,
   onOpenChange,
 }: TransactionFormDialogProps) => {
@@ -325,11 +367,13 @@ const TransactionFormDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <TransactionForm
-          key={transaction?.id ?? "new"}
+          key={`${transaction?.id ?? "new"}-${prefill ? "again" : "fresh"}`}
           kind={kind}
           categories={categories}
           baseCurrency={baseCurrency}
           transaction={transaction}
+          prefill={prefill}
+          onOptimisticSubmit={onOptimisticSubmit}
           onDone={() => onOpenChange(false)}
         />
       </DialogContent>

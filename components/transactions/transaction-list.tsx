@@ -24,7 +24,6 @@ interface TransactionListProps {
    * space and would refuse.
    */
   activeSpaceId: string;
-  busyId: number | null;
   onEdit: (transaction: TransactionListItem) => void;
   onDelete: (transaction: TransactionListItem) => void;
 }
@@ -73,7 +72,6 @@ const TransactionList = ({
   baseCurrency,
   showAuthor,
   activeSpaceId,
-  busyId,
   onEdit,
   onDelete,
 }: TransactionListProps) => {
@@ -82,7 +80,9 @@ const TransactionList = ({
       {items.map((item) => {
         const isConverted = item.currency !== baseCurrency;
         const elsewhere = item.organizationId !== activeSpaceId;
-        const busy = busyId === item.id;
+        // A negative id is a row the page made up while its write is in flight.
+        // It has no real id to edit or delete by yet, and is shown a little faded.
+        const busy = item.id < 0;
         const style = amountStyle(kind, item.baseAmount);
         const fallbackIcon =
           kind === "savings" ? (LIQUIDITY_ICON[item.liquidity ?? "liquid"] ?? "•") : "•";
