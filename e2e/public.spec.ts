@@ -45,6 +45,63 @@ test.describe("signed out", () => {
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
+  test("sign-in offers a way back in for somebody who forgot the password", async ({ page }) => {
+    await page.goto("/sign-in");
+
+    await page.getByRole("link", { name: "Forgot password?" }).click();
+
+    await expect(page).toHaveURL(/\/forgot-password/);
+    await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+  });
+
+  test("asking for a reset says the same thing whether or not the address exists", async ({
+    page,
+  }) => {
+    // Two different addresses, one answer: a page that told them apart would be
+    // a way to list who has an account. Nothing here sends mail: the test
+    // server runs with Resend unset (see `playwright.config.ts`).
+    const answers: string[] = [];
+
+    for (const email of [E2E_EMAIL, "nobody-at-all@financeflow.test"]) {
+      await page.goto("/forgot-password");
+      await page.getByLabel("Email").fill(email);
+      await page.getByRole("button", { name: "Send reset link" }).click();
+
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({
+        timeout: 15_000,
+      });
+
+      answers.push(
+        (await page.getByText("If there is an account for").textContent())?.replace(email, "") ??
+          "",
+      );
+    }
+
+    expect(answers[0]).toBe(answers[1]);
+  });
+
+  test("a reset link with no valid token says it has expired", async ({ page }) => {
+    await page.goto("/reset-password");
+
+    await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Send a new link" })).toBeVisible();
+
+    await page.goto("/reset-password?error=INVALID_TOKEN");
+
+    await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
+  });
+
+  test("a made-up token is refused when the new password is submitted", async ({ page }) => {
+    await page.goto("/reset-password?token=not-a-real-token");
+
+    await page.getByLabel("New password", { exact: true }).fill("a-brand-new-password");
+    await page.getByLabel("Confirm new password").fill("a-brand-new-password");
+    await page.getByRole("button", { name: "Change password" }).click();
+
+    await expect(page.locator("form p[role='alert']")).toBeVisible();
+    await expect(page).toHaveURL(/\/reset-password/);
+  });
+
   test("the offline page answers on its own", async ({ page }) => {
     // Precached at install so a navigation with no network has something to
     // land on. If it stops answering, the service worker's fallback is a 404

@@ -31,6 +31,8 @@ const APP_DIR = path.join(process.cwd(), "app");
 const NO_DATA_TO_WAIT_FOR: Record<string, string> = {
   "(auth)/sign-in": "A form. No query runs before it renders.",
   "(auth)/sign-up": "A form. No query runs before it renders.",
+  "(auth)/forgot-password": "A form. No query runs before it renders.",
+  "(auth)/reset-password": "A form, or a notice. Reads the URL and nothing else.",
   offline: "Precached and static — it is what the service worker serves offline.",
 };
 

@@ -9,8 +9,8 @@ import { signIn, signUp } from "@/lib/auth/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import BrandMark from "@/components/brand-mark";
+import AuthCard from "@/components/auth-card";
+import TwoFactorChallenge from "@/components/two-factor-challenge";
 import { logger } from "@/lib/logger";
 import { purgePrivateCaches } from "@/lib/pwa/private-cache";
 
@@ -18,9 +18,11 @@ interface AuthFormProps {
   mode: "sign-in" | "sign-up";
   /** In-app path to land on once authenticated. Already sanitised by the page. */
   redirectTo?: string;
+  /** Good news to show above the form, such as a password having just been reset. */
+  notice?: string;
 }
 
-function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
+function AuthForm({ mode, redirectTo = "/", notice }: AuthFormProps) {
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -29,6 +31,8 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // True once the password was accepted for an account with two-factor on.
+  const [challenged, setChallenged] = useState(false);
 
   const isSignUp = mode === "sign-up";
 
@@ -51,7 +55,7 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
             throw new Error(error.message);
           }
         } else {
-          const { error } = await signIn.email({
+          const { data, error } = await signIn.email({
             email,
             password,
             callbackURL: redirectTo,
@@ -59,6 +63,16 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
 
           if (error) {
             throw new Error(error.message);
+          }
+
+          // The password was right but the account wants a second factor, so
+          // there is no session yet. Swap in the code step and stop here — the
+          // purge and the redirect below belong to the end of the last step.
+          if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+            setChallenged(true);
+            setPassword("");
+
+            return;
           }
         }
 
@@ -80,6 +94,10 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
     [isSignUp, name, email, password, redirectTo, router],
   );
 
+  if (challenged) {
+    return <TwoFactorChallenge redirectTo={redirectTo} onStartOver={() => setChallenged(false)} />;
+  }
+
   const alternateHref = (() => {
     const path = isSignUp ? "/sign-in" : "/sign-up";
 
@@ -87,103 +105,91 @@ function AuthForm({ mode, redirectTo = "/" }: AuthFormProps) {
   })();
 
   return (
-    <main className="bg-background flex min-h-svh items-center justify-center px-4">
-      <Card className="w-full max-w-sm p-6">
-        <div className="mb-6">
-          {/*
-            The card is the first thing anybody sees of this app, and until now
-            it never said whose it was. The mark is `decorative` because the
-            wordmark beside it already carries the name — without that, a screen
-            reader announces "FinanceFlow FinanceFlow" for one logo.
-          */}
-          <div className="mb-6 flex items-center gap-2.5">
-            <BrandMark className="size-7 shrink-0" gradientId="ff-auth-mark-gradient" decorative />
+    <AuthCard
+      title={isSignUp ? "Create an account" : "Welcome back"}
+      description={isSignUp ? "Sign up to get started" : "Sign in to your account to continue"}
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {isSignUp && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="name">Name</Label>
 
-            {/*
-              Set like the splash's wordmark rather than like a heading — same
-              uppercase, same tracking, same muted colour. It is branding, not
-              the page's title, and at heading weight it competed with the one
-              real heading directly beneath it.
-            */}
-            <span className="text-muted-foreground text-sm font-medium tracking-[0.14em] uppercase">
-              FinanceFlow
-            </span>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+              required
+            />
           </div>
+        )}
 
-          <h1 className="text-foreground text-2xl font-semibold tracking-tight">
-            {isSignUp ? "Create an account" : "Welcome back"}
-          </h1>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="email">Email</Label>
 
-          <p className="text-muted-foreground mt-1 text-sm">
-            {isSignUp ? "Sign up to get started" : "Sign in to your account to continue"}
-          </p>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {isSignUp && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Name</Label>
-
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                required
-              />
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
 
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              minLength={8}
-              required
-            />
+            {!isSignUp && (
+              <Link
+                href="/forgot-password"
+                className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            )}
           </div>
 
-          {error && (
-            <p className="text-destructive text-sm" role="alert">
-              {error}
-            </p>
-          )}
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={isSignUp ? "new-password" : "current-password"}
+            minLength={8}
+            required
+          />
+        </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Please wait..." : isSignUp ? "Create account" : "Sign in"}
-          </Button>
-        </form>
+        {notice && !error && (
+          <p className="text-sm text-emerald-600 dark:text-emerald-400" role="status">
+            {notice}
+          </p>
+        )}
 
-        <p className="text-muted-foreground mt-6 text-center text-sm">
-          {isSignUp ? "Already have an account? " : "Don't have an account? "}
+        {error && (
+          <p className="text-destructive text-sm" role="alert">
+            {error}
+          </p>
+        )}
 
-          <Link
-            href={alternateHref}
-            className="text-foreground font-medium underline-offset-4 hover:underline"
-          >
-            {isSignUp ? "Sign in" : "Sign up"}
-          </Link>
-        </p>
-      </Card>
-    </main>
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading ? "Please wait..." : isSignUp ? "Create account" : "Sign in"}
+        </Button>
+      </form>
+
+      <p className="text-muted-foreground mt-6 text-center text-sm">
+        {isSignUp ? "Already have an account? " : "Don't have an account? "}
+
+        <Link
+          href={alternateHref}
+          className="text-foreground font-medium underline-offset-4 hover:underline"
+        >
+          {isSignUp ? "Sign in" : "Sign up"}
+        </Link>
+      </p>
+    </AuthCard>
   );
 }
 

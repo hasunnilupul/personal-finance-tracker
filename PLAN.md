@@ -10,11 +10,162 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries one merge since
-`v1.5.0`: **#99** (adds, edits and deletes on the Expenses, Income and Savings lists
-show before the server has answered, and the page puts itself back if the save fails)
-— plus its plan record and the v1.5.0 release records that were committed to `dev`
-after that release was cut.
+**Release v1.7.0 is open** — `dev` → `main`, to be merged by the repo owner **as a merge
+commit, never squashed**. It carries **#101** (Feature 24 — change password, forgot and
+reset password; merged as `6d8065b`) and **#102** (Feature 25 — optional two-step
+verification; merged as `e92361d`), plus their plan records. Both feature PRs were
+merged into `dev` by the assistant on the repo owner's instruction that it may; the
+release PR is the owner's.
+
+**Minor bump: `v1.6.0` → `v1.7.0`.** Additive from where a user stands: two new ways in
+and out of an account, nothing removed, and nobody is asked for anything new — two-step
+verification is off until somebody turns it on.
+
+**This release holds a migration and a dependency, so the deploy wants watching, not
+glancing at.** `20261025070731_greedy_thunderbird` creates `two_factor` and adds
+`user.two_factor_enabled` (default `false`, nullable), run by `build:deploy` before
+`next build` on the production database; it is additive and was applied to the
+development database first. `qrcode.react` ^4.2.0 is the only new package.
+`public/sw.js` is **byte-identical to the live file** (checked: same hash on `main` and
+`dev`), so Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js` 200 as JavaScript;
+`/api/export` 307s signed out. **`/forgot-password` and `/reset-password` answer 307**,
+because they do not exist there yet — after the merge they should answer 200. Dependabot
+reads 0 open alerts.
+
+**Verified on `dev` at `e92361d`'s tree:** `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(445), `pnpm build` and `pnpm test:e2e` (60). The browser suite ran against the
+development database, with the migration applied. It leaves two more stable accounts
+there by design — `e2e-security@financeflow.test` and `e2e-twofactor@financeflow.test`,
+each one row like the first — and the second is switched back to one-step sign-in at
+the end of every run.
+
+**What this release leaves unverified, and it is most of the point:**
+
+- **No reset email has been received by anyone.** The suite runs with Resend unset so it
+  can never send mail. The template, the link built from `BETTER_AUTH_URL`, and the
+  redirect to `/reset-password?token=…` were read, not followed. **The first real reset
+  on production is the first time it runs.**
+- **No real authenticator app has scanned the QR code.** The suite reads the same secret
+  from the text beside it and computes the code itself.
+- **Whether production's `BETTER_AUTH_SECRET` is random.** The development one warns
+  "low-entropy" at startup. It now encrypts every authenticator secret, and changing it
+  after anyone enrols would orphan their second factor.
+- **Whether the migration applies cleanly on production** — it has run on the
+  development database and nowhere else.
+- **A trusted-device cookie** ("Trust this device for 30 days") has never been exercised.
+- Carried over, unchanged by this release: the Singapore decision, whether `PERF_LOG=1`
+  is set, pagination has no test, `staleTimes` is still an `experimental` flag, and the
+  v1.4.0 list (does Feature 13 install a new worker, does push deliver, does
+  `financeflow-private-*` disappear on sign-out, does an invitation notice reach the
+  other account, does the budget warning reach the bell, does the CSV open in a
+  spreadsheet).
+
+**After the merge** the record still wants: the merge SHA, that it has two parents, the
+new deployment id from both `/api/version` and the sign-in page, whether `/forgot-password`
+and `/reset-password` now answer 200, and whether the deploy log shows the migration
+running. Committed straight to `dev`.
+
+---
+
+The two features, as they stood when they were merged:
+
+**Feature 25 — optional two-step verification** (merged as #102, branch
+`feat/two-factor-auth`) follows Feature 24 (password change and reset, merged as
+#101, `6d8065b`).
+
+What it adds: **Settings → Account** gains a Two-step verification card. Turning it on
+asks for the password, shows a QR code and the same secret as text, and switches on
+only when a code from the authenticator app has been typed back; ten single-use
+backup codes are shown then and never again. Once on, sign-in is two steps — password,
+then a 6-digit code or a backup code, with an unticked "Trust this device for 30
+days". Turning it off and getting new backup codes both ask for the password again.
+
+**It carries a migration and a dependency**, which is what separates it from Feature
+24. `20261025070731_greedy_thunderbird` adds the `two_factor` table and
+`user.two_factor_enabled` (nullable-with-default, so the previous build keeps working
+against the new schema); it is applied to the development database and **production
+applies it on deploy** — the second time that path runs for anything but a column.
+`qrcode.react` ^4.2.0 draws the code, with no dependencies of its own.
+
+**Two security settings that are not defaults:** backup codes are stored
+`encrypted` (the plugin's default is plaintext), and the second factor is TOTP only —
+no email or SMS code, because an inbox is exactly what a password reset already
+trusts. Lockout (ten failures, fifteen minutes) and the plugin's rate limit are left
+at their defaults.
+
+**Verified on the feature branch:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (445, from 434) and
+`pnpm test:e2e` (60, from 56). The browser suite runs the whole flow with a real RFC 6238 code:
+a wrong code does not switch it on, a right one does and returns ten backup codes,
+sign-in then stops for a code and refuses a wrong one, a backup code works once and
+not twice, and turning it off puts sign-in back to one step.
+
+**Not verified:** a real authenticator app has never read the QR code — the suite
+reads the same secret from the text beside it. **`BETTER_AUTH_SECRET` now encrypts
+every authenticator secret, and the development one warns "low-entropy" at startup;
+whether production's is random is not known to this record.** Changing it after
+anyone turns this on would orphan their second factor. Recovery if somebody loses
+both phone and backup codes is a row delete in `two_factor` plus
+`user.two_factor_enabled = false` — there is deliberately no in-app path.
+
+**Feature 24 stands as merged:** a signed-in person can change their password; a
+signed-out one can request a reset link at `/forgot-password`. **Nobody has received a
+reset email** — the test server runs with Resend unset so the suite can never send
+mail — so the template, the link built from `BETTER_AUTH_URL`, and the redirect to
+`/reset-password?token=…` have been read but not followed end to end. The first real
+reset on production is the first time it runs.
+
+**Released 2026-10-25** — `5bbd4a5` (PR #100), carrying **#99** (adds, edits and
+deletes on the Expenses, Income and Savings lists show before the server has answered,
+and the page puts itself back if the save fails), plus its plan record and the v1.5.0
+release records. **Tagged `v1.6.0`** (annotated, on `5bbd4a5`) on the repo owner's
+go-ahead, the same day. It has a GitHub release page, "v1.6.0 — instant saves".
+
+**Merged with a merge commit, and the history is convergent.** `5bbd4a5` has two
+parents (`18da67f` and `de3e711`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `5bbd4a5` itself. The
+status read `pending` for about forty seconds and then `success`, so there was nothing
+to diagnose. It was `dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e` before the merge.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers **307
+with a zero-byte body**. **`public/sw.js` is untouched and byte-identical to the live
+file**, so this stays a clean Feature 13 trial — still unanswered, still needing a
+device that already had the previous build. The proxy's cookie handling held on the new
+build too: `/expenses` with a made-up session cookie answers **307 to `/sign-in`**, and
+`/sign-in` with the same cookie answers **200**, with no loop.
+
+**No migrations and no dependency changes**, so the migrate step had nothing to do.
+
+**What the live checks cannot show, and it is all of what this release is for.** They
+are signed-out requests. Nothing here shows a row appearing before its save, a failed
+save being taken back, or "Edit again" restoring the form — those need a signed-in
+session. **The first person to add an expense on the live site is the first to try
+it**, and the case most worth watching is a multi-currency entry, which is meant to
+wait for the server rather than appear early.
+
+**Dependabot reads 0 open alerts and there are no open pull requests.**
+
+**Still open:** the Singapore decision and the ~0.2s round trip under every navigation;
+whether `PERF_LOG=1` is set on Vercel (so whether `[perf]` lines exist); pagination
+has no test; `staleTimes` is still an `experimental` flag; and the list v1.4.0 left —
+whether Feature 13 installs a new worker, whether push delivers, whether
+`financeflow-private-*` disappears on sign-out, whether an invitation notice reaches
+the other account, whether the budget warning arrives in the bell, and whether the CSV
+opens in a spreadsheet.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on
+what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
 and the diff over `package.json` and `pnpm-lock.yaml` are both empty; the deploy-time
@@ -71,10 +222,6 @@ JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**
 `pnpm build` and `pnpm test:e2e` (48) — run on #99's branch before it merged; `dev` has
 had nothing since but this record. The development database held no stray test rows
 afterwards.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, and the same URL-by-URL answers.
-Merge it as a **merge commit**.
 
 **Before that: optimistic add, edit and delete** — merged as **#99** (`9cf7a87`).
 
@@ -2303,6 +2450,12 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
 | Transaction list default | Current UTC month for expenses and income; savings opens on everything | A ledger that opens on all history only gets slower; savings is a pool, not a monthly flow |
 | Empty date in the URL    | Present-but-empty means "no limit", absent means "default month" | Without the distinction a user could never see past the default range |
+| Password reset delivery  | Emailed link, one hour, single use        | better-auth's own flow; the link is a credential, so it is short-lived and never logged in production |
+| Reset / change sessions  | Both revoke the account's other sessions  | Someone changing a password usually suspects the old one is known; a surviving session defeats it |
+| Second factor            | TOTP authenticator app only, optional     | Email/SMS codes are as strong as the inbox, which a password reset already trusts       |
+| Two-factor switch-on     | When the first code is proven, not at setup | A wrong scan or a closed tab must not lock anyone out of an account they only began to protect |
+| Backup code storage      | `encrypted`, set explicitly               | The plugin's default is plaintext; a backup code is a password that skips the second factor |
+| Account vs. space settings | Two pages, joined by a sub-navigation   | Different owners (a member can change their password, not the space's currency); no eleventh tab |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -2989,6 +3142,61 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 25 — Optional two-step verification ✅ merged (PR #102)
+
+- [x] `twoFactor` plugin in `lib/auth/auth.ts` (issuer "FinanceFlow", backup codes
+      `encrypted`); `twoFactorClient` in `lib/auth/auth-client.ts`
+- [x] Migration `20261025070731_greedy_thunderbird` — `two_factor` table,
+      `user.two_factor_enabled`; schema in `lib/db/schema/better-auth.ts`
+- [x] Settings → Account: `TwoFactorCard` — turn on (password → QR + text key →
+      code → backup codes), turn off (password), new backup codes (password)
+- [x] Sign-in: `AuthForm` swaps to `TwoFactorChallenge` when the response says
+      `twoFactorRedirect`; authenticator code or backup code; "Start over"; unticked
+      "Trust this device for 30 days"
+- [x] `lib/auth/two-factor-input.ts` — code normalisation and secret formatting, 11
+      unit tests; `e2e/two-factor.spec.ts` with `e2e/totp.ts` (RFC 6238, written out
+      rather than imported) — 4 browser tests
+- [x] `qrcode.react` added for the code itself
+
+**Why TOTP only.** A second factor sent by email or SMS is only as strong as the
+inbox or the SIM, and the inbox is what a password reset already trusts. The
+authenticator app is the one option that does not repeat the weakness it is there for.
+
+**Why it switches on at the end of setup and not the start.** Asking for a secret
+only issues one. The account is asked for a code at sign-in only after a code from the
+app has been typed back and checked, so a wrong scan or a closed tab cannot lock
+anyone out of an account they had only begun to protect.
+
+**Why there is no recovery path in the app.** Losing both the phone and the backup
+codes is meant to be a decision a person makes about another person, not a form. The
+fix is a database edit (see Current position).
+
+### Feature 24 — Password change and reset ✅ merged (PR #101)
+
+- [x] `emailAndPassword.sendResetPassword` (`lib/auth/auth.ts`), an hour's expiry,
+      `revokeSessionsOnPasswordReset`; the email is `lib/email/password-reset-email.ts`
+- [x] `/forgot-password` and `/reset-password` — public in `proxy.ts`, deliberately
+      not in `authRoutes`; the second shows "This link has expired" for a missing
+      token or `?error=INVALID_TOKEN`
+- [x] "Forgot password?" on sign-in; `?reset=1` shows a notice there afterwards
+- [x] `/settings/account` with a change-password card (current + new + confirm,
+      `revokeOtherSessions: true`); `SettingsSubnav` joins it to `/settings/space`
+- [x] The Settings tab stays lit on the account page — `isTabActive` in
+      `components/navigation/tabs.ts`, now the one definition the sidebar and both
+      bars share
+- [x] `AuthCard` extracted from `AuthForm` so four pre-sign-in pages share one frame;
+      `escapeHtml` moved out of the invitation email so two emails share one
+- [x] `lib/auth/password-policy.ts` with 6 unit tests; 4 new browser tests in
+      `e2e/account-security.spec.ts` and 4 in `e2e/public.spec.ts`
+
+**Why it is two pages and not a second tab.** Ten tabs already do not fit across a
+phone, and a member can change their own password but not the space's currency, so
+the two halves of "settings" have different owners. A sub-navigation joins them.
+
+**Reset is not an end run around anything.** A reset signs every session out and
+changes the password, and nothing else — Feature 25's second factor will still be
+asked for at the next sign-in, so an inbox alone is not a way past it.
 
 ### Feature 23 — Savings, tracked separately from goals ✅ merged (PR #71)
 
@@ -3953,6 +4161,42 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **better-auth rate-limits `/sign-in`, `/sign-up`, `/change-password` and
+  `/change-email` to 3 requests per 10 seconds, and `/request-password-reset` to 3
+  per 60 — but only in production.** The browser suite runs a production build, so it
+  meets the limit and `pnpm dev` does not. A spec that signs in per test fails on the
+  limit, falls through to sign-up, and reports "User already exists", which is a
+  message about the account that is really about the clock. Sign in once and share
+  the page (`e2e/account-security.spec.ts`). The store is in-memory, so on Vercel the
+  limit is per instance — best-effort, not a guarantee.
+- **better-auth's `twoFactor` plugin stores backup codes in plaintext unless told
+  `backupCodeOptions: { storeBackupCodes: "encrypted" }`** — the type says only
+  "plain | encrypted", with no documented default, and the behaviour is the plain
+  one. The authenticator secret is encrypted regardless. Both are keyed on
+  `BETTER_AUTH_SECRET`, so rotating it orphans every enrolled account.
+- **The plugin rate-limits every `/two-factor/*` call to 3 per 10 seconds** (and locks
+  an account for 15 minutes after ten failed codes), on top of the sign-in limit
+  above. Enabling, a wrong code and the right one is already three — a browser test
+  that does all of that has to wait out the window (`e2e/two-factor.spec.ts`).
+- **A TOTP code is probably not single-use here.** The plugin's TOTP route
+  (`two-factor/totp/index.mjs`) checks the code against the clock and has no code that
+  records the last one accepted, so a code seen over a shoulder should work until its
+  window passes. Read from the source, not tried. Backup codes *are* single-use — the
+  browser suite proves it.
+- **qrcode.react's `title` prop becomes the SVG's accessible name, not a `title`
+  attribute** — locate it with `getByRole("img", { name })`, not `getByTitle`.
+- **`getByRole("alert")` matches two elements on a client-navigated page** — the
+  form's message and Next's empty `#__next-route-announcer__`. Scope it to the form:
+  `page.locator("form p[role='alert']")`.
+- **A reset link is built from `BETTER_AUTH_URL`, not from the request.** It points at
+  `${BETTER_AUTH_URL}/api/auth/reset-password/<token>?callbackURL=%2Freset-password`,
+  which validates the token and redirects to `/reset-password?token=…` (or
+  `?error=INVALID_TOKEN`). A wrong `BETTER_AUTH_URL` therefore sends a perfectly good
+  email whose link goes to the wrong place.
+- **Changing a password signs out every other session — including the browser
+  storage state a test suite saved.** Do not run a password-change test on the
+  suite's own account; it revokes the session every other spec is holding.
 
 - **State updates inside a form `action` are held until the action's async work is
   done.** The action runs in a transition, and a transition batches every update made

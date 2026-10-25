@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { tabsFor } from "@/components/navigation/tabs";
+import { isTabActive, tabsFor } from "@/components/navigation/tabs";
 
 // One column per primary tab plus one for More, so the bar divides the width it
 // has rather than growing past it.
@@ -40,7 +40,7 @@ export default function MobileNavAndroid({ isPersonal }: { isPersonal: boolean }
   const pathname = usePathname();
 
   const { primary: primaryTabs, overflow: overflowTabs } = tabsFor(isPersonal);
-  const inOverflow = overflowTabs.some((tab) => tab.href === pathname);
+  const inOverflow = overflowTabs.some((tab) => isTabActive(tab, pathname));
 
   return (
     // `data-platform` is what makes the split visible from outside. The two
@@ -56,10 +56,10 @@ export default function MobileNavAndroid({ isPersonal }: { isPersonal: boolean }
             key={tab.href}
             href={tab.href}
             prefetch={tab.prefetch}
-            aria-current={pathname === tab.href ? "page" : undefined}
+            aria-current={isTabActive(tab, pathname) ? "page" : undefined}
             className={cn(
               barItem,
-              pathname === tab.href
+              isTabActive(tab, pathname)
                 ? "text-primary"
                 : "text-muted-foreground hover:text-foreground",
             )}
@@ -86,7 +86,7 @@ export default function MobileNavAndroid({ isPersonal }: { isPersonal: boolean }
             {overflowTabs.map((tab) => (
               <DropdownMenuItem
                 key={tab.href}
-                className={cn(pathname === tab.href && "text-primary")}
+                className={cn(isTabActive(tab, pathname) && "text-primary")}
                 render={<Link href={tab.href} prefetch={tab.prefetch} />}
               >
                 <span>{tab.icon}</span>

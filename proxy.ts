@@ -11,12 +11,23 @@ import { auth } from "@/lib/auth/auth";
  * may not have an account yet — the page tells them to create one. Accepting
  * still requires a signed-in session whose email matches the invitation.
  *
+ * `/forgot-password` and `/reset-password` are public because the person using
+ * them has, by definition, no way in. They are not in `authRoutes` below: a
+ * signed-in user following a reset link has a reason to be there.
+ *
  * `/offline` is public because the service worker precaches it, and a fetch of
  * a guarded route follows the redirect — which would store the sign-in page
  * under the offline page's URL. It holds nothing worth guarding: no session, no
  * data, just an explanation.
  */
-const publicRoutes = ["/sign-in", "/sign-up", "/accept-invitation", "/offline"];
+const publicRoutes = [
+  "/sign-in",
+  "/sign-up",
+  "/forgot-password",
+  "/reset-password",
+  "/accept-invitation",
+  "/offline",
+];
 
 /**
  * Routes that an authenticated user should never see.
