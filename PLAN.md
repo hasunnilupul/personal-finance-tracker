@@ -36,6 +36,44 @@ test account could disturb the others' counts); a touch scrub on a real
 phone was not tried (the 390px check was a desktop browser at that width); and nobody has
 looked at it with a real month of the repo owner's own data.
 
+**Release PR open — `dev` → `main`, to be tagged `v1.9.0`, not yet merged.** It carries
+one feature: **#106** (Feature 27 — the daily spending view, merged into `dev` as
+`1b9ecfb`), plus its plan record (`5d7031c`) and the v1.8.0 release records (`a56f1cc`,
+`5caef0d`). **It must be merged as a merge commit, never squashed.**
+
+**Minor bump: `v1.8.0` → `v1.9.0`.** Additive from where a user stands: the Trend card on
+the reports page gains a fourth tab, and nothing is removed or asked of anyone. The default
+view is still the chart that was there before.
+
+**This release holds no migration and no dependency change.** `git diff main dev` touches
+`PLAN.md`, `components/reports/{daily-chart,report-body}.tsx`, `lib/reports/{daily,range}*`,
+`lib/db/models/report.model.ts`, `lib/repositories/transaction-query.ts`,
+`lib/services/report.service*` and `personal-ledger.test.ts`, and nothing else: no
+`package.json`, no lockfile, nothing under `lib/db/migrations`, no `app/globals.css`.
+**It does add one query** — `sumByDay`, a grouped read beside `sumByMonth` — so unlike
+v1.8.0 this release changes what the server asks the database, though not the schema.
+`public/sw.js` is **byte-identical to the live file** (same hash live and on `main`), so
+Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_5zZHqaPu7w6Rj2PthaUmz4PSgGXQ` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+answer 200; `/api/export` and `/reports` 307 signed out.
+
+**Verified on `dev` before the PR:** `pnpm typecheck`, `pnpm lint` and `pnpm test` (501)
+re-run on `dev`; `pnpm test:e2e` (60, against a production build) was run on the feature
+branch, and `git diff` of that branch's last commit against `dev` outside `PLAN.md` is
+empty, so it is the same code. The new query was also run against the real dev database
+(see Feature 27). No Dependabot PRs are open.
+
+**What this release leaves unverified, as written before the merge:** nothing signed-out can
+see a chart; the reports page has no browser test; **nobody has opened `/reports` signed
+in with the repo owner's own data on this build**, and a touch scrub of the daily chart on a
+real phone has not been tried. The v1.8.0 gaps (the tab choice on a phone, the donut's
+colours on real categories) are unchanged.
+
+---
+
 **Released 2026-10-25** — `703b1e1` (PR #105), **tagged `v1.8.0`** (annotated, on
 `703b1e1`) the same day, with a GitHub release page, "v1.8.0 — more ways to read the
 reports page". It carries one feature: **#104** (Feature 26 — line, net and donut views
