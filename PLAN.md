@@ -10,6 +10,31 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Feature 27 — the daily spending view** is built on `feat/daily-spending-view` and its
+PR is open into `dev`; **it is waiting on the repo owner to merge it.** The Trend card
+gains a fourth tab, **Daily**: one column per day of the range, four figures above it
+(spent, average a day, busiest day, no-spend days), a table twin listing the days that
+had spending. It is offered for ranges of up to 366 days and left out for longer ones,
+and it is on in shared spaces too. **No migration and no dependency**, but unlike
+Feature 26 **it adds a query**: `sumByDay`, one grouped read beside `sumByMonth`, sharing
+its grouping through a new `sumGroupedBy`. See Feature 27 in the Roadmap.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (501, from 473) and
+`pnpm test:e2e` (60, against a production build, after pulling `dev`) — and, unlike
+Feature 26, **against the real database.** Seven expenses were entered through the form
+on the dev server across three months and the page read back figures worked out by hand
+beforehand: the month's total, a day with two entries summed to one column, the busiest
+day, the average over the days that have happened, the count of no-spend days, the
+three-month and twelve-month ranges, and the tab disappearing for a six-year custom
+range. Arrow keys, Home and End, hover, and the tab surviving a range change were
+exercised in the browser; light, dark and a 390px phone were looked at. The seven entries
+were then deleted and the server's list re-read to confirm none remained.
+**Not verified:** the reports page still has no browser test of its own (the seeding
+above was a throwaway script, not a spec, because a spec adding spending to the shared
+test account could disturb the others' counts); a touch scrub on a real
+phone was not tried (the 390px check was a desktop browser at that width); and nobody has
+looked at it with a real month of the repo owner's own data.
+
 **Released 2026-10-25** — `703b1e1` (PR #105), **tagged `v1.8.0`** (annotated, on
 `703b1e1`) the same day, with a GitHub release page, "v1.8.0 — more ways to read the
 reports page". It carries one feature: **#104** (Feature 26 — line, net and donut views
@@ -3257,6 +3282,39 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
+### Feature 27 — The daily spending view ✅ done, PR open
+
+- [x] `sumByDay` (`lib/repositories/transaction-query.ts`), with `sumByMonth` and it now
+      sharing `sumGroupedBy`; `ReportData.byDay` and `DailyTotal`
+- [x] `daysIn` and `MAX_DAILY_DAYS` (`lib/reports/range.ts`) — the day axis, empty past a
+      year; `ReportService.getReport` takes `now` and skips the query for a long range
+- [x] `lib/reports/daily.ts` — `summariseDays` and `dayTicks`
+- [x] `DailyChart` (`components/reports/daily-chart.tsx`) and a **Daily** tab in the Trend
+      card; table twin
+- [x] 28 unit tests: `daily.test.ts` (22) and the service (6), including that the daily
+      query is asked for exactly what the total is
+
+**Why one focusable plot and not a band per day.** There can be 366 columns. A hover
+band each would be a 1.5px target and a year of tab stops, so the pointer picks the
+nearest day by position and the arrow keys step through them (Page Up/Down by a week,
+Home and End). Keyboard focus lands on the busiest day. `touch-pan-y` leaves vertical
+scrolling to the page so a horizontal drag scrubs.
+
+**Why spending only, and why 366 days.** A day's income is not a figure anyone reads,
+and savings are set aside rather than spent; the personal view widens across the owner's
+spaces exactly as the monthly buckets do. Past a year the columns are thinner than a
+pointer and the tab is dropped, and the query is not run — `byDay` empty means "too long
+to draw", which is not the same as a range with no spending (every day present, zero).
+
+**Days still to come are left out of the figures, with one exception.** A range ends at
+the end of its last month, so without this the average is dragged down and the no-spend
+count padded by days nobody has had yet. **The exception is a day with spending on it.**
+The form dates an entry by the person's own calendar and "today" on the server is UTC, so
+for someone ahead of UTC — Sri Lanka is UTC+5:30 — an expense logged between their
+midnight and 05:30 is filed under a date the server calls tomorrow. Treating that day as
+future dropped real spending and made the strip disagree with the Expenses tile; caught
+reading the screenshots, fixed, and pinned by a test.
+
 ### Feature 26 — More ways to read the reports page ✅ merged (PR #104)
 
 - [x] `ChartViews` (`components/charts/chart-views.tsx`) — a card with tabs over several
@@ -4853,6 +4911,16 @@ Things already hit, so they are not hit twice.
   branch that ran the dev server has an unrelated modification to that file waiting in
   `git status`. Revert it (`git checkout -- AGENTS.md`) before committing unless the
   change is deliberate.
+- **A grouped query's expression has to be the same text in the select and the
+  group-by.** `sumGroupedBy` takes the whole `to_char(...)` expression and uses that one
+  object for both. Passing the format string as a bound parameter instead puts two `$n`
+  placeholders in the statement, which Postgres treats as two different expressions even
+  when they carry the same value, and the query fails with "must appear in the GROUP BY
+  clause".
+- **A "date" in this app is the person's calendar day, and "today" on the server is
+  UTC.** They disagree for part of every day for anyone not on UTC. Anything that
+  compares an entry's date to now has to expect an entry filed a day ahead — see the
+  daily view's `isFuture`.
 - **A circle inside a stretched SVG is an ellipse.** The line chart draws its lines in
   a `preserveAspectRatio="none"` SVG with `vector-effect: non-scaling-stroke` so they
   stay 2px at any width, and lays its dots over it as HTML by percentage instead.

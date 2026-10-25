@@ -5,17 +5,19 @@ import {
   inPersonalLedger,
   inSpace,
   sumByCategoryWithNames,
+  sumByDay,
   sumByMonth,
   sumTransactions,
 } from "@/lib/repositories/transaction-query";
 import { SpaceContext } from "@/lib/services/types";
 import {
   CategoryTotal,
+  DailyTotal,
   MonthlyTotals,
   ReportData,
   ReportSummary,
 } from "@/lib/db/models/report.model";
-import { DateRange, monthsIn } from "@/lib/reports/range";
+import { DateRange, daysIn, monthsIn } from "@/lib/reports/range";
 import { MonthKey, parseMonthKey } from "@/lib/budgets/period";
 
 /**
@@ -63,13 +65,24 @@ function dayBefore(date: string): string {
  */
 export class ReportService {
   /**
-   * Everything the reports page draws, in four queries.
+   * Everything the reports page draws, in one round of queries.
    *
-   * Both totals, the category breakdown and the monthly buckets are
+   * Both totals, the category breakdown and the monthly and daily buckets are
    * independent, so they go out together rather than in sequence.
+   *
+   * `now` is only used to tell the days still to come from the days on which
+   * nothing was spent.
    */
-  async getReport(ctx: SpaceContext, range: DateRange): Promise<ReportData> {
+  async getReport(
+    ctx: SpaceContext,
+    range: DateRange,
+    now: Date = new Date(),
+  ): Promise<ReportData> {
     const filters = { from: range.from, to: range.to };
+
+    // Empty for a range too long to draw by the day, in which case the query
+    // for it is skipped rather than run and thrown away.
+    const days = daysIn(range);
 
     // A personal report covers its owner's spending wherever they filed it,
     // including the shared spaces they spend from — that is the whole point of
@@ -96,6 +109,7 @@ export class ReportService {
       savingsTotal,
       categoryRows,
       expenseByMonth,
+      expenseByDay,
       incomeByMonth,
       savingsByMonth,
       carriedIncome,
@@ -107,6 +121,7 @@ export class ReportService {
       ctx.isPersonal ? sumTransactions(savings, earning, filters) : "0",
       sumByCategoryWithNames(expenses, spending, filters),
       sumByMonth(expenses, spending, filters),
+      days.length > 0 ? sumByDay(expenses, spending, filters) : new Map<string, string>(),
       sumByMonth(income, earning, filters),
       ctx.isPersonal ? sumByMonth(savings, earning, filters) : new Map<string, string>(),
       ctx.isPersonal ? sumTransactions(income, earning, carriedFilters) : "0",
@@ -138,7 +153,34 @@ export class ReportService {
           net: subtract(subtract(earned, spent), saved),
         } satisfies MonthlyTotals;
       }),
+      byDay: this.toDays(days, expenseByDay, now),
     };
+  }
+
+  /**
+   * One entry per day of the range, zero where nothing was spent.
+   *
+   * Spending only: a day's income is not a figure anyone reads, and savings are
+   * set aside rather than spent.
+   */
+  private toDays(days: string[], spent: Map<string, string>, now: Date): DailyTotal[] {
+    const today = now.toISOString().slice(0, 10);
+
+    return days.map((date) => {
+      const expense = spent.get(date) ?? "0.00";
+
+      return {
+        date,
+        expense,
+        // **Only a day with nothing on it can be "still to come".** The form
+        // dates an entry by the person's own calendar and `today` here is UTC,
+        // so for someone ahead of UTC an expense logged just after their
+        // midnight is filed under a day this server calls tomorrow. Calling that
+        // day future would drop real spending from the chart and leave its
+        // figures disagreeing with the Expenses tile beside it.
+        isFuture: date > today && Number(expense) === 0,
+      };
+    });
   }
 
   private toSummary(

@@ -17,6 +17,7 @@ import { DateRange } from "@/lib/reports/range";
 const sumTransactions = vi.fn();
 const sumByCategoryWithNames = vi.fn();
 const sumByMonth = vi.fn();
+const sumByDay = vi.fn();
 
 vi.mock("@/lib/repositories/transaction-query", async () => {
   const actual = await vi.importActual<typeof import("@/lib/repositories/transaction-query")>(
@@ -29,6 +30,7 @@ vi.mock("@/lib/repositories/transaction-query", async () => {
     sumTransactions: (...args: unknown[]) => sumTransactions(...args),
     sumByCategoryWithNames: (...args: unknown[]) => sumByCategoryWithNames(...args),
     sumByMonth: (...args: unknown[]) => sumByMonth(...args),
+    sumByDay: (...args: unknown[]) => sumByDay(...args),
   };
 });
 
@@ -64,6 +66,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   sumByCategoryWithNames.mockResolvedValue([]);
   sumByMonth.mockResolvedValue(new Map());
+  sumByDay.mockResolvedValue(new Map());
 });
 
 /** Which table a call targeted, by comparing against the real schema objects. */
@@ -181,5 +184,98 @@ describe("the reports summary's running balance", () => {
 
     expect(report.summary.net).toBe("700.00");
     expect(report.summary.balance).toBe("700.00");
+  });
+});
+
+describe("the daily spending", () => {
+  const NOW = new Date("2026-09-10T08:00:00.000Z");
+
+  it("has a day for every day of the range, zero where nothing was spent", async () => {
+    sumTransactions.mockResolvedValue("0.00");
+    sumByDay.mockResolvedValue(
+      new Map([
+        ["2026-09-02", "40.00"],
+        ["2026-09-09", "12.50"],
+      ]),
+    );
+
+    const report = await reportService.getReport(personal, RANGE, NOW);
+
+    expect(report.byDay).toHaveLength(30);
+    expect(report.byDay[0]).toEqual({ date: "2026-09-01", expense: "0.00", isFuture: false });
+    expect(report.byDay[1]).toEqual({ date: "2026-09-02", expense: "40.00", isFuture: false });
+    expect(report.byDay[29].date).toBe("2026-09-30");
+  });
+
+  it("marks the days after today, and not today itself", async () => {
+    sumTransactions.mockResolvedValue("0.00");
+
+    const report = await reportService.getReport(personal, RANGE, NOW);
+    const future = report.byDay.filter((day) => day.isFuture).map((day) => day.date);
+
+    expect(future[0]).toBe("2026-09-11");
+    expect(future).toHaveLength(20);
+    expect(report.byDay.find((day) => day.date === "2026-09-10")?.isFuture).toBe(false);
+  });
+
+  it("never calls a day with spending a day still to come", async () => {
+    // Someone ahead of UTC logs an expense just after their midnight: it is
+    // filed under a date this server still calls tomorrow.
+    sumTransactions.mockResolvedValue("0.00");
+    sumByDay.mockResolvedValue(new Map([["2026-09-11", "75.00"]]));
+
+    const report = await reportService.getReport(personal, RANGE, NOW);
+
+    expect(report.byDay.find((day) => day.date === "2026-09-11")).toEqual({
+      date: "2026-09-11",
+      expense: "75.00",
+      isFuture: false,
+    });
+    // …while the empty days around it still are.
+    expect(report.byDay.find((day) => day.date === "2026-09-12")?.isFuture).toBe(true);
+  });
+
+  it("asks for exactly what the total asks for, so the days can only add up to it", async () => {
+    sumTransactions.mockResolvedValue("0.00");
+
+    await reportService.getReport(personal, RANGE, NOW);
+
+    const [dayTable, dayScope, dayFilters] = sumByDay.mock.calls[0];
+
+    // The expense total is the in-range call on the same table as the daily query.
+    const expenseTotal = sumTransactions.mock.calls.find(
+      ([table, , filters]) => table === dayTable && filters?.from !== undefined,
+    );
+
+    expect(expenseTotal).toBeDefined();
+    expect(expenseTotal?.[1]).toEqual(dayScope);
+    expect(expenseTotal?.[2]).toEqual(dayFilters);
+    // …and the same widened scope the monthly buckets use.
+    expect(sumByMonth.mock.calls[0][1]).toEqual(dayScope);
+  });
+
+  it("is in the personal ledger for a personal space and the space itself for a shared one", async () => {
+    sumTransactions.mockResolvedValue("0.00");
+
+    await reportService.getReport(personal, RANGE, NOW);
+    await reportService.getReport(shared, RANGE, NOW);
+
+    expect(sumByDay.mock.calls[0][1]).toMatchObject({ within: "personal-ledger" });
+    expect(sumByDay.mock.calls[1][1]).toMatchObject({ within: "space" });
+  });
+
+  it("is empty, and not queried, for a range too long to draw by the day", async () => {
+    sumTransactions.mockResolvedValue("0.00");
+
+    const report = await reportService.getReport(
+      personal,
+      { key: "custom", from: "2020-01-01", to: "2026-09-30", label: "Long" },
+      NOW,
+    );
+
+    expect(report.byDay).toEqual([]);
+    expect(sumByDay).not.toHaveBeenCalled();
+    // The monthly trend is capped separately and still answers.
+    expect(sumByMonth).toHaveBeenCalled();
   });
 });

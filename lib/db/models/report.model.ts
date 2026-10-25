@@ -39,6 +39,26 @@ export interface MonthlyTotals {
 }
 
 /**
+ * One day's spending, in the space's base currency.
+ *
+ * Present for every day the range covers, zero included, so the chart has a
+ * column per day rather than only where entries exist.
+ */
+export interface DailyTotal {
+  /** `YYYY-MM-DD`, a whole UTC day. */
+  date: string;
+  expense: string;
+  /**
+   * After today, **and with nothing recorded on it**. A range ends at the end of
+   * its last month, so the days still to come would otherwise read as days on
+   * which nothing was spent. A day with spending is never future, however the
+   * clock reads: the spending happened, or was entered, and the figures have to
+   * agree with the totals.
+   */
+  isFuture: boolean;
+}
+
+/**
  * The headline figures for a range.
  */
 export interface ReportSummary {
@@ -76,4 +96,10 @@ export interface ReportData {
   summary: ReportSummary;
   byCategory: CategoryTotal[];
   byMonth: MonthlyTotals[];
+  /**
+   * Spending per day. Empty when the range is too long for the daily view — see
+   * `MAX_DAILY_DAYS` — which is a different thing from a range with no spending,
+   * where every day is present and zero.
+   */
+  byDay: DailyTotal[];
 }

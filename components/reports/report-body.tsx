@@ -1,5 +1,6 @@
 import CategoryBreakdown from "@/components/reports/category-breakdown";
 import CategoryDonut from "@/components/reports/category-donut";
+import DailyChart from "@/components/reports/daily-chart";
 import NetChart from "@/components/reports/net-chart";
 import { seriesFor } from "@/components/reports/series";
 import TrendChart from "@/components/reports/trend-chart";
@@ -77,6 +78,27 @@ const ReportBody = async ({ range }: ReportBodyProps) => {
                   heading: "Kept or overspent",
                   description: `Income less expenses and savings, by month, ${range.label}`,
                   content: <NetChart months={report.byMonth} baseCurrency={currency} />,
+                },
+              ]
+            : []),
+          // Empty for a range too long to draw by the day, which leaves the
+          // tab out rather than offering a chart of nothing.
+          ...(report.byDay.length > 0
+            ? [
+                {
+                  key: "daily",
+                  label: "Daily",
+                  heading: "Daily spending",
+                  description: showEarnings
+                    ? `By day, ${range.label} · every space`
+                    : `By day, ${range.label}`,
+                  content: (
+                    <DailyChart
+                      days={report.byDay}
+                      baseCurrency={currency}
+                      rangeLabel={range.label.toLowerCase()}
+                    />
+                  ),
                 },
               ]
             : []),

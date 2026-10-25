@@ -398,15 +398,48 @@ export async function sumByMonth(
   scope: TransactionScope,
   filters: TransactionFilters = {},
 ): Promise<Map<string, string>> {
-  const month = sql<string>`to_char(${table.date}, 'YYYY-MM')`;
+  return sumGroupedBy(table, scope, filters, sql<string>`to_char(${table.date}, 'YYYY-MM')`);
+}
 
+/**
+ * Totals per calendar day over a filtered set.
+ *
+ * The same read as `sumByMonth` at a finer grain, and for the same reason it
+ * needs no timezone handling: every date is anchored to midday UTC, so the day
+ * `to_char` reports is the day the entry was filed under.
+ *
+ * @returns Totals keyed by `YYYY-MM-DD`. Days with no entries are absent; the
+ * caller supplies the full axis, as it does for months.
+ */
+export async function sumByDay(
+  table: TransactionTable,
+  scope: TransactionScope,
+  filters: TransactionFilters = {},
+): Promise<Map<string, string>> {
+  return sumGroupedBy(table, scope, filters, sql<string>`to_char(${table.date}, 'YYYY-MM-DD')`);
+}
+
+/**
+ * One grouped sum, keyed by a date-derived expression.
+ *
+ * The expression is passed whole and used for both the select and the group-by,
+ * rather than being a format string bound as a parameter: Postgres matches a
+ * grouped expression by its text, and two `$n` placeholders are two different
+ * expressions even when they carry the same value.
+ */
+async function sumGroupedBy(
+  table: TransactionTable,
+  scope: TransactionScope,
+  filters: TransactionFilters,
+  bucket: SQL<string>,
+): Promise<Map<string, string>> {
   const rows = await db
-    .select({ month, total: sumBaseAmount(table, scope) })
+    .select({ bucket, total: sumBaseAmount(table, scope) })
     .from(table)
     .where(buildConditions(table, scope, filters))
-    .groupBy(month);
+    .groupBy(bucket);
 
-  return new Map(rows.map((row) => [row.month, row.total]));
+  return new Map(rows.map((row) => [row.bucket, row.total]));
 }
 
 /**

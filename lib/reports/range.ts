@@ -188,6 +188,44 @@ export function resolveRange(
  */
 export const MAX_TREND_MONTHS = 24;
 
+/**
+ * The longest range the daily view will draw.
+ *
+ * A year of days is 366 columns across a card — already thinner than a pointer.
+ * Past that the view is not offered at all rather than drawn as a smear, and the
+ * query is not run, so a hand-edited range spanning decades costs nothing.
+ */
+export const MAX_DAILY_DAYS = 366;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every day the range touches, as `YYYY-MM-DD`, in order — or none, when the
+ * range is longer than `MAX_DAILY_DAYS`.
+ *
+ * Empty rather than truncated: a daily chart of the first year of a five-year
+ * range would read as the whole story. Days are whole UTC days, so a constant
+ * 24 hours steps between them with no daylight-saving edge to trip on.
+ */
+export function daysIn(range: DateRange): string[] {
+  const start = Date.parse(`${range.from}T00:00:00.000Z`);
+  const end = Date.parse(`${range.to}T00:00:00.000Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return [];
+  }
+
+  const count = Math.round((end - start) / DAY_MS) + 1;
+
+  if (count > MAX_DAILY_DAYS) {
+    return [];
+  }
+
+  return Array.from({ length: count }, (_, index) =>
+    toDateString(new Date(start + index * DAY_MS)),
+  );
+}
+
 export function monthsIn(range: DateRange): MonthKey[] {
   const first = range.from.slice(0, 7);
   const last = range.to.slice(0, 7);
