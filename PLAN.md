@@ -10,8 +10,44 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release v1.7.0 is open** — `dev` → `main`, to be merged by the repo owner **as a merge
-commit, never squashed**. It carries **#101** (Feature 24 — change password, forgot and
+**Released 2026-10-25** — `f48a71a` (PR #103), **tagged `v1.7.0`** (annotated, on
+`f48a71a`) on the repo owner's go-ahead, the same day. It was merged by the repo owner
+**as a merge commit**: `f48a71a` has two parents (`5bbd4a5` and `28271a3`), and `dev`
+is an ancestor of `main`. The deploy went `pending` and then `success` within about a
+minute. Nothing to reconverge.
+
+**The id moved and both sides agree:** `/api/version` and the sign-in page's
+`data-dpl-id` both read `dpl_ER1ESqMbab5jYSLYadUo89veku18` (it was
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg` before).
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`), all signed out:
+`/forgot-password`, `/reset-password` and `/reset-password?error=INVALID_TOKEN` now
+answer **200** (they were 307); sign-in carries "Forgot password?"; `/sign-in`,
+`/offline` 200; `/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js`
+200 as JavaScript and byte-identical to the committed file (same hash as `main`'s blob;
+a Windows working copy hashes differently because of CRLF); `/` and
+`/api/export` 307 to sign-in. A made-up session cookie on `/settings/account` 307s to
+`/sign-in` and on `/sign-in` answers 200, with no loop. A reset request for an address
+that does not exist answered `{"status":true,"message":"If this email exists…"}`, and
+`/api/auth/two-factor/verify-totp` answers 401 `INVALID_TWO_FACTOR_COOKIE` — so the
+two-factor routes are mounted.
+
+**The migration is inferred, not read from the log.** The deploy log was not looked
+at. What shows it ran: the reset request above does a user lookup, which selects every
+column of `user`, `two_factor_enabled` included, and it answered 200 rather than
+failing on a missing column. Treat that as strong evidence, not as the log.
+
+**Still unverified, and it is all of what this release is for:** none of these can be
+seen without a signed-in session or a mailbox. **Nobody has received a reset email.**
+**No authenticator app has scanned a code from production.** Whether production's
+`BETTER_AUTH_SECRET` is random is still not known to this record. The trusted-device
+cookie has never been exercised. **The first real reset and the first real enrolment
+are the first runs of either on production.**
+
+**Dependabot** read 0 open alerts when the release PR was opened.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on what
+shipped and why, now historical). It carries **#101** (Feature 24 — change password, forgot and
 reset password; merged as `6d8065b`) and **#102** (Feature 25 — optional two-step
 verification; merged as `e92361d`), plus their plan records. Both feature PRs were
 merged into `dev` by the assistant on the repo owner's instruction that it may; the
@@ -64,11 +100,6 @@ the end of every run.
   `financeflow-private-*` disappear on sign-out, does an invitation notice reach the
   other account, does the budget warning reach the bell, does the CSV open in a
   spreadsheet).
-
-**After the merge** the record still wants: the merge SHA, that it has two parents, the
-new deployment id from both `/api/version` and the sign-in page, whether `/forgot-password`
-and `/reset-password` now answer 200, and whether the deploy log shows the migration
-running. Committed straight to `dev`.
 
 ---
 
