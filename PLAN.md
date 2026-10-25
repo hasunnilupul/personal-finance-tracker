@@ -11,9 +11,8 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 ## Current position
 
 **Feature 27 — the daily spending view** is **merged into `dev`** as `1b9ecfb` (PR #106,
-squashed, from `feat/daily-spending-view`). **It is not released**: it reaches `main` with
-the next `dev` → `main` release PR. The Trend card
-gains a fourth tab, **Daily**: one column per day of the range, four figures above it
+squashed, from `feat/daily-spending-view`, which is deleted) and **released in v1.9.0**. The
+Trend card gains a fourth tab, **Daily**: one column per day of the range, four figures above it
 (spent, average a day, busiest day, no-spend days), a table twin listing the days that
 had spending. It is offered for ranges of up to 366 days and left out for longer ones,
 and it is on in shared spaces too. **No migration and no dependency**, but unlike
@@ -36,10 +35,38 @@ test account could disturb the others' counts); a touch scrub on a real
 phone was not tried (the 390px check was a desktop browser at that width); and nobody has
 looked at it with a real month of the repo owner's own data.
 
-**Release PR open — `dev` → `main`, to be tagged `v1.9.0`, not yet merged.** It carries
-one feature: **#106** (Feature 27 — the daily spending view, merged into `dev` as
-`1b9ecfb`), plus its plan record (`5d7031c`) and the v1.8.0 release records (`a56f1cc`,
-`5caef0d`). **It must be merged as a merge commit, never squashed.**
+**Released 2026-10-25** — `036facd` (PR #107), **tagged `v1.9.0`** (annotated, on
+`036facd`) the same day, with a GitHub release page, "v1.9.0 — a daily spending view on
+the reports page". It carries one feature: **#106** (Feature 27 — the daily spending
+view, merged into `dev` as `1b9ecfb`), plus its plan record (`5d7031c`) and the v1.8.0
+release records (`a56f1cc`, `5caef0d`).
+
+**Merged with a merge commit, and the history is convergent.** `036facd` has two parents
+(`703b1e1` and `f354202`), `git diff main dev` was empty, and `dev` is an ancestor of
+`main`; `dev` was fast-forwarded to it before this record. The PR read `BLOCKED` /
+`REVIEW_REQUIRED` and was merged by the repo owner on GitHub, not bypassed with `--admin`.
+
+**The id moved and both sides agree:** `/api/version` and the sign-in page's `data-dpl-id`
+name `dpl_xLDCdSfDBLh44msXE48XfLBV4XBT` (it was `dpl_5zZHqaPu7w6Rj2PthaUmz4PSgGXQ`). The
+Vercel status on `036facd` read `pending` and then `success` within about a minute.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`), all signed out:
+`/sign-in`, `/offline`, `/forgot-password`, `/manifest.webmanifest` and `/sw.js` answer 200
+(`/sw.js` byte-identical to `main`'s blob); `/`, `/reports` and `/api/export` 307 to
+sign-in. A made-up session cookie on `/reports` 307s to `/sign-in` and on `/sign-in`
+answers 200, with no loop.
+
+**Still unverified:** a chart cannot be seen signed out. **Nobody has opened `/reports`
+signed in with real data on this build**, so `sumByDay` has not run against production
+data (it was run against the dev database before the merge). The reports page has no
+browser test, and a touch scrub of the daily chart on a real phone has not been tried. The
+v1.8.0 gaps below are unchanged.
+
+**Dependabot:** no open PRs when the release PR was opened.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail, now
+historical). It carried one feature: **#106**, plus its plan record and the v1.8.0 release
+records.
 
 **Minor bump: `v1.8.0` → `v1.9.0`.** Additive from where a user stands: the Trend card on
 the reports page gains a fourth tab, and nothing is removed or asked of anyone. The default
@@ -66,7 +93,7 @@ branch, and `git diff` of that branch's last commit against `dev` outside `PLAN.
 empty, so it is the same code. The new query was also run against the real dev database
 (see Feature 27). No Dependabot PRs are open.
 
-**What this release leaves unverified, as written before the merge:** nothing signed-out can
+**What this release left unverified, as written before the merge:** nothing signed-out can
 see a chart; the reports page has no browser test; **nobody has opened `/reports` signed
 in with the repo owner's own data on this build**, and a touch scrub of the daily chart on a
 real phone has not been tried. The v1.8.0 gaps (the tab choice on a phone, the donut's
