@@ -10,39 +10,51 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Feature 24 — password change and reset — is built and in review.** Branch
-`feat/password-change-and-reset`, PR into `dev`. Asked for together with
-Feature 25 (optional two-factor authentication) and a release at the end; this is
-the first of the two, and **Feature 25 does not start until this is merged**.
+**Feature 25 — optional two-step verification — is built and in review.** Branch
+`feat/two-factor-auth`, PR into `dev`. It follows Feature 24 (password change and
+reset, **merged as #101, `6d8065b`**), and a release comes after it; the repo owner
+merges the release PR, and said the feature PRs may be merged without asking.
 
-What it adds: a signed-in person can change their password from **Settings →
-Account** (`/settings/account`, new, reached from a two-link sub-navigation on both
-settings pages), and a signed-out one can ask for a reset link at
-`/forgot-password` and choose a new password at `/reset-password`. Sign-in gains a
-"Forgot password?" link and, after a reset, a notice.
+What it adds: **Settings → Account** gains a Two-step verification card. Turning it on
+asks for the password, shows a QR code and the same secret as text, and switches on
+only when a code from the authenticator app has been typed back; ten single-use
+backup codes are shown then and never again. Once on, sign-in is two steps — password,
+then a 6-digit code or a backup code, with an unticked "Trust this device for 30
+days". Turning it off and getting new backup codes both ask for the password again.
 
-**No migrations and no dependency changes** — better-auth already ships both
-endpoints, and the `account.password` column they write is the existing one. The
-new environment requirement is not a variable but a fact: **a reset link can only be
-emailed if `RESEND_API_KEY` and `RESEND_FROM` are set**, which production has. Where
-they are not set, the link is logged outside production so development still works.
+**It carries a migration and a dependency**, which is what separates it from Feature
+24. `20261025070731_greedy_thunderbird` adds the `two_factor` table and
+`user.two_factor_enabled` (nullable-with-default, so the previous build keeps working
+against the new schema); it is applied to the development database and **production
+applies it on deploy** — the second time that path runs for anything but a column.
+`qrcode.react` ^4.2.0 draws the code, with no dependencies of its own.
 
-Both changes sign other sessions out, on purpose: `revokeSessionsOnPasswordReset`
-for a reset, `revokeOtherSessions` for a change. Someone changing a password is
-usually doing it because the old one may be known.
+**Two security settings that are not defaults:** backup codes are stored
+`encrypted` (the plugin's default is plaintext), and the second factor is TOTP only —
+no email or SMS code, because an inbox is exactly what a password reset already
+trusts. Lockout (ten failures, fifteen minutes) and the plugin's rate limit are left
+at their defaults.
 
-**Verified before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (440) and
-`pnpm test:e2e` (56). The browser suite now covers the forgot-password page giving the
-same answer for an address that exists and one that does not, a made-up reset token
-being refused, a password change that makes the old password stop working and is then
-put back, a wrong current password, and a mismatched confirmation.
+**Verified before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (445, from 434) and
+`pnpm test:e2e` (60, from 56). The browser suite runs the whole flow with a real RFC 6238 code:
+a wrong code does not switch it on, a right one does and returns ten backup codes,
+sign-in then stops for a code and refuses a wrong one, a backup code works once and
+not twice, and turning it off puts sign-in back to one step.
 
-**Not verified, and it is the part that matters:** nobody has received a reset
-email. The test server runs with Resend deliberately unset so the suite can never
-send mail, which means the template, the link better-auth builds from
-`BETTER_AUTH_URL`, and the redirect from that link to `/reset-password?token=…` have
-been read but not followed end to end. **The first real reset on production is the
-first time it runs.**
+**Not verified:** a real authenticator app has never read the QR code — the suite
+reads the same secret from the text beside it. **`BETTER_AUTH_SECRET` now encrypts
+every authenticator secret, and the development one warns "low-entropy" at startup;
+whether production's is random is not known to this record.** Changing it after
+anyone turns this on would orphan their second factor. Recovery if somebody loses
+both phone and backup codes is a row delete in `two_factor` plus
+`user.two_factor_enabled = false` — there is deliberately no in-app path.
+
+**Feature 24 stands as merged:** a signed-in person can change their password; a
+signed-out one can request a reset link at `/forgot-password`. **Nobody has received a
+reset email** — the test server runs with Resend unset so the suite can never send
+mail — so the template, the link built from `BETTER_AUTH_URL`, and the redirect to
+`/reset-password?token=…` have been read but not followed end to end. The first real
+reset on production is the first time it runs.
 
 **Released 2026-10-25** — `5bbd4a5` (PR #100), carrying **#99** (adds, edits and
 deletes on the Expenses, Income and Savings lists show before the server has answered,
@@ -2377,6 +2389,9 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Empty date in the URL    | Present-but-empty means "no limit", absent means "default month" | Without the distinction a user could never see past the default range |
 | Password reset delivery  | Emailed link, one hour, single use        | better-auth's own flow; the link is a credential, so it is short-lived and never logged in production |
 | Reset / change sessions  | Both revoke the account's other sessions  | Someone changing a password usually suspects the old one is known; a surviving session defeats it |
+| Second factor            | TOTP authenticator app only, optional     | Email/SMS codes are as strong as the inbox, which a password reset already trusts       |
+| Two-factor switch-on     | When the first code is proven, not at setup | A wrong scan or a closed tab must not lock anyone out of an account they only began to protect |
+| Backup code storage      | `encrypted`, set explicitly               | The plugin's default is plaintext; a backup code is a password that skips the second factor |
 | Account vs. space settings | Two pages, joined by a sub-navigation   | Different owners (a member can change their password, not the space's currency); no eleventh tab |
 | Package manager          | pnpm                                      |                                                                                          |
 
@@ -3065,7 +3080,36 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 24 — Password change and reset ✅ done, PR open
+### Feature 25 — Optional two-step verification ✅ done, PR open
+
+- [x] `twoFactor` plugin in `lib/auth/auth.ts` (issuer "FinanceFlow", backup codes
+      `encrypted`); `twoFactorClient` in `lib/auth/auth-client.ts`
+- [x] Migration `20261025070731_greedy_thunderbird` — `two_factor` table,
+      `user.two_factor_enabled`; schema in `lib/db/schema/better-auth.ts`
+- [x] Settings → Account: `TwoFactorCard` — turn on (password → QR + text key →
+      code → backup codes), turn off (password), new backup codes (password)
+- [x] Sign-in: `AuthForm` swaps to `TwoFactorChallenge` when the response says
+      `twoFactorRedirect`; authenticator code or backup code; "Start over"; unticked
+      "Trust this device for 30 days"
+- [x] `lib/auth/two-factor-input.ts` — code normalisation and secret formatting, 11
+      unit tests; `e2e/two-factor.spec.ts` with `e2e/totp.ts` (RFC 6238, written out
+      rather than imported) — 4 browser tests
+- [x] `qrcode.react` added for the code itself
+
+**Why TOTP only.** A second factor sent by email or SMS is only as strong as the
+inbox or the SIM, and the inbox is what a password reset already trusts. The
+authenticator app is the one option that does not repeat the weakness it is there for.
+
+**Why it switches on at the end of setup and not the start.** Asking for a secret
+only issues one. The account is asked for a code at sign-in only after a code from the
+app has been typed back and checked, so a wrong scan or a closed tab cannot lock
+anyone out of an account they had only begun to protect.
+
+**Why there is no recovery path in the app.** Losing both the phone and the backup
+codes is meant to be a decision a person makes about another person, not a form. The
+fix is a database edit (see Current position).
+
+### Feature 24 — Password change and reset ✅ merged (PR #101)
 
 - [x] `emailAndPassword.sendResetPassword` (`lib/auth/auth.ts`), an hour's expiry,
       `revokeSessionsOnPasswordReset`; the email is `lib/email/password-reset-email.ts`
@@ -4063,6 +4107,22 @@ Things already hit, so they are not hit twice.
   message about the account that is really about the clock. Sign in once and share
   the page (`e2e/account-security.spec.ts`). The store is in-memory, so on Vercel the
   limit is per instance — best-effort, not a guarantee.
+- **better-auth's `twoFactor` plugin stores backup codes in plaintext unless told
+  `backupCodeOptions: { storeBackupCodes: "encrypted" }`** — the type says only
+  "plain | encrypted", with no documented default, and the behaviour is the plain
+  one. The authenticator secret is encrypted regardless. Both are keyed on
+  `BETTER_AUTH_SECRET`, so rotating it orphans every enrolled account.
+- **The plugin rate-limits every `/two-factor/*` call to 3 per 10 seconds** (and locks
+  an account for 15 minutes after ten failed codes), on top of the sign-in limit
+  above. Enabling, a wrong code and the right one is already three — a browser test
+  that does all of that has to wait out the window (`e2e/two-factor.spec.ts`).
+- **A TOTP code is probably not single-use here.** The plugin's TOTP route
+  (`two-factor/totp/index.mjs`) checks the code against the clock and has no code that
+  records the last one accepted, so a code seen over a shoulder should work until its
+  window passes. Read from the source, not tried. Backup codes *are* single-use — the
+  browser suite proves it.
+- **qrcode.react's `title` prop becomes the SVG's accessible name, not a `title`
+  attribute** — locate it with `getByRole("img", { name })`, not `getByTitle`.
 - **`getByRole("alert")` matches two elements on a client-navigated page** — the
   form's message and Next's empty `#__next-route-announcer__`. Scope it to the form:
   `page.locator("form p[role='alert']")`.

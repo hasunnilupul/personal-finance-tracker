@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth-card";
+import TwoFactorChallenge from "@/components/two-factor-challenge";
 import { logger } from "@/lib/logger";
 import { purgePrivateCaches } from "@/lib/pwa/private-cache";
 
@@ -30,6 +31,8 @@ function AuthForm({ mode, redirectTo = "/", notice }: AuthFormProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // True once the password was accepted for an account with two-factor on.
+  const [challenged, setChallenged] = useState(false);
 
   const isSignUp = mode === "sign-up";
 
@@ -52,7 +55,7 @@ function AuthForm({ mode, redirectTo = "/", notice }: AuthFormProps) {
             throw new Error(error.message);
           }
         } else {
-          const { error } = await signIn.email({
+          const { data, error } = await signIn.email({
             email,
             password,
             callbackURL: redirectTo,
@@ -60,6 +63,16 @@ function AuthForm({ mode, redirectTo = "/", notice }: AuthFormProps) {
 
           if (error) {
             throw new Error(error.message);
+          }
+
+          // The password was right but the account wants a second factor, so
+          // there is no session yet. Swap in the code step and stop here — the
+          // purge and the redirect below belong to the end of the last step.
+          if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+            setChallenged(true);
+            setPassword("");
+
+            return;
           }
         }
 
@@ -80,6 +93,10 @@ function AuthForm({ mode, redirectTo = "/", notice }: AuthFormProps) {
     },
     [isSignUp, name, email, password, redirectTo, router],
   );
+
+  if (challenged) {
+    return <TwoFactorChallenge redirectTo={redirectTo} onStartOver={() => setChallenged(false)} />;
+  }
 
   const alternateHref = (() => {
     const path = isSignUp ? "/sign-in" : "/sign-up";

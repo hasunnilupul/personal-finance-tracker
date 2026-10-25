@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { organization, twoFactor } from "better-auth/plugins";
 
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
@@ -114,6 +114,23 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    /**
+     * Optional second factor: an authenticator app, with backup codes.
+     *
+     * No email or SMS code. Those would make the second factor only as strong as
+     * the inbox, and the inbox is exactly what a password reset trusts — so a
+     * second factor sent there would add nothing against the attack it is for.
+     *
+     * Rate limiting and a lockout (ten failures, fifteen minutes) are the
+     * plugin's own and left at their defaults. They matter more than they look:
+     * a six-digit code is a million guesses, not a secret.
+     */
+    twoFactor({
+      issuer: "FinanceFlow",
+      // The plugin's default is plaintext. A backup code is a password that
+      // skips the second factor, so it is encrypted at rest like the secret is.
+      backupCodeOptions: { storeBackupCodes: "encrypted" },
+    }),
     organization({
       ac,
       roles,

@@ -1,5 +1,6 @@
 import ChangePasswordForm from "@/components/change-password-form";
 import SettingsSubnav from "@/components/settings-subnav";
+import TwoFactorCard from "@/components/two-factor-card";
 import { requireUser } from "@/lib/auth/dal";
 
 const AccountSettingsPage = async () => {
@@ -18,6 +19,8 @@ const AccountSettingsPage = async () => {
       <SettingsSubnav current="account" />
 
       <ChangePasswordForm />
+
+      <TwoFactorCard enabled={user.twoFactorEnabled === true} />
     </div>
   );
 };

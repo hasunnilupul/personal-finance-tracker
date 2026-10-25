@@ -29,6 +29,12 @@ const AccountSettingsLoading = () => {
         <Skeleton className="mt-4 h-9 w-full" />
         <Skeleton className="mt-4 h-9 w-40" />
       </Card>
+
+      <Card className="p-6">
+        <Skeleton className="h-5 w-44" />
+        <Skeleton className="mt-2 h-4 w-full max-w-sm" />
+        <Skeleton className="mt-4 h-9 w-28" />
+      </Card>
     </LoadingRegion>
   );
 };
