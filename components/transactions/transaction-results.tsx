@@ -52,6 +52,7 @@ const TransactionResults = async ({
       baseCurrency={space.baseCurrency}
       showAuthor={!space.isPersonal}
       activeSpaceId={space.id}
+      filters={filters}
       basePath={basePath}
       query={query}
       hasFilters={hasFilters}

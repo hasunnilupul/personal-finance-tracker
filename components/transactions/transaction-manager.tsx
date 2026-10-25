@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
@@ -11,14 +11,31 @@ import { Card } from "@/components/ui/card";
 import { useFilterPending } from "@/components/transactions/filter-pending";
 import TransactionFormDialog from "@/components/transactions/transaction-form-dialog";
 import TransactionList from "@/components/transactions/transaction-list";
-import { deleteTransactionAction } from "@/app/actions/transaction.actions";
+import {
+  createTransactionAction,
+  deleteTransactionAction,
+  type TransactionFormState,
+  updateTransactionAction,
+} from "@/app/actions/transaction.actions";
 import { formatMoney } from "@/lib/currency/format";
 import { Category } from "@/lib/db/models/category.model";
 import {
+  TransactionFilters,
   TransactionKind,
   TransactionListItem,
   TransactionPage,
 } from "@/lib/db/models/transaction.model";
+import {
+  applyChange,
+  type Change,
+  type ChangeContext,
+  type Draft,
+  type OptimisticView,
+  parseDraft,
+} from "@/lib/transactions/optimistic";
+
+/** What a save that never reached the server says, in place of a crash. */
+const OFFLINE_MESSAGE = "Could not reach the server. Check your connection and try again.";
 
 interface TransactionManagerProps {
   kind: TransactionKind;
@@ -29,6 +46,8 @@ interface TransactionManagerProps {
   showAuthor: boolean;
   /** See {@link TransactionList} — decides which rows are read-only here. */
   activeSpaceId: string;
+  /** What the list was asked for — needed to tell whether a new row belongs in it. */
+  filters: TransactionFilters;
   basePath: string;
   query: string;
   hasFilters: boolean;
@@ -40,6 +59,12 @@ interface TransactionManagerProps {
  *
  * The list itself is rendered from data the Server Component fetched, so a
  * filter change is a navigation rather than a client-side refetch.
+ *
+ * **Writes show up before the server has answered, when that can be done
+ * honestly.** `applyChange` works out what the list will look like; where it
+ * cannot be sure — a foreign currency, a search, a later page — it says so and the
+ * write takes the ordinary path, waiting for the server. If a write fails the page
+ * puts itself back, and the entry comes back to the form to try again.
  */
 const TransactionManager = ({
   kind,
@@ -49,6 +74,7 @@ const TransactionManager = ({
   baseCurrency,
   showAuthor,
   activeSpaceId,
+  filters,
   basePath,
   query,
   hasFilters,
@@ -56,20 +82,46 @@ const TransactionManager = ({
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TransactionListItem | undefined>();
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [prefill, setPrefill] = useState<Draft | undefined>();
   const [, startTransition] = useTransition();
   const { start: startNavigation } = useFilterPending();
 
+  const changeContext: ChangeContext = {
+    kind,
+    baseCurrency,
+    activeSpaceId,
+    categories,
+    filters,
+  };
+
+  const serverView = useMemo<OptimisticView>(
+    () => ({
+      items: page.items,
+      total,
+      count: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+    }),
+    [page, total],
+  );
+
+  const [view, addOptimistic] = useOptimistic(
+    serverView,
+    (current, change: Change) => applyChange(current, change, changeContext) ?? current,
+  );
+
   const noun = kind === "expense" ? "expense" : kind === "income" ? "income" : "saving";
-  const pageCount = Math.max(1, Math.ceil(page.total / page.pageSize));
+  const pageCount = Math.max(1, Math.ceil(view.count / view.pageSize));
 
   const openAdd = () => {
     setEditing(undefined);
+    setPrefill(undefined);
     setDialogOpen(true);
   };
 
   const openEdit = (transaction: TransactionListItem) => {
     setEditing(transaction);
+    setPrefill(undefined);
     setDialogOpen(true);
   };
 
@@ -80,12 +132,18 @@ const TransactionManager = ({
       return;
     }
 
-    setBusyId(transaction.id);
+    const change: Change = { type: "delete", id: transaction.id };
 
     startTransition(async () => {
-      const result = await deleteTransactionAction(kind, transaction.id);
+      // Always knowable: the row goes, and its amount comes off the total. If the
+      // delete fails the transition ends without the server's data having
+      // changed, and the row reappears on its own.
+      addOptimistic(change);
 
-      setBusyId(null);
+      const result = await deleteTransactionAction(kind, transaction.id).catch(() => ({
+        error: OFFLINE_MESSAGE,
+        success: undefined,
+      }));
 
       if (result.error) {
         toast.error(result.error);
@@ -93,8 +151,74 @@ const TransactionManager = ({
       }
 
       toast.success(result.success);
-      router.refresh();
     });
+  };
+
+  /**
+   * Takes a save over from the form, if the page can show it honestly.
+   *
+   * The dialog closes and the row appears at once; the action then runs, and if it
+   * fails the page puts itself back and offers the entry again. It only goes this
+   * way when the form would not have come back with a field error (`parseDraft`
+   * mirrors the server's parsing) and the effect on the list is known.
+   *
+   * @returns `true` if it took over, `false` to leave the ordinary path to run.
+   */
+  const submitOptimistically = (formData: FormData): boolean => {
+    const draft = parseDraft(formData);
+
+    if (!draft) {
+      return false;
+    }
+
+    const change: Change = editing
+      ? { type: "update", id: editing.id, draft }
+      : { type: "create", tempId: -Date.now(), draft };
+
+    // Asked against what is on screen now, including any earlier write still in
+    // flight, which is what the next one would be applied to.
+    if (!applyChange(view, change, changeContext)) {
+      return false;
+    }
+
+    const saving = editing;
+
+    setDialogOpen(false);
+
+    startTransition(async () => {
+      addOptimistic(change);
+
+      // A dropped connection rejects rather than returning an error, and an
+      // unhandled rejection here would reach the error boundary instead of the
+      // person. It is a failed save like any other.
+      const result: TransactionFormState = await (
+        saving ? updateTransactionAction : createTransactionAction
+      )({}, formData).catch(() => ({ error: OFFLINE_MESSAGE }));
+
+      if (result.success) {
+        toast.success(saving ? "Entry updated" : "Entry added");
+        return;
+      }
+
+      const message =
+        result.error ??
+        Object.values(result.fieldErrors ?? {})[0] ??
+        (saving ? "Could not save that change." : "Could not save that entry.");
+
+      toast.error(message, {
+        duration: 10_000,
+        action: {
+          label: "Edit again",
+          onClick: () => {
+            setEditing(saving);
+            setPrefill(draft);
+            setDialogOpen(true);
+          },
+        },
+      });
+    });
+
+    return true;
   };
 
   const pageHref = (target: number) => {
@@ -128,10 +252,10 @@ const TransactionManager = ({
               {hasFilters ? "Filtered total" : "Total"}
             </p>
             <p className="text-foreground text-2xl font-semibold tabular-nums">
-              {formatMoney(total, baseCurrency)}
+              {formatMoney(view.total, baseCurrency)}
             </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              {page.total} {page.total === 1 ? "entry" : "entries"}
+              {view.count} {view.count === 1 ? "entry" : "entries"}
             </p>
           </div>
 
@@ -143,7 +267,7 @@ const TransactionManager = ({
       </Card>
 
       <Card className="p-4 sm:p-6">
-        {page.items.length === 0 ? (
+        {view.items.length === 0 ? (
           <div className="py-10 text-center">
             <p className="text-foreground text-sm font-medium">
               {hasFilters ? `No ${noun} matches those filters` : `No ${noun} recorded yet`}
@@ -165,11 +289,10 @@ const TransactionManager = ({
           <>
             <TransactionList
               kind={kind}
-              items={page.items}
+              items={view.items}
               baseCurrency={baseCurrency}
               showAuthor={showAuthor}
               activeSpaceId={activeSpaceId}
-              busyId={busyId}
               onEdit={openEdit}
               onDelete={handleDelete}
             />
@@ -231,6 +354,8 @@ const TransactionManager = ({
         categories={categories}
         baseCurrency={baseCurrency}
         transaction={editing}
+        prefill={prefill}
+        onOptimisticSubmit={submitOptimistically}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />

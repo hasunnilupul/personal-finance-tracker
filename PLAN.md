@@ -10,13 +10,200 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release PR open — `dev` → `main`, not yet merged.** Carries three merges since
-`v1.4.0`: **#95** (the proxy no longer looks the session up in the database on
-private routes, and the space is fetched in one query), **#96** (the browser keeps
-pages it has fetched for 30 seconds, and four tabs prefetch their whole page) and
-**#97** (the list stays on screen, dimmed, while a filter or page loads instead of
-being swapped for a skeleton) — plus the plan record for each. This is the whole
-of the navigation-speed work that has been done; it is nowhere near live.
+**Release PR open — `dev` → `main`, not yet merged.** Carries one merge since
+`v1.5.0`: **#99** (adds, edits and deletes on the Expenses, Income and Savings lists
+show before the server has answered, and the page puts itself back if the save fails)
+— plus its plan record and the v1.5.0 release records that were committed to `dev`
+after that release was cut.
+
+**No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
+and the diff over `package.json` and `pnpm-lock.yaml` are both empty; the deploy-time
+migrate step is a no-op, the lowest-risk shape a release can have here.
+**`public/sw.js` is untouched and byte-identical to the live file**, so this stays a
+clean Feature 13 trial — still unanswered, still needing a device that already had the
+previous build.
+
+**Minor bump: `v1.5.0` → `v1.6.0`.** Additive from where a user stands — saving,
+editing and deleting should feel immediate — with nothing removed. One behaviour is
+different and worth naming: a row can now appear on screen *before* it is saved, and
+if the save then fails it disappears again with a message and an "Edit again" button.
+Before, nothing appeared until the server had agreed.
+
+**This release changes what the person sees about their own money before it is true,
+which none of the earlier ones did.** The safeguard is that the prediction
+(`lib/transactions/optimistic.ts`) refuses to guess — a foreign currency, a search, an
+author filter, a page other than the first and an edit that moves a row to the edge of
+a full page all fall back to waiting for the server, as before. That rule is covered by
+43 unit tests and the browser spec, **but it has not been seen on the live site**, and
+the converted-currency case in particular has only been checked as "does not go
+optimistic".
+
+**What it leaves unverified, going in:**
+
+- **How it feels on production.** Every timing so far was taken against a development
+  database across an ocean. Whether `PERF_LOG=1` is set on Vercel, and so whether the
+  `[perf]` lines asked for after v1.5.0 exist, is not known to this record.
+- **A failed save in the real world.** The spec cuts the request from the browser;
+  nobody has watched a real server error or a flaky phone connection.
+- **Income and savings.** They share the code but only Expenses is driven by a browser
+  test.
+- **Pagination** still has no test, and **`staleTimes` is still an `experimental`
+  flag** from the v1.5.0 release.
+
+**Still open from earlier releases:** the Singapore decision — the ~0.2s round trip
+under every navigation is untouched by this release — and, from the list v1.4.0 left,
+whether Feature 13 installs a new worker, whether push delivers, whether
+`financeflow-private-*` disappears on sign-out, whether an invitation notice reaches
+the other account, whether the budget warning arrives in the bell, and whether the CSV
+opens in a spreadsheet. **Resolved since v1.5.0:** the Dependabot count read **0 open**
+when this PR was opened.
+
+**The deployment id before the merge is `dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e`** — the one
+v1.5.0 ended on, so production has not moved since — confirmed through `/api/version`
+and the sign-in page's `data-dpl-id` on `finance-flow.nilupulperera.dev`, and recorded
+in advance so a slow deploy cannot be mistaken for a stale one.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` answers 200 as `application/manifest+json`; `/sw.js` 200 as
+JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**.
+
+**Verified on `dev` at `9cf7a87`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (428),
+`pnpm build` and `pnpm test:e2e` (48) — run on #99's branch before it merged; `dev` has
+had nothing since but this record. The development database held no stray test rows
+afterwards.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, and the same URL-by-URL answers.
+Merge it as a **merge commit**.
+
+**Before that: optimistic add, edit and delete** — merged as **#99** (`9cf7a87`).
+
+**Optimistic add, edit and delete on the transaction lists.** Branch
+`feat/optimistic-transactions`, merged as `9cf7a87`. Step (d) of the navigation-speed
+plan: a write shows on the page before the server has answered it, and the page puts
+itself back if the server never does.
+
+**What is optimistic, and what deliberately is not.** *Delete* is always knowable —
+the row goes and its amount comes off the total. *Add* and *edit* are knowable only
+sometimes, and the rule in `lib/transactions/optimistic.ts` is that it never guesses:
+`applyChange` returns `null` the moment it cannot be sure, and `null` means the write
+takes the ordinary path, waiting for the server exactly as before. It declines for:
+
+- **a foreign currency** — the converted amount comes from a rate the server looks up
+  for the entry's date. The server also re-converts on *every* edit (the form always
+  posts amount, currency and date), so a foreign row is predicted only when none of
+  the three changed;
+- **a search or an author filter** — a new row's author is not known on the client,
+  and reproducing `ILIKE` would be a second implementation to keep in step;
+- **any page but the first** — a new row would land elsewhere;
+- **an edited date that carries a row to the edge of a full page** — it cannot be told
+  from the row leaving the page.
+
+A new row outside the date range or category being shown is a *known* answer, not an
+unknown one: the list is correctly left alone and the server files it. Money is added
+in whole cents so a long run of small sums cannot drift from what the server prints.
+
+**On failure** the optimistic layer lifts by itself — `useOptimistic` reverts when the
+transition ends without the server's data having changed — and a toast carries the
+reason plus **"Edit again"**, which reopens the form with exactly what was typed.
+A dropped connection makes the action *reject* rather than return an error; that is
+caught and reported as a failed save, because left alone it reached the error boundary.
+
+**The dialog closes from `onSubmit`, not from the form's action — and this cost a round
+of debugging.** A form `action` runs inside a React transition, and a transition holds
+back every state update made inside it until its async work is done. Closing the dialog
+from within the action therefore kept it open for exactly as long as the server took,
+which is the thing being removed. `onSubmit` is an ordinary event: if the page takes the
+save over it calls `preventDefault()`, and React never starts the form action. Delete was
+unaffected only because it does not go through a form.
+
+**`item.id < 0` means "the page made this row up".** A pending row has a negative temp id,
+is shown faded, and has no Edit or Delete until the server's real id replaces it. The
+list's `busyId` prop is gone for that reason.
+
+**Tests, mutation-checked.** `lib/transactions/optimistic.test.ts` (43) pins the
+predictions and, as importantly, the refusals. `e2e/optimistic-transactions.spec.ts`
+holds or cuts off the Server Action request from the browser's side and asserts what the
+page shows meanwhile: add, delete and edit appear within 2.5s of a server held for 7s; a
+delete stays gone after the server answers; a cut-off save is taken back and "Edit
+again" restores the typed note and amount; and a foreign-currency save is *not* shown
+early. With the optimistic calls switched off, the four early-display tests fail and the
+foreign-currency one — which tests the fallback — still passes. **These tests write to
+the development database**, unlike most of the suite; every entry carries a note
+starting `e2e-optimistic`, and a sweep after each test removes what is left.
+
+**Two e2e traps came out of this, both in Gotchas:** a UI assertion no longer proves the
+server finished, and a sweep that only looked at the list left rows behind three times
+before it was fixed. `shared-space.spec.ts`'s cross-space test had the same flaw — it
+would add and delete with the requests still in flight — and now waits for each
+response.
+
+**Dependabot is resolved.** The alert count read **0 open, 82 fixed** on 2026-10-25,
+about a day after the fixed lockfile reached `main` (it had read 35 for hours after both
+v1.4.0 and v1.5.0). GitHub's scan was slow, not the tree wrong. No Dependabot PRs are
+open.
+
+**Verified:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (428), `pnpm build` and
+`pnpm test:e2e` (48), and the development database holds no stray test rows afterwards.
+**Not verified:** how it feels on the live site, and a multi-currency space in a
+browser — the foreign-currency path is covered only as "does not go optimistic".
+Pagination still has no test. Income and savings go through the same code, but only
+expenses is driven by the browser spec.
+
+**Released 2026-10-24** — `18da67f` (PR #98), carrying **#95** (no database
+session lookup in the proxy for private routes; the space fetched in one query),
+**#96** (the browser keeps fetched pages for 30 seconds; four tabs prefetch their
+whole page) and **#97** (the list stays on screen, dimmed, while a filter or page
+loads), plus the plan records for each. **Tagged `v1.5.0`** (annotated, on
+`18da67f`) on the repo owner's go-ahead, the same day. It has a GitHub release
+page, "v1.5.0 — faster navigation".
+
+**Merged with a merge commit, and the history is convergent.** `18da67f` has two
+parents (`0f026ae` and `f205465`), `git diff main dev` is empty, and `dev` is an
+ancestor of `main`. Nothing to reconverge.
+
+**The id moved and both sides agree.** `/api/version` reports
+`dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e`, the sign-in page's `data-dpl-id` is the same
+string, and it is the deployment named in the Vercel status on `18da67f` itself.
+The status read `pending` on the first look and `success` about a minute later, so
+the early read was a build still running, not a stale answer. It was
+`dpl_9U8addzsyYfRuWz7CP7BSC5tncwj` before the merge.
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`): `/` 307s;
+`/sign-in` and `/offline` answer 200 as HTML; `/manifest.webmanifest` answers 200 as
+`application/manifest+json`; `/sw.js` answers 200 as JavaScript with
+`no-cache, no-store, must-revalidate`. A signed-out `GET /api/export` answers **307
+with a zero-byte body**. **`public/sw.js` is untouched and byte-identical to the live
+file**, so this is another clean Feature 13 trial — still unanswered, still needing a
+device that already had the previous build.
+
+**The change to the proxy was exercised on the live site with a cookie the server
+does not recognise, and both halves held.** A request to `/expenses` carrying a
+made-up `__Secure-better-auth.session_token` answered **307 to `/sign-in`** — the
+proxy let it through on the cookie's presence and the page turned it away — and
+`/sign-in` with the same cookie answered **200 with no redirect**, so there is no
+loop. That is the failure the stale-cookie test exists for, seen outside the test
+suite for the first time. **Not tried: a real session that has genuinely expired.**
+
+**No migrations and no dependency changes**, so the migrate step had nothing to do.
+
+**Nothing in this release has been measured on production.** Whether it feels faster
+is unanswered. `PERF_LOG=1` is the way to find out; whether it was set before this
+deploy is not known to this record, so check the function logs for `[perf]` lines —
+if there are none, the variable is not set or the deploy predates it, and setting it
+needs a redeploy. The Singapore decision is still open and is what would move the
+0.2s floor.
+
+**Still open from #97:** pagination is untested, and so is everything above on a real
+device.
+
+**The Dependabot alert count still reads 35**, hours after v1.4.0 and v1.5.0 put the
+fixed lockfile on `main`. Still the same calendar day as v1.4.0, so not yet a finding;
+**check it again tomorrow.** If it is still 35, GitHub's scan is not picking up the
+lockfile and the cause is on its side or in how the graph is submitted, not in the tree.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on
+what shipped and why, now historical):
 
 **No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
 is empty, and so is the diff over `package.json` and `pnpm-lock.yaml`. The
@@ -77,10 +264,6 @@ JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**
 **Verified on `dev` at `613f969`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (385),
 `pnpm build` and `pnpm test:e2e` (43) — run on #97's branch before it merged; `dev`
 has had nothing since but this record.
-
-**After the merge**, finish this record (step 8): the merge SHA, that it has two
-parents, that the id moved and both sides agree, the same URL-by-URL answers, and
-the alert count again. Merge it as a **merge commit**.
 
 **Before that: step 3, the list stays on screen** — merged as **#97** (`613f969`).
 
@@ -3771,6 +3954,27 @@ link dies at the next deploy.
 
 Things already hit, so they are not hit twice.
 
+- **State updates inside a form `action` are held until the action's async work is
+  done.** The action runs in a transition, and a transition batches every update made
+  within it. Closing a dialog from the action keeps it open for as long as the server
+  takes. To act at once, decide in `onSubmit` (an ordinary event) and call
+  `preventDefault()` — React then does not start the action. See
+  `components/transactions/transaction-form-dialog.tsx`.
+- **With optimistic UI, the page emptying proves nothing about the server.** A
+  deleted row is gone before the request is sent, so `toHaveCount(0)` passes at once
+  and the test can end with the request still in flight, cancelled when the page
+  closes — leaving the row in the database. Anything that writes in e2e has to wait
+  for the Server Action's *response* (`waitForResponse` on a POST with a
+  `next-action` header) and, to be sure, read the list back after a reload. The
+  sweep in `optimistic-transactions.spec.ts` left rows behind three times before it
+  did; `shared-space.spec.ts` had the same flaw.
+- **The filter bar renders long before the list.** Counting rows right after `goto`
+  can read zero while the results are still behind their skeleton. Wait for the
+  total (`getByText(/total$/i)`) first.
+- **A request that fails instantly cannot be observed failing.** To assert that a row
+  was shown and then taken back, make the request hang for a few seconds and then
+  abort it, as a dropped connection does.
+
 - **A URL assertion in e2e waits on the server, not on the click.** With the App
   Router, `router.push` changes the address only when the navigation commits,
   which is after the page has rendered against the database. Under the 3-worker
@@ -4258,7 +4462,7 @@ Not blocking, but worth doing.
       Lanka; it is a data migration and the repo owner's call. **(b) client router
       cache** — done, see Current position.
       **(c) keep the old list on screen while a filter loads** — done, see
-      Current position (the clicked-link part was dropped, and why is recorded there). **(d)** optimistic add/edit/delete (`useOptimistic`). **(e)** Cache
+      Current position (the clicked-link part was dropped, and why is recorded there). **(d)** optimistic add/edit/delete — done, see Current position. **(e)** Cache
       Components + Partial Prefetching, the "instant navigation" path in Next 16.4 —
       a migration of its own. **(f)** `cookieCache` with `nextCookies()`, see above.
 
