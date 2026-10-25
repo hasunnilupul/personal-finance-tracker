@@ -10,8 +10,96 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Release v1.7.0 is open** — `dev` → `main`, to be merged by the repo owner **as a merge
-commit, never squashed**. It carries **#101** (Feature 24 — change password, forgot and
+**Release PR open — `dev` → `main`, not yet merged.** It carries one feature: **#104**
+(Feature 26 — line, net and donut views on the reports page, merged into `dev` as
+`ad429cc`), plus its plan records (`9b871a6`) and the v1.7.0 release records (`ce2f45e`).
+**It must be merged as a merge commit, never squashed.**
+
+**Minor bump: `v1.7.0` → `v1.8.0`.** Additive from where a user stands: the reports page
+gains tabs over charts it already had, and nothing is removed or asked of anyone. The
+default view in each card is the chart that was there before.
+
+**This release holds no migration and no dependency change** — the lowest-risk shape it
+can have. `git diff main dev` touches `PLAN.md`, `app/globals.css` (six colour tokens),
+`components/charts/chart-views.tsx`, `components/reports/*` and `lib/reports/chart-scale*`
+and nothing else: no `package.json`, no lockfile, nothing under `lib/db/migrations`.
+`public/sw.js` is **byte-identical to the live file** (same hash, `d32773d…`, live and on
+`main`), so Feature 13 stays a clean trial.
+
+**Production before the merge** (`finance-flow.nilupulperera.dev`): deployment
+`dpl_ER1ESqMbab5jYSLYadUo89veku18` from both `/api/version` and the sign-in page's
+`data-dpl-id`; `/` 307s; `/sign-in`, `/offline`, `/manifest.webmanifest` and `/sw.js`
+answer 200; `/api/export` and `/reports` 307 signed out.
+
+**Verified on `dev` before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (473) and
+`pnpm test:e2e` (60, against a production build), run on the feature branch after
+pulling `dev`; `dev` has gained only plan records since.
+
+**What this release will leave unverified, and it is all of what it is for:** nothing
+signed-out can see a chart. **Nobody has looked at the new views with real data** — the
+screenshots used mock data and the test account has no spending. The reports page has no
+browser test. Whether the tab choice behaves on a real phone, and whether the donut's
+colours read well on the repo owner's own categories, are open until somebody signed in
+opens `/reports`. The carried-over list from v1.7.0 below is unchanged by this release.
+
+---
+
+**Feature 26 — more ways to read the reports page** is **merged into `dev`** as
+`ad429cc` (PR #104, squashed, from `feat/report-chart-views`). **It is not released**: it
+reaches `main` with the next `dev` → `main` release PR. The Trend card now offers **Columns** (the existing chart), **Lines** and **Net**, and the
+category card offers **Bars** (existing) and **Donut**. A shared space gets Columns and
+Lines only — it records no income, so there is nothing to net — and the Trend chart there
+now draws just Expenses rather than three series with two of them flat. No migration, no
+dependency, no change to the query: every view is drawn from the `byMonth` and
+`byCategory` the page already had. See Feature 26 in the Roadmap for the reasoning.
+
+**Verified** on the branch after pulling `dev`: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(473, from 445) and `pnpm test:e2e` (60, against a production build); plus a look at a
+signed-in render in light and dark, at 900px and 390px, with mock data for the personal
+and shared cases and the real `/reports` for the test account (which has no spending, so
+it showed the empty branches). Keyboard arrows moving between tabs, and the chosen view
+surviving a range change, were both exercised in the browser. **Not verified:** nobody
+has seen the new views with a real month of the repo owner's own data, and the reports
+page has no browser test, so a regression there would be found by eye.
+
+**Released 2026-10-25** — `f48a71a` (PR #103), **tagged `v1.7.0`** (annotated, on
+`f48a71a`) on the repo owner's go-ahead, the same day. It was merged by the repo owner
+**as a merge commit**: `f48a71a` has two parents (`5bbd4a5` and `28271a3`), and `dev`
+is an ancestor of `main`. The deploy went `pending` and then `success` within about a
+minute. Nothing to reconverge.
+
+**The id moved and both sides agree:** `/api/version` and the sign-in page's
+`data-dpl-id` both read `dpl_ER1ESqMbab5jYSLYadUo89veku18` (it was
+`dpl_9PrkBxnrKrj4Lbw1PK2kjpAAycEg` before).
+
+**Verified against the live site** (`finance-flow.nilupulperera.dev`), all signed out:
+`/forgot-password`, `/reset-password` and `/reset-password?error=INVALID_TOKEN` now
+answer **200** (they were 307); sign-in carries "Forgot password?"; `/sign-in`,
+`/offline` 200; `/manifest.webmanifest` 200 as `application/manifest+json`; `/sw.js`
+200 as JavaScript and byte-identical to the committed file (same hash as `main`'s blob;
+a Windows working copy hashes differently because of CRLF); `/` and
+`/api/export` 307 to sign-in. A made-up session cookie on `/settings/account` 307s to
+`/sign-in` and on `/sign-in` answers 200, with no loop. A reset request for an address
+that does not exist answered `{"status":true,"message":"If this email exists…"}`, and
+`/api/auth/two-factor/verify-totp` answers 401 `INVALID_TWO_FACTOR_COOKIE` — so the
+two-factor routes are mounted.
+
+**The migration is inferred, not read from the log.** The deploy log was not looked
+at. What shows it ran: the reset request above does a user lookup, which selects every
+column of `user`, `two_factor_enabled` included, and it answered 200 rather than
+failing on a missing column. Treat that as strong evidence, not as the log.
+
+**Still unverified, and it is all of what this release is for:** none of these can be
+seen without a signed-in session or a mailbox. **Nobody has received a reset email.**
+**No authenticator app has scanned a code from production.** Whether production's
+`BETTER_AUTH_SECRET` is random is still not known to this record. The trusted-device
+cookie has never been exercised. **The first real reset and the first real enrolment
+are the first runs of either on production.**
+
+**Dependabot** read 0 open alerts when the release PR was opened.
+
+**Before the merge, the release PR was opened as follows** (kept for the detail on what
+shipped and why, now historical). It carries **#101** (Feature 24 — change password, forgot and
 reset password; merged as `6d8065b`) and **#102** (Feature 25 — optional two-step
 verification; merged as `e92361d`), plus their plan records. Both feature PRs were
 merged into `dev` by the assistant on the repo owner's instruction that it may; the
@@ -64,11 +152,6 @@ the end of every run.
   `financeflow-private-*` disappear on sign-out, does an invitation notice reach the
   other account, does the budget warning reach the bell, does the CSV open in a
   spreadsheet).
-
-**After the merge** the record still wants: the merge SHA, that it has two parents, the
-new deployment id from both `/api/version` and the sign-in page, whether `/forgot-password`
-and `/reset-password` now answer 200, and whether the deploy log shows the migration
-running. Committed straight to `dev`.
 
 ---
 
@@ -2428,6 +2511,8 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Budget `startDate`       | Derived from the clock, never from input  | A client-supplied start is a way to backdate a limit over spending already recorded      |
 | Charts                   | Hand-rolled CSS/SVG, no chart library     | Three chart shapes do not pay for a dependency, and the marks are already CSS            |
 | Chart colour             | Two validated tokens, checked not chosen  | The existing `--chart-*` are a grey ramp; a series pair has to clear CVD and contrast    |
+| Category chart colour    | Five validated tokens by rank, then a neutral | Not the category's own colour (implies the hue means something); no aqua or green, which are income |
+| Report chart views       | Tabs inside the card, held in a module map | A different drawing of one answer is not a filter, and state alone resets on every range change |
 | Multi-table writes       | One `db.batch`, via `lib/db/batch.ts`     | The HTTP driver has no _interactive_ transactions, but a batch is still one transaction  |
 | Reassigning a category   | Budgets are not moved; they cascade       | The dialog already counts them destroyed, and moving one trips the unique period index   |
 | Recurring trigger        | On-read catch-up; cron as an accelerator  | `CRON_SECRET` is unset, so a cron-only sweep would never fire in this deployment         |
@@ -3142,6 +3227,48 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 26 — More ways to read the reports page ✅ merged (PR #104)
+
+- [x] `ChartViews` (`components/charts/chart-views.tsx`) — a card with tabs over several
+      charts of the same data; the showing view is the only one mounted
+- [x] `MonthPlot` — the frame the month charts share (legend, gridlines, hover bands,
+      month labels, tooltip); `TrendChart` moved onto it, columns unchanged
+- [x] `TrendLines` — the same series as lines; `NetChart` — income less expenses and
+      savings, as bars up and down from a zero line
+- [x] `CategoryDonut` — spending as a ring of at most six wedges, the tail folded into
+      "Other", with the name, amount and share of every wedge printed beside it
+- [x] `lib/reports/chart-scale.ts` — `niceMax`, `niceDomain`, `foldCategories`,
+      `ringArcs`, 28 unit tests; `--viz-cat-1..5` and `--viz-other` in `globals.css`
+- [x] Every view has its own table twin; no new query, migration or dependency
+
+**Why these four and not others.** They are the readings the existing data supports
+without a new query: direction over time (lines), the one figure the other views make
+you subtract (net), and share rather than rank (donut). A daily or weekday view, or
+"where the income went", would each need a new grouped query and are listed under
+follow-ups rather than half-done here.
+
+**Why the choice lives in the card and not in the URL.** The views are different
+readings of one answer, not filters, and a URL param would re-run the report query for
+what is a change of drawing. The body sits under a `<Suspense>` keyed on the range, so
+**component state would reset to the first view on every range change** — the choice is
+kept in a module-level map read through `useSyncExternalStore` instead. It survives a
+client-side range change and not a reload, on purpose; no storage API is involved.
+
+**Donut colour is five more validated tokens, not the category's own colour.** Orange,
+blue, yellow, magenta, violet in that order, checked as an ordered set against both card
+surfaces (adjacent CVD ΔE 16.3 light / 13.2 dark, normal-vision 19.6 / 19.3) and with the
+last wedge beside the first, since a ring has no end (29.1 / 26.0). Aqua and green are
+left out because they are the income hue: every wedge is spending, and a green one would
+read as money in. Yellow and magenta measure under 3:1 on the light card, so — as with
+income's aqua — the printed names and amounts and the table twin are the relief, not an
+extra. Colour is by rank, so a category can change hue when the range does; that is why
+nothing depends on the hue alone.
+
+**Net is symmetric about zero when months fall on both sides** (`niceDomain`), so a
+month 50 over looks the same size as one 50 under, and the zero line is drawn heavier
+than the gridlines. It uses the two hues the page already means "in" and "out" by, but
+position says the same thing, so colour is never the only signal.
 
 ### Feature 25 — Optional two-step verification ✅ merged (PR #102)
 
@@ -4692,6 +4819,18 @@ Things already hit, so they are not hit twice.
   `15` — a typo becoming a plausible amount, which for money is the worst kind
   of failure. Found by the first test written against it. To accept a new
   format, widen the `AMOUNT` regex; never go back to stripping.
+- **`next dev` rewrites `AGENTS.md` when it starts.** It re-adds a
+  `<!-- BEGIN:nextjs-agent-rules -->` block and reflows the heading, so a feature
+  branch that ran the dev server has an unrelated modification to that file waiting in
+  `git status`. Revert it (`git checkout -- AGENTS.md`) before committing unless the
+  change is deliberate.
+- **A circle inside a stretched SVG is an ellipse.** The line chart draws its lines in
+  a `preserveAspectRatio="none"` SVG with `vector-effect: non-scaling-stroke` so they
+  stay 2px at any width, and lays its dots over it as HTML by percentage instead.
+  Putting `<circle>`s in that SVG looks right at one width and wrong at every other.
+- **`chart-views.tsx` reads module state, so it must not be given a server snapshot of
+  anything but "nothing chosen".** The server and the first client render must agree
+  for hydration; the stored choice lands just after, as a second render.
 
 ---
 
