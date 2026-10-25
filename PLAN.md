@@ -10,6 +10,40 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Feature 24 — password change and reset — is built and in review.** Branch
+`feat/password-change-and-reset`, PR into `dev`. Asked for together with
+Feature 25 (optional two-factor authentication) and a release at the end; this is
+the first of the two, and **Feature 25 does not start until this is merged**.
+
+What it adds: a signed-in person can change their password from **Settings →
+Account** (`/settings/account`, new, reached from a two-link sub-navigation on both
+settings pages), and a signed-out one can ask for a reset link at
+`/forgot-password` and choose a new password at `/reset-password`. Sign-in gains a
+"Forgot password?" link and, after a reset, a notice.
+
+**No migrations and no dependency changes** — better-auth already ships both
+endpoints, and the `account.password` column they write is the existing one. The
+new environment requirement is not a variable but a fact: **a reset link can only be
+emailed if `RESEND_API_KEY` and `RESEND_FROM` are set**, which production has. Where
+they are not set, the link is logged outside production so development still works.
+
+Both changes sign other sessions out, on purpose: `revokeSessionsOnPasswordReset`
+for a reset, `revokeOtherSessions` for a change. Someone changing a password is
+usually doing it because the old one may be known.
+
+**Verified before the PR:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (440) and
+`pnpm test:e2e` (56). The browser suite now covers the forgot-password page giving the
+same answer for an address that exists and one that does not, a made-up reset token
+being refused, a password change that makes the old password stop working and is then
+put back, a wrong current password, and a mismatched confirmation.
+
+**Not verified, and it is the part that matters:** nobody has received a reset
+email. The test server runs with Resend deliberately unset so the suite can never
+send mail, which means the template, the link better-auth builds from
+`BETTER_AUTH_URL`, and the redirect from that link to `/reset-password?token=…` have
+been read but not followed end to end. **The first real reset on production is the
+first time it runs.**
+
 **Released 2026-10-25** — `5bbd4a5` (PR #100), carrying **#99** (adds, edits and
 deletes on the Expenses, Income and Savings lists show before the server has answered,
 and the page puts itself back if the save fails), plus its plan record and the v1.5.0
@@ -2341,6 +2375,9 @@ Locked in. Revisit only with a reason — and note the reason here.
 | Savings withdrawal       | A negative-amount entry, not a new flow   | Same signed-delta convention `savingsGoals` contributions already use                     |
 | Transaction list default | Current UTC month for expenses and income; savings opens on everything | A ledger that opens on all history only gets slower; savings is a pool, not a monthly flow |
 | Empty date in the URL    | Present-but-empty means "no limit", absent means "default month" | Without the distinction a user could never see past the default range |
+| Password reset delivery  | Emailed link, one hour, single use        | better-auth's own flow; the link is a credential, so it is short-lived and never logged in production |
+| Reset / change sessions  | Both revoke the account's other sessions  | Someone changing a password usually suspects the old one is known; a surviving session defeats it |
+| Account vs. space settings | Two pages, joined by a sub-navigation   | Different owners (a member can change their password, not the space's currency); no eleventh tab |
 | Package manager          | pnpm                                      |                                                                                          |
 
 ---
@@ -3027,6 +3064,32 @@ capsule, blurs, carries a gradient mask and takes no taps — and it disappears 
 page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
+
+### Feature 24 — Password change and reset ✅ done, PR open
+
+- [x] `emailAndPassword.sendResetPassword` (`lib/auth/auth.ts`), an hour's expiry,
+      `revokeSessionsOnPasswordReset`; the email is `lib/email/password-reset-email.ts`
+- [x] `/forgot-password` and `/reset-password` — public in `proxy.ts`, deliberately
+      not in `authRoutes`; the second shows "This link has expired" for a missing
+      token or `?error=INVALID_TOKEN`
+- [x] "Forgot password?" on sign-in; `?reset=1` shows a notice there afterwards
+- [x] `/settings/account` with a change-password card (current + new + confirm,
+      `revokeOtherSessions: true`); `SettingsSubnav` joins it to `/settings/space`
+- [x] The Settings tab stays lit on the account page — `isTabActive` in
+      `components/navigation/tabs.ts`, now the one definition the sidebar and both
+      bars share
+- [x] `AuthCard` extracted from `AuthForm` so four pre-sign-in pages share one frame;
+      `escapeHtml` moved out of the invitation email so two emails share one
+- [x] `lib/auth/password-policy.ts` with 6 unit tests; 4 new browser tests in
+      `e2e/account-security.spec.ts` and 4 in `e2e/public.spec.ts`
+
+**Why it is two pages and not a second tab.** Ten tabs already do not fit across a
+phone, and a member can change their own password but not the space's currency, so
+the two halves of "settings" have different owners. A sub-navigation joins them.
+
+**Reset is not an end run around anything.** A reset signs every session out and
+changes the password, and nothing else — Feature 25's second factor will still be
+asked for at the next sign-in, so an inbox alone is not a way past it.
 
 ### Feature 23 — Savings, tracked separately from goals ✅ merged (PR #71)
 
@@ -3991,6 +4054,26 @@ link dies at the next deploy.
 ## Gotchas
 
 Things already hit, so they are not hit twice.
+
+- **better-auth rate-limits `/sign-in`, `/sign-up`, `/change-password` and
+  `/change-email` to 3 requests per 10 seconds, and `/request-password-reset` to 3
+  per 60 — but only in production.** The browser suite runs a production build, so it
+  meets the limit and `pnpm dev` does not. A spec that signs in per test fails on the
+  limit, falls through to sign-up, and reports "User already exists", which is a
+  message about the account that is really about the clock. Sign in once and share
+  the page (`e2e/account-security.spec.ts`). The store is in-memory, so on Vercel the
+  limit is per instance — best-effort, not a guarantee.
+- **`getByRole("alert")` matches two elements on a client-navigated page** — the
+  form's message and Next's empty `#__next-route-announcer__`. Scope it to the form:
+  `page.locator("form p[role='alert']")`.
+- **A reset link is built from `BETTER_AUTH_URL`, not from the request.** It points at
+  `${BETTER_AUTH_URL}/api/auth/reset-password/<token>?callbackURL=%2Freset-password`,
+  which validates the token and redirects to `/reset-password?token=…` (or
+  `?error=INVALID_TOKEN`). A wrong `BETTER_AUTH_URL` therefore sends a perfectly good
+  email whose link goes to the wrong place.
+- **Changing a password signs out every other session — including the browser
+  storage state a test suite saved.** Do not run a password-change test on the
+  suite's own account; it revokes the session every other spec is holding.
 
 - **State updates inside a form `action` are held until the action's async work is
   done.** The action runs in a transition, and a transition batches every update made

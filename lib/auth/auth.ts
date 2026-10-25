@@ -11,9 +11,13 @@ import { buildInvitationUrl } from "@/lib/auth/urls";
 import { spaceService } from "@/lib/services/space.service";
 import { categoryService } from "@/lib/services/category.service";
 import { sendInvitationEmail } from "@/lib/email/invitation-email";
+import { sendPasswordResetEmail } from "@/lib/email/password-reset-email";
 import { userRepository } from "@/lib/repositories/user.repository";
 import { DEFAULT_CURRENCY } from "@/constants/currencies";
 import { logger } from "@/lib/logger";
+
+/** An hour: long enough to find the email, short enough that a stale one is dead. */
+const RESET_PASSWORD_EXPIRES_IN_SECONDS = 60 * 60;
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -22,6 +26,30 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    resetPasswordTokenExpiresIn: RESET_PASSWORD_EXPIRES_IN_SECONDS,
+    // Resetting a password is what somebody does when they think the old one
+    // is known to someone else. Leaving their other sessions signed in would
+    // leave that someone in.
+    revokeSessionsOnPasswordReset: true,
+    /**
+     * Sends the reset link. Whether the address has an account is never said
+     * to the caller — better-auth answers the same either way — and this is
+     * only reached when it does.
+     *
+     * A failed send is logged by `sendEmail` and otherwise ignored, so a Resend
+     * outage cannot be told apart from an unknown address by whoever asked.
+     */
+    sendResetPassword: async ({ user, url }) => {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        resetUrl: url,
+        expiresInMinutes: RESET_PASSWORD_EXPIRES_IN_SECONDS / 60,
+      });
+    },
+    onPasswordReset: async ({ user }) => {
+      logger.info("Password reset", { userId: user.id });
+    },
   },
   databaseHooks: {
     user: {

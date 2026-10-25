@@ -16,6 +16,11 @@ const SpaceSettingsLoading = () => {
         <Skeleton className="mt-2 h-4 w-64 max-w-full" />
       </div>
 
+      <div className="flex gap-2">
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-8 w-24" />
+      </div>
+
       <Card className="p-6">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="mt-2 h-4 w-full max-w-sm" />

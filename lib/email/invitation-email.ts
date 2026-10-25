@@ -1,26 +1,12 @@
 // No "server-only" here on purpose — see lib/auth/signup-policy.ts.
 import { sendEmail } from "@/lib/email/client";
+import { escapeHtml } from "@/lib/email/escape-html";
 
 export interface InvitationEmailOptions {
   to: string;
   spaceName: string;
   inviterName: string;
   acceptUrl: string;
-}
-
-/**
- * Escapes text before it goes into the HTML body.
- *
- * Space names and display names are user-supplied, and an email client is not
- * a place to find out that they were not escaped.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 /**
