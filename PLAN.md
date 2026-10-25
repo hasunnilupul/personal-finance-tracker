@@ -10,8 +10,76 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
+**Release PR open — `dev` → `main`, not yet merged.** Carries one merge since
+`v1.5.0`: **#99** (adds, edits and deletes on the Expenses, Income and Savings lists
+show before the server has answered, and the page puts itself back if the save fails)
+— plus its plan record and the v1.5.0 release records that were committed to `dev`
+after that release was cut.
+
+**No migrations and no dependency changes.** `git diff origin/main dev -- lib/db/`
+and the diff over `package.json` and `pnpm-lock.yaml` are both empty; the deploy-time
+migrate step is a no-op, the lowest-risk shape a release can have here.
+**`public/sw.js` is untouched and byte-identical to the live file**, so this stays a
+clean Feature 13 trial — still unanswered, still needing a device that already had the
+previous build.
+
+**Minor bump: `v1.5.0` → `v1.6.0`.** Additive from where a user stands — saving,
+editing and deleting should feel immediate — with nothing removed. One behaviour is
+different and worth naming: a row can now appear on screen *before* it is saved, and
+if the save then fails it disappears again with a message and an "Edit again" button.
+Before, nothing appeared until the server had agreed.
+
+**This release changes what the person sees about their own money before it is true,
+which none of the earlier ones did.** The safeguard is that the prediction
+(`lib/transactions/optimistic.ts`) refuses to guess — a foreign currency, a search, an
+author filter, a page other than the first and an edit that moves a row to the edge of
+a full page all fall back to waiting for the server, as before. That rule is covered by
+43 unit tests and the browser spec, **but it has not been seen on the live site**, and
+the converted-currency case in particular has only been checked as "does not go
+optimistic".
+
+**What it leaves unverified, going in:**
+
+- **How it feels on production.** Every timing so far was taken against a development
+  database across an ocean. Whether `PERF_LOG=1` is set on Vercel, and so whether the
+  `[perf]` lines asked for after v1.5.0 exist, is not known to this record.
+- **A failed save in the real world.** The spec cuts the request from the browser;
+  nobody has watched a real server error or a flaky phone connection.
+- **Income and savings.** They share the code but only Expenses is driven by a browser
+  test.
+- **Pagination** still has no test, and **`staleTimes` is still an `experimental`
+  flag** from the v1.5.0 release.
+
+**Still open from earlier releases:** the Singapore decision — the ~0.2s round trip
+under every navigation is untouched by this release — and, from the list v1.4.0 left,
+whether Feature 13 installs a new worker, whether push delivers, whether
+`financeflow-private-*` disappears on sign-out, whether an invitation notice reaches
+the other account, whether the budget warning arrives in the bell, and whether the CSV
+opens in a spreadsheet. **Resolved since v1.5.0:** the Dependabot count read **0 open**
+when this PR was opened.
+
+**The deployment id before the merge is `dpl_5KAbDGgTv1Q24qcbVdANHF2Stf5e`** — the one
+v1.5.0 ended on, so production has not moved since — confirmed through `/api/version`
+and the sign-in page's `data-dpl-id` on `finance-flow.nilupulperera.dev`, and recorded
+in advance so a slow deploy cannot be mistaken for a stale one.
+
+**Live before the merge:** `/` 307s; `/sign-in` and `/offline` answer 200 as HTML;
+`/manifest.webmanifest` answers 200 as `application/manifest+json`; `/sw.js` 200 as
+JavaScript. A signed-out `GET /api/export` answers **307 with a zero-byte body**.
+
+**Verified on `dev` at `9cf7a87`:** `pnpm typecheck`, `pnpm lint`, `pnpm test` (428),
+`pnpm build` and `pnpm test:e2e` (48) — run on #99's branch before it merged; `dev` has
+had nothing since but this record. The development database held no stray test rows
+afterwards.
+
+**After the merge**, finish this record (step 8): the merge SHA, that it has two
+parents, that the id moved and both sides agree, and the same URL-by-URL answers.
+Merge it as a **merge commit**.
+
+**Before that: optimistic add, edit and delete** — merged as **#99** (`9cf7a87`).
+
 **Optimistic add, edit and delete on the transaction lists.** Branch
-`feat/optimistic-transactions`, PR open into `dev`. Step (d) of the navigation-speed
+`feat/optimistic-transactions`, merged as `9cf7a87`. Step (d) of the navigation-speed
 plan: a write shows on the page before the server has answered it, and the page puts
 itself back if the server never does.
 
