@@ -10,8 +10,9 @@ the "Current position" marker, and add anything learned to Decisions or Gotchas.
 
 ## Current position
 
-**Feature 27 — the daily spending view** is built on `feat/daily-spending-view` and its
-PR is open into `dev`; **it is waiting on the repo owner to merge it.** The Trend card
+**Feature 27 — the daily spending view** is **merged into `dev`** as `1b9ecfb` (PR #106,
+squashed, from `feat/daily-spending-view`). **It is not released**: it reaches `main` with
+the next `dev` → `main` release PR. The Trend card
 gains a fourth tab, **Daily**: one column per day of the range, four figures above it
 (spent, average a day, busiest day, no-spend days), a table twin listing the days that
 had spending. It is offered for ranges of up to 366 days and left out for longer ones,
@@ -3282,7 +3283,7 @@ page is the same bug wearing a different shape.
 
 **Still not seen in WebKit**, which is the standing gap for the whole bar.
 
-### Feature 27 — The daily spending view ✅ done, PR open
+### Feature 27 — The daily spending view ✅ merged (PR #106)
 
 - [x] `sumByDay` (`lib/repositories/transaction-query.ts`), with `sumByMonth` and it now
       sharing `sumGroupedBy`; `ReportData.byDay` and `DailyTotal`
